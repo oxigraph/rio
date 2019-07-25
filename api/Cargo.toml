@@ -1,0 +1,17 @@
+[package]
+name = "rio_api"
+version = "0.0.1"
+authors = ["Tpt <thomas@pellissier-tanon.fr>"]
+license = "Apache-2.0"
+readme = "../README.md"
+keywords = ["RDF", "parser"]
+repository = "https://github.com/Tpt/rio"
+description = """
+Common data structures for RDF formats parsers
+"""
+edition = "2018"
+
+[badges]
+travis-ci = { repository = "Tpt/rio" }
+is-it-maintained-issue-resolution = { repository = "Tpt/rio" }
+is-it-maintained-open-issues = { repository = "Tpt/rio" }

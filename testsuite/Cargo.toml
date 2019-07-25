@@ -1,0 +1,25 @@
+[package]
+name = "rio_testsuite"
+version = "0.0.1"
+authors = ["Tpt <thomas@pellissier-tanon.fr>"]
+license = "Apache-2.0"
+readme = "../README.md"
+repository = "https://github.com/Tpt/rio"
+description = """
+W3C testsuite evaluator for Rio parsers
+"""
+edition = "2018"
+publish = false
+
+[dependencies]
+rio_api = {path = "../api"}
+rio_turtle = {path = "../turtle"}
+chrono = "0.4"
+permutohedron = "0.2"
+
+[dev-dependencies]
+bencher = "0.1"
+
+[[bench]]
+name = "w3c_testsuite"
+harness = false

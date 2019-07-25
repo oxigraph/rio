@@ -1,0 +1,21 @@
+[package]
+name = "rio_turtle"
+version = "0.0.1"
+authors = ["Tpt <thomas@pellissier-tanon.fr>"]
+license = "Apache-2.0"
+readme = "../README.md"
+keywords = ["RDF", "parser", "Turtle", "N-Triples"]
+repository = "https://github.com/Tpt/rio"
+description = """
+RDF Turtle and N-Triples parsers
+"""
+edition = "2018"
+
+[badges]
+travis-ci = { repository = "Tpt/rio" }
+is-it-maintained-issue-resolution = { repository = "Tpt/rio" }
+is-it-maintained-open-issues = { repository = "Tpt/rio" }
+
+[dependencies]
+rio_api = {path = "../api"}
+url = "2"
