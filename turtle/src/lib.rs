@@ -4,6 +4,7 @@
 //! They do not rely on any dependencies outside of Rust standard library.
 
 mod error;
+mod iri;
 mod ntriples;
 mod shared;
 mod turtle;

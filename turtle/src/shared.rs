@@ -1,13 +1,15 @@
 use crate::error::*;
+use crate::iri::validate_iri;
 use crate::utils::*;
 use rio_api::model::*;
 use std::char;
 use std::str;
 use std::u8;
 
-pub(crate) fn parse_iriref<'a>(
+pub fn configurable_parse_iriref<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
+    is_absolute: bool,
 ) -> Result<NamedNode<'a>, TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
     read.check_is_current(b'<')?;
@@ -16,11 +18,16 @@ pub(crate) fn parse_iriref<'a>(
         match read.current() {
             b'>' => {
                 read.consume()?;
+                if is_absolute {
+                    if let Err(_) = validate_iri(buffer) {
+                        return Err(read.parse_error(TurtleErrorKind::InvalidURI)); //TODO position
+                    }
+                }
                 return Ok(NamedNode {
                     iri: to_str(read, buffer)?,
                 });
             }
-            0..=20 | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' | b' ' => {
+            0x0..=0x20 | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' => {
                 //TODO: added ' ' to make tests pass
                 read.unexpected_char_error()?
             }
@@ -79,15 +86,41 @@ pub fn parse_langtag(
 ) -> Result<(), TurtleError> {
     // [144s] 	LANGTAG 	::= 	'@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
     read.check_is_current(b'@')?;
+    read.consume()?;
+
+    //[a-zA-Z]
+    let c = read.current();
+    match c {
+        b'a'..=b'z' | b'A'..=b'Z' => buffer.push(c),
+        _ => read.unexpected_char_error()?,
+    };
+
+    //[a-zA-Z]*
     loop {
         read.consume()?;
-        match read.current() {
-            //TODO: be strict
-            c => match c {
-                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' => buffer.push(c),
-                _ => return Ok(()),
-            },
+        let c = read.current();
+        match c {
+            b'a'..=b'z' | b'A'..=b'Z' => buffer.push(c),
+            b'-' => break, // follow-up
+            _ => return Ok(()),
         }
+    }
+
+    // ('-' [a-zA-Z0-9]+)*
+    loop {
+        let c = read.current();
+        match c {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push(c),
+            b'-' => match read.next() {
+                Some(n) => match n {
+                    b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push(b'-'),
+                    _ => return Ok(()),
+                },
+                None => return Ok(()),
+            },
+            _ => return Ok(()),
+        }
+        read.consume()?
     }
 }
 

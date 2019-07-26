@@ -826,6 +826,13 @@ fn parse_blank_node<'a>(
     Ok(())
 }
 
+fn parse_iriref<'a>(
+    read: &mut impl OneLookAheadLineByteRead,
+    buffer: &'a mut Vec<u8>,
+) -> Result<NamedNode<'a>, TurtleError> {
+    configurable_parse_iriref(read, buffer, false)
+}
+
 fn parse_pname_ns(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &mut Vec<u8>,

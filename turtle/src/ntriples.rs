@@ -182,6 +182,13 @@ fn parse_literal<'a>(
     }
 }
 
+fn parse_iriref<'a>(
+    read: &mut impl OneLookAheadLineByteRead,
+    buffer: &'a mut Vec<u8>,
+) -> Result<NamedNode<'a>, TurtleError> {
+    configurable_parse_iriref(read, buffer, true)
+}
+
 fn skip_whitespace(read: &mut impl OneLookAheadLineByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
