@@ -186,7 +186,7 @@ fn parse_iriref<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
 ) -> Result<NamedNode<'a>, TurtleError> {
-    configurable_parse_iriref(read, buffer, true)
+    configurable_parse_iriref(read, buffer, IriFormat::Iri)
 }
 
 fn skip_whitespace(read: &mut impl OneLookAheadLineByteRead) -> Result<(), TurtleError> {

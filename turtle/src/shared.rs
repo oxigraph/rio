@@ -1,5 +1,5 @@
 use crate::error::*;
-use crate::iri::validate_iri;
+use crate::iri::{validate_absolute_iri, validate_iri, validate_iri_reference};
 use crate::utils::*;
 use rio_api::model::*;
 use std::char;
@@ -9,7 +9,7 @@ use std::u8;
 pub fn configurable_parse_iriref<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
-    is_absolute: bool,
+    format: IriFormat,
 ) -> Result<NamedNode<'a>, TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
     read.check_is_current(b'<')?;
@@ -18,30 +18,44 @@ pub fn configurable_parse_iriref<'a>(
         match read.current() {
             b'>' => {
                 read.consume()?;
-                if is_absolute {
-                    if let Err(_) = validate_iri(buffer) {
-                        return Err(read.parse_error(TurtleErrorKind::InvalidURI)); //TODO position
-                    }
+                let validation = match format {
+                    IriFormat::Iri => validate_iri(buffer),
+                    IriFormat::AbsoluteIri => validate_absolute_iri(buffer),
+                    IriFormat::IriReference => validate_iri_reference(buffer),
+                };
+                if validation.is_err() {
+                    return Err(read.parse_error(TurtleErrorKind::InvalidIRI)); //TODO position
                 }
                 return Ok(NamedNode {
                     iri: to_str(read, buffer)?,
                 });
             }
-            0x0..=0x20 | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' => {
+            b'\0'..=b' ' | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' => {
                 //TODO: added ' ' to make tests pass
                 read.unexpected_char_error()?
             }
             b'\\' => {
                 read.consume()?;
-                buffer.push_char(match read.current() {
+                match match read.current() {
                     b'u' => read_hexa_char(read, 4)?,
                     b'U' => read_hexa_char(read, 8)?,
                     _ => read.unexpected_char_error()?,
-                })
+                } {
+                    '\0'..=' ' | '<' | '"' | '{' | '}' | '|' | '^' | '`' => {
+                        read.unexpected_char_error()?
+                    }
+                    c => buffer.push_char(c),
+                }
             }
             c => buffer.push(c),
         }
     }
+}
+
+pub enum IriFormat {
+    Iri,          // Normal IRI without base resolution
+    AbsoluteIri,  // IRI used as base
+    IriReference, // Relative or absolute IRI
 }
 
 pub fn parse_blank_node_label<'a>(

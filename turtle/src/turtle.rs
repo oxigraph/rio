@@ -140,7 +140,7 @@ fn parse_base(
     skip_whitespace(read)?;
 
     base_url.clear();
-    parse_iriref(read, base_url)?;
+    parse_iriref_base(read, base_url)?;
     skip_whitespace(read)?;
 
     read.check_is_current(b'.')?;
@@ -158,7 +158,7 @@ fn parse_sparql_base(
     skip_whitespace(read)?;
 
     base_url.clear();
-    parse_iriref(read, base_url)?;
+    parse_iriref_base(read, base_url)?;
 
     Ok(())
 }
@@ -738,10 +738,10 @@ fn parse_iri<'a>(
                 let url = Url::options()
                     .base_url(Some(
                         &Url::parse(to_str(read, base_url)?)
-                            .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseURI))?,
+                            .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI))?,
                     ))
                     .parse(to_str(read, buffer.as_slice())?)
-                    .map_err(|_| read.parse_error(TurtleErrorKind::InvalidURI))?;
+                    .map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI))?;
                 buffer.clear();
                 buffer.extend_from_slice(url.as_str().as_bytes());
             }
@@ -826,11 +826,18 @@ fn parse_blank_node<'a>(
     Ok(())
 }
 
+fn parse_iriref_base<'a>(
+    read: &mut impl OneLookAheadLineByteRead,
+    buffer: &'a mut Vec<u8>,
+) -> Result<NamedNode<'a>, TurtleError> {
+    configurable_parse_iriref(read, buffer, IriFormat::AbsoluteIri)
+}
+
 fn parse_iriref<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
 ) -> Result<NamedNode<'a>, TurtleError> {
-    configurable_parse_iriref(read, buffer, false)
+    configurable_parse_iriref(read, buffer, IriFormat::IriReference)
 }
 
 fn parse_pname_ns(

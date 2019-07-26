@@ -20,8 +20,8 @@ pub enum TurtleErrorKind {
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
     InvalidUTF8,
-    InvalidBaseURI,
-    InvalidURI,
+    InvalidBaseIRI, //TODO: remove
+    InvalidIRI,
 }
 
 impl fmt::Display for TurtleError {
@@ -37,8 +37,8 @@ impl fmt::Display for TurtleError {
                 write!(f, "invalid unicode code point '{}'", point)
             }
             TurtleErrorKind::InvalidUTF8 => write!(f, "invalid UTF-8 encoding"),
-            TurtleErrorKind::InvalidBaseURI => write!(f, "invalid base URI"),
-            TurtleErrorKind::InvalidURI => write!(f, "invalid URI"),
+            TurtleErrorKind::InvalidBaseIRI => write!(f, "invalid base URI"),
+            TurtleErrorKind::InvalidIRI => write!(f, "invalid URI"),
         }?;
         write!(
             f,
