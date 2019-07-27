@@ -19,19 +19,6 @@ pub fn parse_iriref_absolute<'a>(
     }
 }
 
-pub fn parse_iriref_base<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
-) -> Result<NamedNode<'a>, TurtleError> {
-    parse_iriref(read, buffer)?;
-    match validate_absolute_iri(buffer) {
-        Ok(()) => Ok(NamedNode {
-            iri: to_str(read, buffer)?,
-        }),
-        Err(_) => Err(read.parse_error(TurtleErrorKind::InvalidIRI)), //TODO position
-    }
-}
-
 pub fn parse_iriref_relative<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,

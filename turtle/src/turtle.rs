@@ -1,7 +1,7 @@
 //! Implementation of [Turtle](https://www.w3.org/TR/turtle/) RDF syntax
 
 use crate::error::*;
-use crate::iri::validate_absolute_iri;
+use crate::iri::validate_iri;
 use crate::shared::*;
 use crate::utils::*;
 use rio_api::model::*;
@@ -54,7 +54,7 @@ impl<R: BufRead> TurtleParser<R> {
     /// The base URL might be empty to state there is no base URL.
     pub fn new(reader: R, base_url: &str) -> Result<Self, TurtleError> {
         let read = OneLookAheadLineByteReader::new(reader)?;
-        if !base_url.is_empty() && validate_absolute_iri(base_url.as_bytes()).is_err() {
+        if !base_url.is_empty() && validate_iri(base_url.as_bytes()).is_err() {
             return Err(read.parse_error(TurtleErrorKind::InvalidBaseIRI));
         }
         Ok(Self {
@@ -101,13 +101,33 @@ fn parse_statement<R: BufRead>(
     if parser.read.current() == EOF {
         Ok(())
     } else if parser.read.starts_with(b"@prefix") {
-        parse_prefix_id(&mut parser.read, &mut parser.namespaces)
+        parse_prefix_id(
+            &mut parser.read,
+            &mut parser.namespaces,
+            &parser.base_url,
+            &mut parser.temp_buf,
+        )
     } else if parser.read.starts_with(b"@base") {
-        parse_base(&mut parser.read, &mut parser.base_url)
+        parse_base(
+            &mut parser.read,
+            &mut parser.base_url,
+            &mut parser.temp_buf,
+            &mut parser.object_annotation_buf,
+        )
     } else if parser.read.starts_with_ignore_ascii_case(b"BASE") {
-        parse_sparql_base(&mut parser.read, &mut parser.base_url)
+        parse_sparql_base(
+            &mut parser.read,
+            &mut parser.base_url,
+            &mut parser.temp_buf,
+            &mut parser.object_annotation_buf,
+        )
     } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX") {
-        parse_sparql_prefix(&mut parser.read, &mut parser.namespaces)
+        parse_sparql_prefix(
+            &mut parser.read,
+            &mut parser.namespaces,
+            &parser.base_url,
+            &mut parser.temp_buf,
+        )
     } else {
         parse_triple(parser, on_triple)
     }
@@ -116,6 +136,8 @@ fn parse_statement<R: BufRead>(
 fn parse_prefix_id(
     read: &mut impl OneLookAheadLineByteRead,
     namespaces: &mut HashMap<Vec<u8>, Vec<u8>>,
+    base_url: &[u8],
+    temp_buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [4] 	prefixID 	::= 	'@prefix' PNAME_NS IRIREF '.'
     read.consume_many("@prefix".len())?;
@@ -126,7 +148,7 @@ fn parse_prefix_id(
     skip_whitespace(read)?;
 
     let mut value = Vec::default();
-    parse_iriref_absolute(read, &mut value)?;
+    parse_iriref_relative(read, &mut value, temp_buffer, base_url)?;
     skip_whitespace(read)?;
 
     read.check_is_current(b'.')?;
@@ -139,13 +161,14 @@ fn parse_prefix_id(
 fn parse_base(
     read: &mut impl OneLookAheadLineByteRead,
     base_url: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
+    buffer_for_old_base_url: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [5] 	base 	::= 	'@base' IRIREF '.'
     read.consume_many("@base".len())?;
     skip_whitespace(read)?;
 
-    base_url.clear();
-    parse_iriref_base(read, base_url)?;
+    parse_base_iriref(read, base_url, temp_buffer, buffer_for_old_base_url)?;
     skip_whitespace(read)?;
 
     read.check_is_current(b'.')?;
@@ -157,20 +180,39 @@ fn parse_base(
 fn parse_sparql_base(
     read: &mut impl OneLookAheadLineByteRead,
     base_url: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
+    buffer_for_old_base_url: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [5s] 	sparqlBase 	::= 	"BASE" IRIREF
     read.consume_many("BASE".len())?;
     skip_whitespace(read)?;
 
-    base_url.clear();
-    parse_iriref_base(read, base_url)?;
+    parse_base_iriref(read, base_url, temp_buffer, buffer_for_old_base_url)
+}
 
+fn parse_base_iriref(
+    read: &mut impl OneLookAheadLineByteRead,
+    base_url: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
+    buffer_for_old_base_url: &mut Vec<u8>,
+) -> Result<(), TurtleError> {
+    if base_url.is_empty() {
+        parse_iriref_absolute(read, base_url)?;
+    } else {
+        buffer_for_old_base_url.extend_from_slice(base_url);
+        base_url.clear();
+        parse_iriref_relative(read, base_url, temp_buffer, buffer_for_old_base_url)?;
+        temp_buffer.clear();
+        buffer_for_old_base_url.clear();
+    }
     Ok(())
 }
 
 fn parse_sparql_prefix(
     read: &mut impl OneLookAheadLineByteRead,
     namespaces: &mut HashMap<Vec<u8>, Vec<u8>>,
+    base_url: &[u8],
+    temp_buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [6s] 	sparqlPrefix 	::= 	"PREFIX" PNAME_NS IRIREF
     read.consume_many("PREFIX".len())?;
@@ -181,7 +223,7 @@ fn parse_sparql_prefix(
     skip_whitespace(read)?;
 
     let mut value = Vec::default();
-    parse_iriref_absolute(read, &mut value)?;
+    parse_iriref_relative(read, &mut value, temp_buffer, base_url)?;
     skip_whitespace(read)?;
 
     namespaces.insert(prefix, value);

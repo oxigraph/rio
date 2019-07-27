@@ -22,19 +22,6 @@ pub fn validate_iri(value: &[u8]) -> Result<(), usize> {
     }
 }
 
-pub fn validate_absolute_iri(value: &[u8]) -> Result<(), usize> {
-    match parse_absolute_iri(value, 0) {
-        Ok(i) => {
-            if i.fragment_end == value.len() {
-                Ok(())
-            } else {
-                Err(i.fragment_end)
-            }
-        }
-        Err(i) => Err(i),
-    }
-}
-
 // RFC 3986 5.2 Relative Resolution algorithm
 pub fn resolve_relative_iri(
     reference_iri: &[u8],
@@ -263,17 +250,6 @@ fn parse_iri_reference(value: &[u8], start: usize) -> Result<IriElementsPosition
     }
 }
 
-fn parse_absolute_iri(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
-    // absolute-IRI = scheme ":" ihier-part [ "?" iquery ] = IRI without fragment
-    let positions = parse_iri(value, start)?;
-
-    if positions.fragment_end > positions.query_end {
-        Err(positions.query_end + 1)
-    } else {
-        Ok(positions)
-    }
-}
-
 fn parse_irelative_ref(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
     // irelative-ref = irelative-part [ "?" iquery ] [ "#" ifragment ]
     let (authority_end, path_end) = parse_irelative_path(value, start)?;
@@ -456,7 +432,7 @@ fn is_digit(b: u8) -> bool {
 
 #[test]
 fn test_parsing() {
-    let examples_absolute = [
+    let examples = [
         "file://foo",
         "ftp://ftp.is.co.za/rfc/rfc1808.txt",
         "http://www.ietf.org/rfc/rfc2396.txt",
@@ -473,9 +449,6 @@ fn test_parsing() {
         "http://example.com/foo/bar/",
         "http://example.com/foo/bar?q=1&r=2",
         "http://example.com/foo/bar/?q=1&r=2",
-    ];
-
-    let examples = [
         "http://example.com#toto",
         "http://example.com/#toto",
         "http://example.com/foo#toto",
@@ -484,19 +457,6 @@ fn test_parsing() {
         "http://example.com/foo/bar?q=1&r=2#toto",
         "http://example.com/foo/bar/?q=1&r=2#toto",
     ];
-
-    for e in &examples_absolute {
-        assert!(
-            validate_iri(e.as_bytes()).is_ok(),
-            "{} is not recognized as an IRI",
-            e
-        );
-        assert!(
-            validate_absolute_iri(e.as_bytes()).is_ok(),
-            "{} is not recognized as an absolute IRI",
-            e
-        );
-    }
 
     for e in &examples {
         assert!(
