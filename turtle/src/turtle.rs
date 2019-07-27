@@ -1,19 +1,18 @@
 //! Implementation of [Turtle](https://www.w3.org/TR/turtle/) RDF syntax
 
 use crate::error::*;
+use crate::iri::validate_absolute_iri;
 use crate::shared::*;
 use crate::utils::*;
 use rio_api::model::*;
 use rio_api::parser::TripleParser;
 use std::collections::HashMap;
 use std::io::BufRead;
-use url::Url;
 
 /// A [Turtle](https://www.w3.org/TR/turtle/) streaming parser.
 ///
 /// It implements the `TripleParser` trait.
 ///
-/// Warning: This parser is still a work in progress and relies on the `Url` crate for relative IRI resolution.
 ///
 /// Count the number of of people using `TripleParse` API:
 /// ```
@@ -46,6 +45,7 @@ pub struct TurtleParser<R: BufRead> {
     subject_type_stack: Vec<NamedOrBlankNodeType>,
     predicate_buf_stack: BufferStack<u8>,
     object_annotation_buf: Vec<u8>, // datatype or language tag
+    temp_buf: Vec<u8>,
 }
 
 impl<R: BufRead> TurtleParser<R> {
@@ -53,8 +53,12 @@ impl<R: BufRead> TurtleParser<R> {
     ///
     /// The base URL might be empty to state there is no base URL.
     pub fn new(reader: R, base_url: &str) -> Result<Self, TurtleError> {
+        let read = OneLookAheadLineByteReader::new(reader)?;
+        if !base_url.is_empty() && validate_absolute_iri(base_url.as_bytes()).is_err() {
+            return Err(read.parse_error(TurtleErrorKind::InvalidBaseIRI));
+        }
         Ok(Self {
-            read: OneLookAheadLineByteReader::new(reader)?,
+            read,
             base_url: base_url.as_bytes().to_vec(),
             namespaces: HashMap::default(),
             bnode_id_generator: BlankNodeIdGenerator::default(),
@@ -62,6 +66,7 @@ impl<R: BufRead> TurtleParser<R> {
             subject_type_stack: Vec::default(),
             predicate_buf_stack: BufferStack::default(),
             object_annotation_buf: Vec::default(),
+            temp_buf: Vec::default(),
         })
     }
 }
@@ -121,7 +126,7 @@ fn parse_prefix_id(
     skip_whitespace(read)?;
 
     let mut value = Vec::default();
-    parse_iriref(read, &mut value)?;
+    parse_iriref_absolute(read, &mut value)?;
     skip_whitespace(read)?;
 
     read.check_is_current(b'.')?;
@@ -176,7 +181,7 @@ fn parse_sparql_prefix(
     skip_whitespace(read)?;
 
     let mut value = Vec::default();
-    parse_iriref(read, &mut value)?;
+    parse_iriref_absolute(read, &mut value)?;
     skip_whitespace(read)?;
 
     namespaces.insert(prefix, value);
@@ -221,6 +226,7 @@ fn parse_predicate_object_list<R: BufRead>(
         parse_verb(
             &mut parser.read,
             parser.predicate_buf_stack.push(),
+            &mut parser.temp_buf,
             parser.base_url.as_slice(),
             &parser.namespaces,
         )?;
@@ -264,6 +270,7 @@ fn parse_object_list<R: BufRead>(
 fn parse_verb<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
+    temp_buffer: &'a mut Vec<u8>,
     base_url: &[u8],
     namespaces: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<(), TurtleError> {
@@ -273,7 +280,7 @@ fn parse_verb<'a>(
             match read.next() {
                 // We check that it is not a prefixed URI
                 Some(c) if is_possible_pn_chars(c) || c == b'.' || c == b':' => {
-                    parse_predicate(read, buffer, base_url, namespaces)
+                    parse_predicate(read, buffer, temp_buffer, base_url, namespaces)
                 }
                 _ => {
                     buffer.extend_from_slice(RDF_TYPE.as_bytes());
@@ -282,7 +289,7 @@ fn parse_verb<'a>(
                 }
             }
         }
-        _ => parse_predicate(read, buffer, base_url, namespaces),
+        _ => parse_predicate(read, buffer, temp_buffer, base_url, namespaces),
     }
 }
 
@@ -310,6 +317,7 @@ fn parse_subject<R: BufRead>(
             parse_iri(
                 &mut parser.read,
                 parser.subject_buf_stack.push(),
+                &mut parser.temp_buf,
                 parser.base_url.as_slice(),
                 &parser.namespaces,
             )?;
@@ -321,11 +329,12 @@ fn parse_subject<R: BufRead>(
 fn parse_predicate<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
+    temp_buffer: &'a mut Vec<u8>,
     base_url: &[u8],
     namespaces: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<(), TurtleError> {
     //[11] 	predicate 	::= 	iri
-    parse_iri(read, buffer, base_url, namespaces)
+    parse_iri(read, buffer, temp_buffer, base_url, namespaces)
 }
 
 fn parse_object<R: BufRead>(
@@ -341,6 +350,7 @@ fn parse_object<R: BufRead>(
             parse_iri(
                 &mut parser.read,
                 &mut parser.subject_buf_stack.push(),
+                &mut parser.temp_buf,
                 parser.base_url.as_slice(),
                 &parser.namespaces,
             )?;
@@ -371,6 +381,7 @@ fn parse_object<R: BufRead>(
                 &mut parser.read,
                 parser.subject_buf_stack.push(),
                 &mut parser.object_annotation_buf,
+                &mut parser.temp_buf,
                 parser.base_url.as_slice(),
                 &parser.namespaces,
             )?;
@@ -383,6 +394,7 @@ fn parse_object<R: BufRead>(
                     &mut parser.read,
                     parser.subject_buf_stack.push(),
                     &mut parser.object_annotation_buf,
+                    &mut parser.temp_buf,
                     parser.base_url.as_slice(),
                     &parser.namespaces,
                 )?;
@@ -392,6 +404,7 @@ fn parse_object<R: BufRead>(
                 parse_iri(
                     &mut parser.read,
                     parser.subject_buf_stack.push(),
+                    &mut parser.temp_buf,
                     parser.base_url.as_slice(),
                     &parser.namespaces,
                 )?;
@@ -429,12 +442,20 @@ fn parse_literal<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
     annotation_buffer: &'a mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
     base_url: &[u8],
     namespaces: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<TermType, TurtleError> {
     // [13] 	literal 	::= 	RDFLiteral | NumericLiteral | BooleanLiteral
     match read.current() {
-        b'"' | b'\'' => parse_rdf_literal(read, buffer, annotation_buffer, base_url, namespaces),
+        b'"' | b'\'' => parse_rdf_literal(
+            read,
+            buffer,
+            annotation_buffer,
+            temp_buffer,
+            base_url,
+            namespaces,
+        ),
         b'+' | b'-' | b'.' | b'0'..=b'9' => {
             parse_numeric_literal(read, buffer, annotation_buffer)?;
             Ok(TermType::TypedLiteral)
@@ -656,6 +677,7 @@ fn parse_rdf_literal(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &mut Vec<u8>,
     annotation_buffer: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
     base_url: &[u8],
     namespaces: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<TermType, TurtleError> {
@@ -673,7 +695,7 @@ fn parse_rdf_literal(
             read.check_is_current(b'^')?;
             read.consume()?;
             skip_whitespace(read)?;
-            parse_iri(read, annotation_buffer, base_url, namespaces)?;
+            parse_iri(read, annotation_buffer, temp_buffer, base_url, namespaces)?;
             Ok(TermType::TypedLiteral)
         }
         _ => Ok(TermType::SimpleLiteral),
@@ -723,28 +745,17 @@ fn parse_string(
     }
 }
 
-fn parse_iri<'a>(
+fn parse_iri(
     read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
+    buffer: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
     base_url: &[u8],
     namespaces: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<(), TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
     match read.current() {
         b'<' => {
-            parse_iriref(read, buffer)?;
-            if !base_url.is_empty() {
-                //TODO: avoid allocations and dependencies
-                let url = Url::options()
-                    .base_url(Some(
-                        &Url::parse(to_str(read, base_url)?)
-                            .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI))?,
-                    ))
-                    .parse(to_str(read, buffer.as_slice())?)
-                    .map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI))?;
-                buffer.clear();
-                buffer.extend_from_slice(url.as_str().as_bytes());
-            }
+            parse_iriref_relative(read, buffer, temp_buffer, base_url)?;
         }
         _ => parse_prefixed_name(read, buffer, namespaces)?,
     }
@@ -824,20 +835,6 @@ fn parse_blank_node<'a>(
         _ => read.unexpected_char_error()?,
     }
     Ok(())
-}
-
-fn parse_iriref_base<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
-) -> Result<NamedNode<'a>, TurtleError> {
-    configurable_parse_iriref(read, buffer, IriFormat::AbsoluteIri)
-}
-
-fn parse_iriref<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
-) -> Result<NamedNode<'a>, TurtleError> {
-    configurable_parse_iriref(read, buffer, IriFormat::IriReference)
 }
 
 fn parse_pname_ns(

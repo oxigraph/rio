@@ -18,4 +18,3 @@ is-it-maintained-open-issues = { repository = "Tpt/rio" }
 
 [dependencies]
 rio_api = {path = "../api"}
-url = "2"

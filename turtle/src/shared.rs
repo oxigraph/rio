@@ -1,16 +1,62 @@
 use crate::error::*;
-use crate::iri::{validate_absolute_iri, validate_iri, validate_iri_reference};
+use crate::iri::*;
 use crate::utils::*;
 use rio_api::model::*;
 use std::char;
 use std::str;
 use std::u8;
 
-pub fn configurable_parse_iriref<'a>(
+pub fn parse_iriref_absolute<'a>(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &'a mut Vec<u8>,
-    format: IriFormat,
 ) -> Result<NamedNode<'a>, TurtleError> {
+    parse_iriref(read, buffer)?;
+    match validate_iri(buffer) {
+        Ok(()) => Ok(NamedNode {
+            iri: to_str(read, buffer)?,
+        }),
+        Err(_) => Err(read.parse_error(TurtleErrorKind::InvalidIRI)), //TODO position
+    }
+}
+
+pub fn parse_iriref_base<'a>(
+    read: &mut impl OneLookAheadLineByteRead,
+    buffer: &'a mut Vec<u8>,
+) -> Result<NamedNode<'a>, TurtleError> {
+    parse_iriref(read, buffer)?;
+    match validate_absolute_iri(buffer) {
+        Ok(()) => Ok(NamedNode {
+            iri: to_str(read, buffer)?,
+        }),
+        Err(_) => Err(read.parse_error(TurtleErrorKind::InvalidIRI)), //TODO position
+    }
+}
+
+pub fn parse_iriref_relative<'a>(
+    read: &mut impl OneLookAheadLineByteRead,
+    buffer: &'a mut Vec<u8>,
+    temp_buffer: &'a mut Vec<u8>,
+    base_iri: &'a [u8],
+) -> Result<NamedNode<'a>, TurtleError> {
+    if base_iri.is_empty() {
+        parse_iriref_absolute(read, buffer)
+    } else {
+        parse_iriref(read, temp_buffer)?;
+        let result = resolve_relative_iri(temp_buffer, base_iri, buffer);
+        temp_buffer.clear();
+        match result {
+            Ok(()) => Ok(NamedNode {
+                iri: to_str(read, buffer)?,
+            }),
+            Err(_) => Err(read.parse_error(TurtleErrorKind::InvalidIRI)), //TODO position
+        }
+    }
+}
+
+fn parse_iriref(
+    read: &mut impl OneLookAheadLineByteRead,
+    buffer: &mut Vec<u8>,
+) -> Result<(), TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
     read.check_is_current(b'<')?;
     loop {
@@ -18,17 +64,7 @@ pub fn configurable_parse_iriref<'a>(
         match read.current() {
             b'>' => {
                 read.consume()?;
-                let validation = match format {
-                    IriFormat::Iri => validate_iri(buffer),
-                    IriFormat::AbsoluteIri => validate_absolute_iri(buffer),
-                    IriFormat::IriReference => validate_iri_reference(buffer),
-                };
-                if validation.is_err() {
-                    return Err(read.parse_error(TurtleErrorKind::InvalidIRI)); //TODO position
-                }
-                return Ok(NamedNode {
-                    iri: to_str(read, buffer)?,
-                });
+                return Ok(());
             }
             b'\0'..=b' ' | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' => {
                 //TODO: added ' ' to make tests pass
@@ -50,12 +86,6 @@ pub fn configurable_parse_iriref<'a>(
             c => buffer.push(c),
         }
     }
-}
-
-pub enum IriFormat {
-    Iri,          // Normal IRI without base resolution
-    AbsoluteIri,  // IRI used as base
-    IriReference, // Relative or absolute IRI
 }
 
 pub fn parse_blank_node_label<'a>(

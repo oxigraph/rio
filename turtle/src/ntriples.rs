@@ -16,6 +16,7 @@ use std::u8;
 /// It does not do any allocation during parsing except buffer resizing
 /// if a line significantly longer than the previous is encountered.
 ///
+///
 /// Count the number of of people using `TripleParse` API:
 /// ```
 /// use rio_turtle::NTriplesParser;
@@ -103,7 +104,7 @@ fn parse_line<'a>(
 
     skip_whitespace(read)?;
 
-    let predicate = parse_iriref(read, predicate_buf)?;
+    let predicate = parse_iriref_absolute(read, predicate_buf)?;
 
     skip_whitespace(read)?;
 
@@ -132,7 +133,7 @@ fn parse_term<'a>(
     annotation_buffer: &'a mut Vec<u8>,
 ) -> Result<Term<'a>, TurtleError> {
     match read.current() {
-        b'<' => Ok(parse_iriref(read, buffer)?.into()),
+        b'<' => Ok(parse_iriref_absolute(read, buffer)?.into()),
         b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
         b'"' => Ok(parse_literal(read, buffer, annotation_buffer)?.into()),
         _ => read.unexpected_char_error(),
@@ -144,7 +145,7 @@ fn parse_named_or_blank_node<'a>(
     buffer: &'a mut Vec<u8>,
 ) -> Result<NamedOrBlankNode<'a>, TurtleError> {
     match read.current() {
-        b'<' => Ok(parse_iriref(read, buffer)?.into()),
+        b'<' => Ok(parse_iriref_absolute(read, buffer)?.into()),
         b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
         _ => read.unexpected_char_error(),
     }
@@ -173,20 +174,13 @@ fn parse_literal<'a>(
             skip_whitespace(read)?;
             Ok(Literal::Typed {
                 value: to_str(read, buffer)?,
-                datatype: parse_iriref(read, annotation_buffer)?,
+                datatype: parse_iriref_absolute(read, annotation_buffer)?,
             })
         }
         _ => Ok(Literal::Simple {
             value: to_str(read, buffer)?,
         }),
     }
-}
-
-fn parse_iriref<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
-) -> Result<NamedNode<'a>, TurtleError> {
-    configurable_parse_iriref(read, buffer, IriFormat::Iri)
 }
 
 fn skip_whitespace(read: &mut impl OneLookAheadLineByteRead) -> Result<(), TurtleError> {

@@ -1,14 +1,21 @@
 type IriParserState = Result<usize, usize>; // usize = the end position
 
-//TODO: update offset when returning Err
+#[derive(Debug)]
+struct IriElementsPositions {
+    scheme_end: usize,
+    authority_end: usize,
+    path_end: usize,
+    query_end: usize,
+    fragment_end: usize,
+}
 
 pub fn validate_iri(value: &[u8]) -> Result<(), usize> {
     match parse_iri(value, 0) {
         Ok(i) => {
-            if i == value.len() {
+            if i.fragment_end == value.len() {
                 Ok(())
             } else {
-                Err(i)
+                Err(i.fragment_end)
             }
         }
         Err(i) => Err(i),
@@ -18,32 +25,198 @@ pub fn validate_iri(value: &[u8]) -> Result<(), usize> {
 pub fn validate_absolute_iri(value: &[u8]) -> Result<(), usize> {
     match parse_absolute_iri(value, 0) {
         Ok(i) => {
-            if i == value.len() {
+            if i.fragment_end == value.len() {
                 Ok(())
             } else {
-                Err(i)
+                Err(i.fragment_end)
             }
         }
         Err(i) => Err(i),
     }
 }
 
-pub fn validate_iri_reference(value: &[u8]) -> Result<(), usize> {
-    match parse_iri_reference(value, 0) {
-        Ok(i) => {
-            if i == value.len() {
-                Ok(())
+// RFC 3986 5.2 Relative Resolution algorithm
+pub fn resolve_relative_iri(
+    reference_iri: &[u8],
+    base_iri: &[u8],
+    target_buffer: &mut Vec<u8>,
+) -> Result<(), usize> {
+    let reference_positions = parse_iri_reference(reference_iri, 0)?;
+    let base_positions = parse_iri(base_iri, 0).unwrap(); //TODO: proper errors if the input have not been validated yet
+
+    // if defined(R.scheme) then
+    if reference_positions.scheme_end > 0 {
+        // T.scheme = R.scheme;
+        // T.authority = R.authority;
+        target_buffer.extend_from_slice(&reference_iri[0..reference_positions.authority_end]);
+        // T.path = remove_dot_segments(R.path);
+        append_and_remove_dot_segments(
+            &reference_iri[reference_positions.authority_end..reference_positions.path_end],
+            target_buffer,
+            target_buffer.len(),
+        );
+        // T.query = R.query;
+        // T.fragment = R.fragment;
+        target_buffer.extend_from_slice(&reference_iri[reference_positions.path_end..]);
+    } else {
+        // T.scheme = Base.scheme;
+        target_buffer.extend_from_slice(&base_iri[0..base_positions.scheme_end]);
+
+        // if defined(R.authority) then
+        if reference_positions.authority_end > reference_positions.scheme_end {
+            // T.authority = R.authority;
+            target_buffer.extend_from_slice(
+                &reference_iri[reference_positions.scheme_end..reference_positions.authority_end],
+            );
+            // T.path = remove_dot_segments(R.path);
+            append_and_remove_dot_segments(
+                &reference_iri[reference_positions.authority_end..reference_positions.path_end],
+                target_buffer,
+                target_buffer.len(),
+            );
+            // T.query = R.query;
+            // T.fragment = R.fragment;
+            target_buffer.extend_from_slice(&reference_iri[reference_positions.path_end..])
+        } else {
+            // T.authority = Base.authority;
+            target_buffer.extend_from_slice(
+                &base_iri[base_positions.scheme_end..base_positions.authority_end],
+            );
+            // if (R.path == "") then TODO: is correct?
+            if reference_positions.path_end == reference_positions.authority_end {
+                // T.path = Base.path;
+                target_buffer.extend_from_slice(
+                    &base_iri[base_positions.authority_end..base_positions.path_end],
+                );
+                // if defined(R.query) then
+                if reference_positions.query_end > reference_positions.path_end {
+                    // T.query = R.query;
+                    target_buffer.extend_from_slice(
+                        &reference_iri[reference_positions.path_end..reference_positions.query_end],
+                    );
+                } else {
+                    // T.query = Base.query;
+                    target_buffer.extend_from_slice(
+                        &base_iri[base_positions.path_end..base_positions.query_end],
+                    );
+                }
             } else {
-                Err(i)
+                // if (R.path starts-with "/") then
+                if reference_positions.authority_end < reference_iri.len()
+                    && reference_iri[reference_positions.authority_end] == b'/'
+                {
+                    // T.path = remove_dot_segments(R.path);
+                    append_and_remove_dot_segments(
+                        &reference_iri
+                            [reference_positions.authority_end..reference_positions.path_end],
+                        target_buffer,
+                        target_buffer.len(),
+                    );
+                } else {
+                    let path_start_in_target = target_buffer.len();
+                    // T.path = merge(Base.path, R.path);
+                    // T.path = remove_dot_segments(T.path);
+                    if base_positions.authority_end > base_positions.scheme_end
+                        && base_positions.path_end == base_positions.authority_end
+                    {
+                        target_buffer.push(b'/');
+                    } else {
+                        let last_base_slash = base_iri
+                            [base_positions.authority_end..base_positions.path_end]
+                            .iter()
+                            .cloned()
+                            .enumerate()
+                            .rev()
+                            .find(|(_, c)| *c == b'/')
+                            .map_or(0, |(i, _)| i)
+                            + base_positions.authority_end;
+                        append_and_remove_dot_segments(
+                            &base_iri[base_positions.authority_end..=last_base_slash],
+                            target_buffer,
+                            path_start_in_target,
+                        );
+                    }
+                    append_and_remove_dot_segments(
+                        &reference_iri
+                            [reference_positions.authority_end..reference_positions.path_end],
+                        target_buffer,
+                        path_start_in_target,
+                    );
+                }
+                // T.query = R.query;
+                target_buffer.extend_from_slice(
+                    &reference_iri[reference_positions.path_end..reference_positions.query_end],
+                );
+            }
+            // T.fragment = R.fragment;
+            target_buffer.extend_from_slice(
+                &reference_iri[reference_positions.query_end..reference_positions.fragment_end],
+            );
+        }
+    }
+    Ok(())
+}
+
+// RFC 3986 5.2.4 Remove Dot Segments
+fn append_and_remove_dot_segments(
+    mut input: &[u8],
+    output: &mut Vec<u8>,
+    path_start_in_output: usize, //protects the authority before this position
+) {
+    while !input.is_empty() {
+        if input.starts_with(b"../") {
+            pop_last_segment(output, path_start_in_output);
+            input = &input[3..];
+        } else if input.starts_with(b"./") || input.starts_with(b"/./") {
+            input = &input[2..];
+        } else if input == b"/." {
+            input = b"/";
+        } else if input == b"." {
+            input = b"";
+        } else if input.starts_with(b"/../") {
+            pop_last_segment(output, path_start_in_output);
+            input = &input[3..];
+        } else if input == b"/.." || input == b".." {
+            pop_last_segment(output, path_start_in_output);
+            input = b"";
+        } else {
+            if input[0] != b'/' || output.last() != Some(&b'/') {
+                output.push(input[0]);
+            }
+            input = &input[1..];
+            while !input.is_empty() && input[0] != b'/' {
+                output.push(input[0]);
+                input = &input[1..];
             }
         }
-        Err(i) => Err(i),
     }
 }
 
-fn parse_iri(value: &[u8], start: usize) -> IriParserState {
-    // IRI = scheme ":" ihier-part [ "?" iquery ] [ "#" ifragment ] = absolute-IRI [ "#" ifragment ]
-    let query_end = parse_absolute_iri(value, start)?;
+fn pop_last_segment(buffer: &mut Vec<u8>, path_start_in_buffer: usize) {
+    let init_len = buffer.len();
+    for i in (path_start_in_buffer..init_len).rev() {
+        if buffer[i] == b'/' && i != init_len - 1 {
+            return;
+        }
+        buffer.pop();
+    }
+    buffer.push(b'/') // Ensures there is always a /
+}
+
+fn parse_iri(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
+    // IRI = scheme ":" ihier-part [ "?" iquery ] [ "#" ifragment ]
+    let scheme_end = parse_scheme(value, start)?;
+    if scheme_end >= value.len() || value[scheme_end] != b':' {
+        Err(scheme_end)?
+    }
+
+    let (authority_end, path_end) = parse_ihier_part(value, scheme_end + 1)?;
+
+    let query_end = if path_end < value.len() && value[path_end] == b'?' {
+        parse_iquery(value, path_end + 1)?
+    } else {
+        path_end
+    };
 
     let fragment_end = if query_end < value.len() && value[query_end] == b'#' {
         parse_ifragment(value, query_end + 1)?
@@ -51,22 +224,29 @@ fn parse_iri(value: &[u8], start: usize) -> IriParserState {
         query_end
     };
 
-    Ok(fragment_end)
+    Ok(IriElementsPositions {
+        scheme_end: scheme_end + 1,
+        authority_end,
+        path_end,
+        query_end,
+        fragment_end,
+    })
 }
 
-fn parse_ihier_part(value: &[u8], start: usize) -> IriParserState {
+fn parse_ihier_part(value: &[u8], start: usize) -> Result<(usize, usize), usize> {
+    // (authority_end, path_end)
     // ihier-part = "//" iauthority ipath-abempty / ipath-absolute / ipath-rootless / ipath-empty
-    if value.len() >= start + 2 && value[start] == b'/' && value[start + 1] == b'/' {
-        let i = parse_iauthority(value, start + 2)?;
-        parse_ipath_abempty(value, i)
-    } else if value.len() > start && value[start] == b'/' {
-        parse_ipath_absolute(value, start)
+    if value[start..].starts_with(b"//") {
+        let authority_end = parse_iauthority(value, start + 2)?;
+        Ok((authority_end, parse_ipath_abempty(value, authority_end)?))
+    } else if value[start..].starts_with(b"/") {
+        Ok((start, parse_ipath_absolute(value, start)?))
     } else {
         match parse_ipath_rootless(value, start) {
-            Ok(i) => Ok(i),
+            Ok(i) => Ok((start, i)),
             Err(i) => {
                 if i == start {
-                    Ok(i) // ipath empty
+                    Ok((start, i)) // ipath empty
                 } else {
                     Err(i)
                 }
@@ -75,35 +255,28 @@ fn parse_ihier_part(value: &[u8], start: usize) -> IriParserState {
     }
 }
 
-fn parse_iri_reference(value: &[u8], start: usize) -> IriParserState {
+fn parse_iri_reference(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
     // IRI-reference  = IRI / irelative-ref
     match parse_iri(value, start) {
-        Ok(r) => Ok(r),
+        Ok(positions) => Ok(positions),
         Err(_) => parse_irelative_ref(value, start),
     }
 }
 
-fn parse_absolute_iri(value: &[u8], start: usize) -> IriParserState {
-    // absolute-IRI = scheme ":" ihier-part [ "?" iquery ]
-    let scheme_end = parse_scheme(value, start)?;
-    if scheme_end >= value.len() || value[scheme_end] != b':' {
-        Err(scheme_end)?
-    }
+fn parse_absolute_iri(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
+    // absolute-IRI = scheme ":" ihier-part [ "?" iquery ] = IRI without fragment
+    let positions = parse_iri(value, start)?;
 
-    let path_end = parse_ihier_part(value, scheme_end + 1)?;
-
-    let query_end = if path_end < value.len() && value[path_end] == b'?' {
-        parse_iquery(value, path_end + 1)?
+    if positions.fragment_end > positions.query_end {
+        Err(positions.query_end + 1)
     } else {
-        path_end
-    };
-
-    Ok(query_end)
+        Ok(positions)
+    }
 }
 
-fn parse_irelative_ref(value: &[u8], start: usize) -> IriParserState {
+fn parse_irelative_ref(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
     // irelative-ref = irelative-part [ "?" iquery ] [ "#" ifragment ]
-    let path_end = parse_irelative_path(value, start)?;
+    let (authority_end, path_end) = parse_irelative_path(value, start)?;
 
     let query_end = if path_end < value.len() && value[path_end] == b'?' {
         parse_iquery(value, path_end + 1)?
@@ -116,22 +289,29 @@ fn parse_irelative_ref(value: &[u8], start: usize) -> IriParserState {
         query_end
     };
 
-    Ok(fragment_end)
+    Ok(IriElementsPositions {
+        scheme_end: start,
+        authority_end,
+        path_end,
+        query_end,
+        fragment_end,
+    })
 }
 
-fn parse_irelative_path(value: &[u8], start: usize) -> IriParserState {
+fn parse_irelative_path(value: &[u8], start: usize) -> Result<(usize, usize), usize> {
+    // (authority_end, path_end)
     // irelative-part = "//" iauthority ipath-abempty / ipath-absolute / ipath-noscheme / ipath-empty
-    if value.len() >= start + 2 && value[start] == b'/' && value[start + 1] == b'/' {
-        let i = parse_iauthority(&value, start + 2)?;
-        parse_ipath_abempty(value, i)
-    } else if value.len() > start && value[start] == b'/' {
-        parse_ipath_absolute(value, start)
+    if value[start..].starts_with(b"//") {
+        let authority_end = parse_iauthority(&value, start + 2)?;
+        Ok((authority_end, parse_ipath_abempty(value, authority_end)?))
+    } else if value[start..].starts_with(b"/") {
+        Ok((start, parse_ipath_absolute(value, start)?))
     } else {
         match parse_ipath_noscheme(value, start) {
-            Ok(i) => Ok(i),
+            Ok(i) => Ok((start, i)),
             Err(i) => {
                 if i == start {
-                    Ok(i) // ipath empty
+                    Ok((start, i)) // ipath empty
                 } else {
                     Err(i)
                 }
@@ -181,7 +361,7 @@ fn parse_ipath_abempty(value: &[u8], start: usize) -> IriParserState {
 
 fn parse_ipath_absolute(value: &[u8], start: usize) -> IriParserState {
     // ipath-absolute = "/" [ isegment-nz *( "/" isegment ) ] = "/" [ isegment-nz ipath-abempty ]
-    if value.len() <= start || value[start] != b'/' {
+    if !value[start..].starts_with(b"/") {
         return Err(start);
     }
 
@@ -305,17 +485,6 @@ fn test_parsing() {
         "http://example.com/foo/bar/?q=1&r=2#toto",
     ];
 
-    let examples_relative = [
-        "//foo.com/bar",
-        "/foo",
-        "/../foo",
-        "/./foo",
-        "bar",
-        "?p=1",
-        "?p=1#boo",
-        "#boo",
-    ];
-
     for e in &examples_absolute {
         assert!(
             validate_iri(e.as_bytes()).is_ok(),
@@ -327,11 +496,6 @@ fn test_parsing() {
             "{} is not recognized as an absolute IRI",
             e
         );
-        assert!(
-            validate_iri_reference(e.as_bytes()).is_ok(),
-            "{} is not recognized as an IRI reference",
-            e
-        );
     }
 
     for e in &examples {
@@ -340,18 +504,75 @@ fn test_parsing() {
             "{} is not recognized as an IRI",
             e
         );
-        assert!(
-            validate_iri_reference(e.as_bytes()).is_ok(),
-            "{} is not recognized as an IRI reference",
-            e
-        );
     }
+}
 
-    for e in &examples_relative {
+#[test]
+fn test_resolve_relative_iri() {
+    use std::str;
+
+    let base = "http://a/b/c/d;p?q";
+
+    let examples = [
+        ("g:h", "g:h"),
+        ("g", "http://a/b/c/g"),
+        ("g/", "http://a/b/c/g/"),
+        ("/g", "http://a/g"),
+        ("//g", "http://g"),
+        ("?y", "http://a/b/c/d;p?y"),
+        ("g?y", "http://a/b/c/g?y"),
+        ("#s", "http://a/b/c/d;p?q#s"),
+        ("g#s", "http://a/b/c/g#s"),
+        ("g?y#s", "http://a/b/c/g?y#s"),
+        (";x", "http://a/b/c/;x"),
+        ("g;x", "http://a/b/c/g;x"),
+        ("g;x?y#s", "http://a/b/c/g;x?y#s"),
+        ("", "http://a/b/c/d;p?q"),
+        (".", "http://a/b/c/"),
+        ("./", "http://a/b/c/"),
+        ("./g", "http://a/b/c/g"),
+        ("..", "http://a/b/"),
+        ("../", "http://a/b/"),
+        ("../g", "http://a/b/g"),
+        ("../..", "http://a/"),
+        ("../../", "http://a/"),
+        ("../../g", "http://a/g"),
+        ("../../../g", "http://a/g"),
+        ("../../../../g", "http://a/g"),
+        ("/./g", "http://a/g"),
+        ("/../g", "http://a/g"),
+        ("g.", "http://a/b/c/g."),
+        (".g", "http://a/b/c/.g"),
+        ("g..", "http://a/b/c/g.."),
+        ("..g", "http://a/b/c/..g"),
+        ("./../g", "http://a/b/g"),
+        ("./g/.", "http://a/b/c/g/"),
+        ("g/./h", "http://a/b/c/g/h"),
+        ("g/../h", "http://a/b/c/h"),
+        ("g;x=1/./y", "http://a/b/c/g;x=1/y"),
+        ("g;x=1/../y", "http://a/b/c/y"),
+        ("g?y/./x", "http://a/b/c/g?y/./x"),
+        ("g?y/../x", "http://a/b/c/g?y/../x"),
+        ("g#s/./x", "http://a/b/c/g#s/./x"),
+        ("g#s/../x", "http://a/b/c/g#s/../x"),
+        ("http:g", "http:g"),
+    ];
+
+    let mut buffer = Vec::default();
+    for (input, output) in examples.iter() {
+        let result = resolve_relative_iri(input.as_bytes(), base.as_bytes(), &mut buffer);
         assert!(
-            validate_iri_reference(e.as_bytes()).is_ok(),
-            "{} is not recognized as an IRI reference",
-            e
+            result.is_ok(),
+            "Resolving of {} failed at byte {}",
+            input,
+            result.unwrap_err()
         );
+        let result = str::from_utf8(&buffer).unwrap();
+        assert_eq!(
+            result, *output,
+            "Resolving of {} is wrong. Found {} and expecting {}",
+            input, result, output
+        );
+        buffer.clear();
     }
 }

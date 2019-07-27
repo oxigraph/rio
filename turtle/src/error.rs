@@ -20,7 +20,7 @@ pub enum TurtleErrorKind {
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
     InvalidUTF8,
-    InvalidBaseIRI, //TODO: remove
+    InvalidBaseIRI,
     InvalidIRI,
 }
 
