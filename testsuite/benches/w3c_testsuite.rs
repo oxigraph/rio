@@ -36,14 +36,14 @@ fn test_data_from_testsuite(
 
 fn ntriples_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     test_data_from_testsuite(
-        "http://www.w3.org/2013/N-TriplesTests/manifest.ttl".to_owned(),
+        "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl".to_owned(),
         &["http://www.w3.org/ns/rdftest#TestNTriplesPositiveSyntax"],
     )
 }
 
 fn turtle_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     test_data_from_testsuite(
-        "http://www.w3.org/2013/TurtleTests/manifest.ttl".to_owned(),
+        "http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned(),
         &[
             "http://www.w3.org/ns/rdftest#TestTurtlePositiveSyntax",
             "http://www.w3.org/ns/rdftest#TestTurtleEval",

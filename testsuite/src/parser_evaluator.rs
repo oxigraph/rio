@@ -80,19 +80,13 @@ pub fn read_w3c_rdf_test_file(
     tests_path: &Path,
 ) -> Result<BufReader<File>, Box<dyn Error>> {
     let mut path = tests_path.to_owned();
-    path.push(
-        if url.starts_with("http://www.w3.org/2013/N-TriplesTests") {
-            Ok(url.replace("http://www.w3.org/2013/N-TriplesTests/", "ntriples/"))
-        } else if url.starts_with("http://www.w3.org/2013/TurtleTests/") {
-            Ok(url.replace("http://www.w3.org/2013/TurtleTests/", "turtle/"))
-        } else if url.starts_with("http://www.w3.org/2013/RDFXMLTests/") {
-            Ok(url.replace("http://www.w3.org/2013/RDFXMLTests/", "rdf-xml/"))
-        } else {
-            Err(Box::new(TestEvaluationError::UnknownTestUrl(
-                url.to_owned(),
-            )))
-        }?,
-    );
+    path.push(if url.starts_with("http://w3c.github.io/rdf-tests/") {
+        Ok(url.replace("http://w3c.github.io/rdf-tests/", ""))
+    } else {
+        Err(Box::new(TestEvaluationError::UnknownTestUrl(
+            url.to_owned(),
+        )))
+    }?);
 
     Ok(BufReader::new(File::open(&path).map_err(|e| {
         TestEvaluationError::IO(path.to_string_lossy().to_string(), e)

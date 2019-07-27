@@ -37,7 +37,7 @@ fn run_testsuite(
 #[test]
 fn ntriples_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite(
-        "http://www.w3.org/2013/N-TriplesTests/manifest.ttl".to_owned(),
+        "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl".to_owned(),
         0,
     )
 }
@@ -45,7 +45,7 @@ fn ntriples_w3c_testsuite() -> Result<(), Box<dyn Error>> {
 #[test]
 fn turtle_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite(
-        "http://www.w3.org/2013/TurtleTests/manifest.ttl".to_owned(),
-        5,
+        "http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned(),
+        3,
     )
 }
