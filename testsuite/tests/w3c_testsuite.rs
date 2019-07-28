@@ -10,10 +10,7 @@ fn get_test_path() -> PathBuf {
     return base_path;
 }
 
-fn run_testsuite(
-    manifest_uri: String,
-    number_of_expected_errors: usize,
-) -> Result<(), Box<dyn Error>> {
+fn run_testsuite(manifest_uri: String) -> Result<(), Box<dyn Error>> {
     let test_path = get_test_path();
     let manifest = TestManifest::new(manifest_uri, |url| parse_w3c_rdf_test_file(url, &test_path));
 
@@ -26,26 +23,16 @@ fn run_testsuite(
         }
     }
 
-    assert!(
-        errors.len() <= number_of_expected_errors,
-        "\n{}\n",
-        errors.join("\n")
-    );
+    assert!(errors.is_empty(), "\n{}\n", errors.join("\n"));
     Ok(())
 }
 
 #[test]
 fn ntriples_w3c_testsuite() -> Result<(), Box<dyn Error>> {
-    run_testsuite(
-        "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl".to_owned(),
-        0,
-    )
+    run_testsuite("http://w3c.github.io/rdf-tests/ntriples/manifest.ttl".to_owned())
 }
 
 #[test]
 fn turtle_w3c_testsuite() -> Result<(), Box<dyn Error>> {
-    run_testsuite(
-        "http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned(),
-        2,
-    )
+    run_testsuite("http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned())
 }

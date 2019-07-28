@@ -106,7 +106,12 @@ pub fn resolve_relative_iri(
                     if base_positions.authority_end > base_positions.scheme_end
                         && base_positions.path_end == base_positions.authority_end
                     {
-                        target_buffer.push(b'/');
+                        append_and_remove_dot_segments_with_extra_slash(
+                            &reference_iri
+                                [reference_positions.authority_end..reference_positions.path_end],
+                            target_buffer,
+                            path_start_in_target,
+                        );
                     } else {
                         let last_base_slash = base_iri
                             [base_positions.authority_end..base_positions.path_end]
@@ -122,13 +127,23 @@ pub fn resolve_relative_iri(
                             target_buffer,
                             path_start_in_target,
                         );
+                        let to_add = &reference_iri
+                            [reference_positions.authority_end..reference_positions.path_end];
+                        if target_buffer.ends_with(b"/") {
+                            target_buffer.pop();
+                            append_and_remove_dot_segments_with_extra_slash(
+                                to_add,
+                                target_buffer,
+                                path_start_in_target,
+                            );
+                        } else {
+                            append_and_remove_dot_segments(
+                                to_add,
+                                target_buffer,
+                                path_start_in_target,
+                            );
+                        }
                     }
-                    append_and_remove_dot_segments(
-                        &reference_iri
-                            [reference_positions.authority_end..reference_positions.path_end],
-                        target_buffer,
-                        path_start_in_target,
-                    );
                 }
                 // T.query = R.query;
                 target_buffer.extend_from_slice(
@@ -148,28 +163,25 @@ pub fn resolve_relative_iri(
 fn append_and_remove_dot_segments(
     mut input: &[u8],
     output: &mut Vec<u8>,
-    path_start_in_output: usize, //protects the authority before this position
+    path_start_in_output: usize,
 ) {
     while !input.is_empty() {
         if input.starts_with(b"../") {
-            pop_last_segment(output, path_start_in_output);
             input = &input[3..];
         } else if input.starts_with(b"./") || input.starts_with(b"/./") {
             input = &input[2..];
         } else if input == b"/." {
             input = b"/";
-        } else if input == b"." {
-            input = b"";
         } else if input.starts_with(b"/../") {
             pop_last_segment(output, path_start_in_output);
             input = &input[3..];
-        } else if input == b"/.." || input == b".." {
+        } else if input == b"/.." {
             pop_last_segment(output, path_start_in_output);
+            input = b"/";
+        } else if input == b"." || input == b".." {
             input = b"";
         } else {
-            if input[0] != b'/' || output.last() != Some(&b'/') {
-                output.push(input[0]);
-            }
+            output.push(input[0]);
             input = &input[1..];
             while !input.is_empty() && input[0] != b'/' {
                 output.push(input[0]);
@@ -180,14 +192,40 @@ fn append_and_remove_dot_segments(
 }
 
 fn pop_last_segment(buffer: &mut Vec<u8>, path_start_in_buffer: usize) {
-    let init_len = buffer.len();
-    for i in (path_start_in_buffer..init_len).rev() {
-        if buffer[i] == b'/' && i != init_len - 1 {
+    for i in (path_start_in_buffer..buffer.len()).rev() {
+        if buffer[i] == b'/' {
+            buffer.pop();
             return;
         }
         buffer.pop();
     }
-    buffer.push(b'/') // Ensures there is always a /
+}
+
+fn append_and_remove_dot_segments_with_extra_slash(
+    mut input: &[u8],
+    output: &mut Vec<u8>,
+    path_start_in_output: usize,
+) {
+    if input.is_empty() {
+        output.push(b'/');
+    } else if input.starts_with(b"./") {
+        append_and_remove_dot_segments(&input[1..], output, path_start_in_output)
+    } else if input == b"." {
+        append_and_remove_dot_segments(b"/", output, path_start_in_output)
+    } else if input.starts_with(b"../") {
+        pop_last_segment(output, path_start_in_output);
+        append_and_remove_dot_segments(&input[2..], output, path_start_in_output)
+    } else if input == b".." {
+        pop_last_segment(output, path_start_in_output);
+        append_and_remove_dot_segments(b"/", output, path_start_in_output)
+    } else {
+        output.push(b'/');
+        while !input.is_empty() && input[0] != b'/' {
+            output.push(input[0]);
+            input = &input[1..];
+        }
+        append_and_remove_dot_segments(input, output, path_start_in_output)
+    }
 }
 
 fn parse_iri(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
