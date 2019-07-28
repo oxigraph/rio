@@ -19,6 +19,8 @@ permutohedron = "0.2"
 
 [dev-dependencies]
 bencher = "0.1"
+sophia = { git = "https://github.com/pchampin/sophia_rs" }
+chelone = "0.1"
 
 [[bench]]
 name = "w3c_testsuite"

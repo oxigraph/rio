@@ -1,10 +1,13 @@
 use bencher::{benchmark_group, benchmark_main, Bencher};
+use chelone::Graph;
 use rio_api::parser::TripleParser;
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
     parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,
 };
 use rio_turtle::{NTriplesParser, TurtleParser};
+use sophia::parser::nt;
+use sophia::triple::stream::TripleSource;
 use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
@@ -114,10 +117,40 @@ fn bench_parse_turtle_with_turtle(bench: &mut Bencher) {
     )
 }
 
+fn bench_parse_ntriples_with_sophia(bench: &mut Bencher) {
+    let data = match ntriples_test_data() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
+    bench.bytes = data.len() as u64;
+    bench.iter(|| nt::parse_read(data.as_slice()).in_sink(&mut ()).unwrap());
+}
+
+fn bench_parse_turtle_with_chelone(bench: &mut Bencher) {
+    let data = String::from_utf8(match ntriples_test_data() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    })
+    .unwrap();
+    bench.bytes = data.len() as u64;
+    bench.iter(|| {
+        let graph = Graph::new(data.as_str()).unwrap();
+        let triples = graph.parse();
+    });
+}
+
 benchmark_group!(
     w3c_testsuite,
     bench_parse_ntriples_with_ntriples,
     bench_parse_ntriples_with_turtle,
-    bench_parse_turtle_with_turtle
+    bench_parse_turtle_with_turtle,
+    bench_parse_ntriples_with_sophia,
+    bench_parse_turtle_with_chelone
 );
 benchmark_main!(w3c_testsuite);
