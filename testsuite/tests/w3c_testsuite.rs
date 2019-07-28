@@ -46,6 +46,6 @@ fn ntriples_w3c_testsuite() -> Result<(), Box<dyn Error>> {
 fn turtle_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite(
         "http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned(),
-        3,
+        2,
     )
 }

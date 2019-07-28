@@ -64,7 +64,7 @@ fn parse_iriref(
                     b'U' => read_hexa_char(read, 8)?,
                     _ => read.unexpected_char_error()?,
                 } {
-                    '\0'..=' ' | '<' | '"' | '{' | '}' | '|' | '^' | '`' => {
+                    '\0'..=' ' | '<' | '>' | '"' | '{' | '}' | '|' | '^' | '`' => {
                         read.unexpected_char_error()?
                     }
                     c => buffer.push_char(c),
