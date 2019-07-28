@@ -12,8 +12,8 @@ edition = "2018"
 publish = false
 
 [dependencies]
-rio_api = {path = "../api"}
-rio_turtle = {path = "../turtle"}
+rio_api = "0.1"
+rio_turtle = "0.1"
 chrono = "0.4"
 permutohedron = "0.2"
 

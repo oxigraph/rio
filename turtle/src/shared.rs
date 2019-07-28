@@ -54,7 +54,6 @@ fn parse_iriref(
                 return Ok(());
             }
             b'\0'..=b' ' | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' => {
-                //TODO: added ' ' to make tests pass
                 read.unexpected_char_error()?
             }
             b'\\' => {

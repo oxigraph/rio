@@ -1,6 +1,11 @@
 Rio
 ===
 
+
+[![Build Status](https://travis-ci.org/Tpt/rio.svg?branch=master)](https://travis-ci.org/Tpt/rio)
+[![Latest Version](https://img.shields.io/crates/v/rio_api.svg)](https://crates.io/crates/rio_api)
+[![Latest Version](https://img.shields.io/crates/v/rio_turtle.svg)](https://crates.io/crates/rio_turtle)
+
 Rio is a library aiming at providing conformant and fast parsers for RDF related file formats.
 
 It currently provides [N-Triples](https://www.w3.org/TR/n-triples/) and [Turtle](https://www.w3.org/TR/turtle/) parsers.

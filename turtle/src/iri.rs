@@ -69,7 +69,7 @@ pub fn resolve_relative_iri(
             target_buffer.extend_from_slice(
                 &base_iri[base_positions.scheme_end..base_positions.authority_end],
             );
-            // if (R.path == "") then TODO: is correct?
+            // if (R.path == "") then
             if reference_positions.path_end == reference_positions.authority_end {
                 // T.path = Base.path;
                 target_buffer.extend_from_slice(
