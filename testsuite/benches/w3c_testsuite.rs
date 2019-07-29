@@ -6,9 +6,11 @@ use rio_testsuite::parser_evaluator::{
     parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,
 };
 use rio_turtle::{NTriplesParser, TurtleParser};
+use serd_sys::{serd_reader_new, serd_reader_read_string, SerdSyntax};
 use sophia::parser::nt;
 use sophia::triple::stream::TripleSource;
 use std::error::Error;
+use std::ffi::CString;
 use std::io::Read;
 use std::path::PathBuf;
 
@@ -104,6 +106,20 @@ fn bench_parse_ntriples_with_turtle(bench: &mut Bencher) {
     )
 }
 
+fn bench_parse_ntriples_with_serd(bench: &mut Bencher) {
+    parse_with_serde(
+        bench,
+        match ntriples_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+        SerdSyntax::SERD_NTRIPLES,
+    );
+}
+
 fn bench_parse_turtle_with_turtle(bench: &mut Bencher) {
     parse_turtle(
         bench,
@@ -141,7 +157,46 @@ fn bench_parse_turtle_with_chelone(bench: &mut Bencher) {
     bench.bytes = data.len() as u64;
     bench.iter(|| {
         let graph = Graph::new(data.as_str()).unwrap();
-        let triples = graph.parse();
+        graph.parse();
+    });
+}
+
+fn bench_parse_turtle_with_serd(bench: &mut Bencher) {
+    parse_with_serde(
+        bench,
+        match ntriples_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+        SerdSyntax::SERD_TURTLE,
+    );
+}
+
+fn parse_with_serde(bench: &mut Bencher, mut data: Vec<u8>, format: SerdSyntax) {
+    //Let's clean data
+    for i in 0..data.len() {
+        if data[i] == b'\0' {
+            data[i] = b' ';
+        }
+    }
+
+    bench.bytes = data.len() as u64;
+    let data = CString::new(data).unwrap();
+    bench.iter(|| unsafe {
+        let mut count = 0;
+        let reader = serd_reader_new(
+            format,
+            &mut count as *mut _ as *mut ::std::os::raw::c_void,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        serd_reader_read_string(reader, data.as_bytes_with_nul().as_ptr());
     });
 }
 
@@ -149,8 +204,10 @@ benchmark_group!(
     w3c_testsuite,
     bench_parse_ntriples_with_ntriples,
     bench_parse_ntriples_with_turtle,
+    bench_parse_ntriples_with_serd,
     bench_parse_turtle_with_turtle,
     bench_parse_ntriples_with_sophia,
-    bench_parse_turtle_with_chelone
+    bench_parse_turtle_with_chelone,
+    bench_parse_turtle_with_serd
 );
 benchmark_main!(w3c_testsuite);
