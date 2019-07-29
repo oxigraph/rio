@@ -6,37 +6,28 @@ use std::char;
 use std::str;
 use std::u8;
 
-pub fn parse_iriref_absolute<'a>(
+pub fn parse_iriref_absolute(
     read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
-) -> Result<NamedNode<'a>, TurtleError> {
+    buffer: &mut Vec<u8>,
+) -> Result<(), TurtleError> {
     parse_iriref(read, buffer)?;
-    match validate_iri(buffer) {
-        Ok(()) => Ok(NamedNode {
-            iri: to_str(read, buffer)?,
-        }),
-        Err(_) => Err(read.parse_error(TurtleErrorKind::InvalidIRI)), //TODO position
-    }
+    validate_iri(buffer).map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI)) //TODO position
 }
 
-pub fn parse_iriref_relative<'a>(
+pub fn parse_iriref_relative(
     read: &mut impl OneLookAheadLineByteRead,
-    buffer: &'a mut Vec<u8>,
-    temp_buffer: &'a mut Vec<u8>,
-    base_iri: &'a [u8],
-) -> Result<NamedNode<'a>, TurtleError> {
+    buffer: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
+    base_iri: &[u8],
+) -> Result<(), TurtleError> {
     if base_iri.is_empty() {
         parse_iriref_absolute(read, buffer)
     } else {
         parse_iriref(read, temp_buffer)?;
-        let result = resolve_relative_iri(temp_buffer, base_iri, buffer);
+        let result = resolve_relative_iri(temp_buffer, base_iri, buffer)
+            .map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI)); //TODO position
         temp_buffer.clear();
-        match result {
-            Ok(()) => Ok(NamedNode {
-                iri: to_str(read, buffer)?,
-            }),
-            Err(_) => Err(read.parse_error(TurtleErrorKind::InvalidIRI)), //TODO position
-        }
+        result
     }
 }
 
