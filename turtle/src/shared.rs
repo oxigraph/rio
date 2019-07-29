@@ -18,17 +18,17 @@ pub fn parse_iriref_relative(
     read: &mut impl OneLookAheadLineByteRead,
     buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
-    base_iri: &[u8],
+    iri_parser: &IriParser,
 ) -> Result<(), TurtleError> {
-    if base_iri.is_empty() {
-        parse_iriref_absolute(read, buffer)
-    } else {
+    if iri_parser.has_base_iri() {
         parse_iriref(read, temp_buffer)?;
-        let result = resolve_relative_iri(temp_buffer, base_iri, buffer)
+        let result = iri_parser.resolve(temp_buffer, buffer)
             .map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI)); //TODO position
         temp_buffer.clear();
         result
-    }
+    } else {
+parse_iriref_absolute(read, buffer)
+}
 }
 
 fn parse_iriref(

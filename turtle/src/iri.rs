@@ -1,6 +1,46 @@
+pub struct IriParser {
+    base_iri: Vec<u8>,
+    base_positions: IriElementsPositions
+}
+
+impl IriParser {
+    pub fn new(base_iri: &[u8]) -> Result<Self, usize> {
+        let mut this = Self {
+            base_iri: Vec::default(),
+            base_positions: IriElementsPositions::default()
+        };
+        if !base_iri.is_empty() {
+            this.set_base_iri(base_iri)?;
+        }
+        Ok(this)
+    }
+
+    pub fn set_base_iri(&mut self, base_iri: &[u8]) -> Result<(), usize> {
+        self.base_iri.clear();
+        self.base_iri.extend_from_slice(base_iri);
+        self.base_positions = parse_iri(&self.base_iri, 0)?;
+        Ok(())
+    }
+
+    pub fn has_base_iri(&self) -> bool {
+        !self.base_iri.is_empty()
+    }
+
+    pub fn resolve(&self, iri: &[u8], target_buffer: &mut Vec<u8>) -> Result<(), usize> {
+        if self.base_iri.is_empty() {
+            parse_iri(iri, 0)?;
+            target_buffer.extend_from_slice(iri);
+            Ok(())
+        } else {
+            resolve_relative_iri(iri, &self.base_iri, &self.base_positions, target_buffer)
+        }
+    }
+}
+
+
 type IriParserState = Result<usize, usize>; // usize = the end position
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct IriElementsPositions {
     scheme_end: usize,
     authority_end: usize,
@@ -23,13 +63,13 @@ pub fn validate_iri(value: &[u8]) -> Result<(), usize> {
 }
 
 // RFC 3986 5.2 Relative Resolution algorithm
-pub fn resolve_relative_iri(
+fn resolve_relative_iri(
     reference_iri: &[u8],
     base_iri: &[u8],
+    base_positions: &IriElementsPositions,
     target_buffer: &mut Vec<u8>,
 ) -> Result<(), usize> {
     let reference_positions = parse_iri_reference(reference_iri, 0)?;
-    let base_positions = parse_iri(base_iri, 0).unwrap(); //TODO: proper errors if the input have not been validated yet
 
     // if defined(R.scheme) then
     if reference_positions.scheme_end > 0 {
@@ -557,8 +597,9 @@ fn test_resolve_relative_iri() {
     ];
 
     let mut buffer = Vec::default();
+    let iri_parser = IriParser::new(base.as_bytes()).unwrap();
     for (input, output) in examples.iter() {
-        let result = resolve_relative_iri(input.as_bytes(), base.as_bytes(), &mut buffer);
+        let result = iri_parser.resolve(input.as_bytes(), &mut buffer);
         assert!(
             result.is_ok(),
             "Resolving of {} failed at byte {}",
