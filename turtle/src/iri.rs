@@ -1,13 +1,13 @@
 pub struct IriParser {
     base_iri: Vec<u8>,
-    base_positions: IriElementsPositions
+    base_positions: IriElementsPositions,
 }
 
 impl IriParser {
     pub fn new(base_iri: &[u8]) -> Result<Self, usize> {
         let mut this = Self {
             base_iri: Vec::default(),
-            base_positions: IriElementsPositions::default()
+            base_positions: IriElementsPositions::default(),
         };
         if !base_iri.is_empty() {
             this.set_base_iri(base_iri)?;
@@ -36,7 +36,6 @@ impl IriParser {
         }
     }
 }
-
 
 type IriParserState = Result<usize, usize>; // usize = the end position
 

@@ -7,7 +7,7 @@ use std::str;
 use std::u8;
 
 pub fn parse_iriref_absolute(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     parse_iriref(read, buffer)?;
@@ -15,24 +15,25 @@ pub fn parse_iriref_absolute(
 }
 
 pub fn parse_iriref_relative(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
     iri_parser: &IriParser,
 ) -> Result<(), TurtleError> {
     if iri_parser.has_base_iri() {
         parse_iriref(read, temp_buffer)?;
-        let result = iri_parser.resolve(temp_buffer, buffer)
+        let result = iri_parser
+            .resolve(temp_buffer, buffer)
             .map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI)); //TODO position
         temp_buffer.clear();
         result
     } else {
-parse_iriref_absolute(read, buffer)
-}
+        parse_iriref_absolute(read, buffer)
+    }
 }
 
 fn parse_iriref(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
@@ -66,7 +67,7 @@ fn parse_iriref(
 }
 
 pub fn parse_blank_node_label<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
 ) -> Result<BlankNode<'a>, TurtleError> {
     // [141s] 	BLANK_NODE_LABEL 	::= 	'_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
@@ -102,7 +103,7 @@ pub fn parse_blank_node_label<'a>(
 }
 
 pub fn parse_langtag(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [144s] 	LANGTAG 	::= 	'@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
@@ -146,7 +147,7 @@ pub fn parse_langtag(
 }
 
 pub fn parse_string_literal_quote(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [22] 	STRING_LITERAL_QUOTE 	::= 	'"' ([^#x22#x5C#xA#xD] | ECHAR | UCHAR)* '"' /* #x22=" #x5C=\ #xA=new line #xD=carriage return */
@@ -154,7 +155,7 @@ pub fn parse_string_literal_quote(
 }
 
 pub fn parse_string_literal_quote_inner(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     quote: u8,
 ) -> Result<(), TurtleError> {
@@ -174,7 +175,7 @@ pub fn parse_string_literal_quote_inner(
 }
 
 pub fn parse_echar_or_uchar(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     read.check_is_current(b'\\')?;
@@ -196,7 +197,7 @@ pub fn parse_echar_or_uchar(
 }
 
 pub(crate) fn read_hexa_char(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     len: usize,
 ) -> Result<char, TurtleError> {
     let point = read_hexa_u32(read, len)?;
@@ -204,7 +205,7 @@ pub(crate) fn read_hexa_char(
         .ok_or_else(|| read.parse_error(TurtleErrorKind::InvalidUnicodeCodePoint(point)))
 }
 
-fn read_hexa_u32(read: &mut impl OneLookAheadLineByteRead, len: usize) -> Result<u32, TurtleError> {
+fn read_hexa_u32(read: &mut impl LookAheadByteRead, len: usize) -> Result<u32, TurtleError> {
     let mut value = 0;
     for _ in 0..len {
         read.consume()?;
@@ -227,7 +228,7 @@ fn convert_hexa_byte(c: u8) -> Option<u8> {
 }
 
 pub(crate) fn to_str<'a>(
-    read: &impl OneLookAheadLineByteRead,
+    read: &impl LookAheadByteRead,
     s: &'a [u8],
 ) -> Result<&'a str, TurtleError> {
     str::from_utf8(s).map_err(|_| read.parse_error(TurtleErrorKind::InvalidUTF8))

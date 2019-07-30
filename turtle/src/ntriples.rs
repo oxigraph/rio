@@ -17,7 +17,7 @@ use std::u8;
 /// if a line significantly longer than the previous is encountered.
 ///
 ///
-/// Count the number of of people using `TripleParse` API:
+/// Count the number of of people using the `TripleParser` API:
 /// ```
 /// use rio_turtle::NTriplesParser;
 /// use rio_api::parser::TripleParser;
@@ -39,7 +39,7 @@ use std::u8;
 /// assert_eq!(2, count)
 /// ```
 pub struct NTriplesParser<R: BufRead> {
-    read: OneLookAheadLineByteReader<R>,
+    read: LookAheadLineBasedByteReader<R>,
     subject_buf: Vec<u8>,
     predicate_buf: Vec<u8>,
     object_buf: Vec<u8>,
@@ -49,7 +49,7 @@ pub struct NTriplesParser<R: BufRead> {
 impl<R: BufRead> NTriplesParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
-            read: OneLookAheadLineByteReader::new(reader)?,
+            read: LookAheadLineBasedByteReader::new(reader)?,
             subject_buf: Vec::default(),
             predicate_buf: Vec::default(),
             object_buf: Vec::default(),
@@ -86,7 +86,7 @@ impl<R: BufRead> TripleParser for NTriplesParser<R> {
 }
 
 fn parse_line<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     subject_buf: &'a mut Vec<u8>,
     predicate_buf: &'a mut Vec<u8>,
     object_buf: &'a mut Vec<u8>,
@@ -128,7 +128,7 @@ fn parse_line<'a>(
 }
 
 fn parse_term<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     annotation_buffer: &'a mut Vec<u8>,
 ) -> Result<Term<'a>, TurtleError> {
@@ -141,7 +141,7 @@ fn parse_term<'a>(
 }
 
 fn parse_named_or_blank_node<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
 ) -> Result<NamedOrBlankNode<'a>, TurtleError> {
     match read.current() {
@@ -152,7 +152,7 @@ fn parse_named_or_blank_node<'a>(
 }
 
 fn parse_literal<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     annotation_buffer: &'a mut Vec<u8>,
 ) -> Result<Literal<'a>, TurtleError> {
@@ -183,7 +183,7 @@ fn parse_literal<'a>(
     }
 }
 
-fn skip_whitespace(read: &mut impl OneLookAheadLineByteRead) -> Result<(), TurtleError> {
+fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             b' ' | b'\t' => read.consume()?,
@@ -192,7 +192,7 @@ fn skip_whitespace(read: &mut impl OneLookAheadLineByteRead) -> Result<(), Turtl
     }
 }
 
-fn skip_until_eol(read: &mut impl OneLookAheadLineByteRead) -> Result<(), TurtleError> {
+fn skip_until_eol(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             EOF => return Ok(()),
@@ -207,7 +207,7 @@ fn skip_until_eol(read: &mut impl OneLookAheadLineByteRead) -> Result<(), Turtle
 }
 
 fn parse_iriref<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
 ) -> Result<NamedNode<'a>, TurtleError> {
     parse_iriref_absolute(read, buffer)?;

@@ -4,8 +4,8 @@ use std::u8;
 
 pub const EOF: u8 = u8::MAX;
 
-/// Reads the file line by line in a streaming way
-pub trait OneLookAheadLineByteRead {
+/// An interface for the parsers input providing a lot of utilities
+pub trait LookAheadByteRead {
     /// Returns the current byte or EOF if the file is finished
     fn current(&self) -> u8;
 
@@ -61,7 +61,8 @@ pub trait OneLookAheadLineByteRead {
     }
 }
 
-pub struct OneLookAheadLineByteReader<R: BufRead> {
+/// Reads the file line by line in a streaming way
+pub struct LookAheadLineBasedByteReader<R: BufRead> {
     inner: R,
     line: Vec<u8>,
     current: u8,
@@ -69,7 +70,7 @@ pub struct OneLookAheadLineByteReader<R: BufRead> {
     byte_number: usize,
 }
 
-impl<R: BufRead> OneLookAheadLineByteReader<R> {
+impl<R: BufRead> LookAheadLineBasedByteReader<R> {
     pub fn new(inner: R) -> Result<Self, TurtleError> {
         let mut this = Self {
             inner,
@@ -85,7 +86,7 @@ impl<R: BufRead> OneLookAheadLineByteReader<R> {
     }
 }
 
-impl<R: BufRead> OneLookAheadLineByteRead for OneLookAheadLineByteReader<R> {
+impl<R: BufRead> LookAheadByteRead for LookAheadLineBasedByteReader<R> {
     fn current(&self) -> u8 {
         self.current
     }

@@ -14,7 +14,7 @@ use std::io::BufRead;
 /// It implements the `TripleParser` trait.
 ///
 ///
-/// Count the number of of people using `TripleParse` API:
+/// Count the number of of people using the `TripleParser` API:
 /// ```
 /// use rio_turtle::TurtleParser;
 /// use rio_api::parser::TripleParser;
@@ -37,7 +37,7 @@ use std::io::BufRead;
 /// assert_eq!(2, count)
 /// ```
 pub struct TurtleParser<R: BufRead> {
-    read: OneLookAheadLineByteReader<R>,
+    read: LookAheadLineBasedByteReader<R>,
     iri_parser: IriParser,
     namespaces: HashMap<Vec<u8>, Vec<u8>>,
     bnode_id_generator: BlankNodeIdGenerator,
@@ -53,9 +53,9 @@ impl<R: BufRead> TurtleParser<R> {
     ///
     /// The base IRI might be empty to state there is no base URL.
     pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
-        let read = OneLookAheadLineByteReader::new(reader)?;
+        let read = LookAheadLineBasedByteReader::new(reader)?;
         let iri_parser = IriParser::new(base_iri.as_bytes())
-                .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI))?;
+            .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI))?;
         Ok(Self {
             read,
             iri_parser,
@@ -133,7 +133,7 @@ fn parse_statement<R: BufRead>(
 }
 
 fn parse_prefix_id(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     namespaces: &mut HashMap<Vec<u8>, Vec<u8>>,
     iri_parser: &IriParser,
     temp_buffer: &mut Vec<u8>,
@@ -158,7 +158,7 @@ fn parse_prefix_id(
 }
 
 fn parse_base(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
     iri_parser: &mut IriParser,
@@ -177,7 +177,7 @@ fn parse_base(
 }
 
 fn parse_sparql_base(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
     iri_parser: &mut IriParser,
@@ -190,19 +190,21 @@ fn parse_sparql_base(
 }
 
 fn parse_base_iriref(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
     iri_parser: &mut IriParser,
 ) -> Result<(), TurtleError> {
     parse_iriref_relative(read, buffer, temp_buffer, iri_parser)?;
-    let result = iri_parser.set_base_iri(&buffer).map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI));
+    let result = iri_parser
+        .set_base_iri(&buffer)
+        .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI));
     buffer.clear();
     result
 }
 
 fn parse_sparql_prefix(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     namespaces: &mut HashMap<Vec<u8>, Vec<u8>>,
     iri_parser: &IriParser,
     temp_buffer: &mut Vec<u8>,
@@ -303,7 +305,7 @@ fn parse_object_list<R: BufRead>(
 }
 
 fn parse_verb<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     temp_buffer: &'a mut Vec<u8>,
     iri_parser: &IriParser,
@@ -362,7 +364,7 @@ fn parse_subject<R: BufRead>(
 }
 
 fn parse_predicate<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     temp_buffer: &'a mut Vec<u8>,
     iri_parser: &IriParser,
@@ -474,7 +476,7 @@ fn emit_triple<'a, R: BufRead>(
 }
 
 fn parse_literal<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     annotation_buffer: &'a mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
@@ -607,7 +609,7 @@ fn parse_collection<R: BufRead>(
 }
 
 fn parse_numeric_literal(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     annotation_buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
@@ -709,7 +711,7 @@ fn parse_numeric_literal(
 }
 
 fn parse_rdf_literal(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     annotation_buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
@@ -738,7 +740,7 @@ fn parse_rdf_literal(
 }
 
 fn parse_boolean_literal(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     annotation_buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
@@ -758,7 +760,7 @@ fn parse_boolean_literal(
 }
 
 fn parse_string(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     match read.current() {
@@ -781,7 +783,7 @@ fn parse_string(
 }
 
 fn parse_iri(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     temp_buffer: &mut Vec<u8>,
     iri_parser: &IriParser,
@@ -798,7 +800,7 @@ fn parse_iri(
 }
 
 fn parse_prefixed_name<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     namespaces: &HashMap<Vec<u8>, Vec<u8>>,
 ) -> Result<(), TurtleError> {
@@ -840,7 +842,7 @@ fn parse_prefixed_name<'a>(
     }
 }
 
-fn has_future_char_valid_pname_local(read: &impl OneLookAheadLineByteRead) -> bool {
+fn has_future_char_valid_pname_local(read: &impl LookAheadByteRead) -> bool {
     let mut i = 1;
     loop {
         match read.ahead(i) {
@@ -855,7 +857,7 @@ fn has_future_char_valid_pname_local(read: &impl OneLookAheadLineByteRead) -> bo
 }
 
 fn parse_blank_node<'a>(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &'a mut Vec<u8>,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<(), TurtleError> {
@@ -873,7 +875,7 @@ fn parse_blank_node<'a>(
 }
 
 fn parse_pname_ns(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [139s] 	PNAME_NS 	::= 	PN_PREFIX? ':'
@@ -888,7 +890,7 @@ fn parse_pname_ns(
 }
 
 fn parse_exponent(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [154s] 	EXPONENT 	::= 	[eE] [+-]? [0-9]+
@@ -925,7 +927,7 @@ fn parse_exponent(
 }
 
 fn parse_string_literal_single_quote(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [23] 	STRING_LITERAL_SINGLE_QUOTE 	::= 	"'" ([^#x27#x5C#xA#xD] | ECHAR | UCHAR)* "'" /* #x27=' #x5C=\ #xA=new line #xD=carriage return */
@@ -933,7 +935,7 @@ fn parse_string_literal_single_quote(
 }
 
 fn parse_string_literal_long_single_quote(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [24] 	STRING_LITERAL_LONG_SINGLE_QUOTE 	::= 	"'''" (("'" | "''")? ([^'\] | ECHAR | UCHAR))* "'''"
@@ -941,7 +943,7 @@ fn parse_string_literal_long_single_quote(
 }
 
 fn parse_string_literal_long_quote(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [25] 	STRING_LITERAL_LONG_QUOTE 	::= 	'"""' (('"' | '""')? ([^"\] | ECHAR | UCHAR))* '"""'
@@ -949,7 +951,7 @@ fn parse_string_literal_long_quote(
 }
 
 fn parse_string_literal_long_quote_inner(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     quote: u8,
 ) -> Result<(), TurtleError> {
@@ -988,7 +990,7 @@ fn parse_string_literal_long_quote_inner(
 }
 
 fn parse_anon(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<(), TurtleError> {
@@ -1002,7 +1004,7 @@ fn parse_anon(
 }
 
 fn parse_pn_prefix(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [167s] 	PN_PREFIX 	::= 	PN_CHARS_BASE ((PN_CHARS | '.')* PN_CHARS)?
@@ -1027,7 +1029,7 @@ fn parse_pn_prefix(
 }
 
 fn parse_percent(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [170s] 	PERCENT 	::= 	'%' HEX HEX
@@ -1040,10 +1042,7 @@ fn parse_percent(
     Ok(())
 }
 
-fn parse_hex(
-    read: &mut impl OneLookAheadLineByteRead,
-    buffer: &mut Vec<u8>,
-) -> Result<(), TurtleError> {
+fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut Vec<u8>) -> Result<(), TurtleError> {
     // [171s] 	HEX 	::= 	[0-9] | [A-F] | [a-f]
     let c = read.current();
     match c {
@@ -1056,7 +1055,7 @@ fn parse_hex(
 }
 
 fn parse_pn_local_esc(
-    read: &mut impl OneLookAheadLineByteRead,
+    read: &mut impl LookAheadByteRead,
     buffer: &mut Vec<u8>,
 ) -> Result<(), TurtleError> {
     // [172s] 	PN_LOCAL_ESC 	::= 	'\' ('_' | '~' | '.' | '-' | '!' | '$' | '&' | "'" | '(' | ')' | '*' | '+' | ',' | ';' | '=' | '/' | '?' | '#' | '@' | '%')
@@ -1073,7 +1072,7 @@ fn parse_pn_local_esc(
     }
 }
 
-fn skip_whitespace(read: &mut impl OneLookAheadLineByteRead) -> Result<(), TurtleError> {
+fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             b' ' | b'\t' | b'\n' | b'\r' => read.consume()?,
