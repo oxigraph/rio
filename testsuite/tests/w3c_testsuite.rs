@@ -33,6 +33,11 @@ fn ntriples_w3c_testsuite() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn nquads_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    run_testsuite("http://w3c.github.io/rdf-tests/nquads/manifest.ttl".to_owned())
+}
+
+#[test]
 fn turtle_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned())
 }
