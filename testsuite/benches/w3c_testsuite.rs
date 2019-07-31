@@ -4,7 +4,7 @@ use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
     parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,
 };
-use rio_turtle::{NQuadsParser, NTriplesParser, TurtleParser};
+use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleParser};
 use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
@@ -58,6 +58,16 @@ fn turtle_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     )
 }
 
+fn trig_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
+    test_data_from_testsuite(
+        "http://w3c.github.io/rdf-tests/trig/manifest.ttl".to_owned(),
+        &[
+            "http://www.w3.org/ns/rdftest#TestTrigPositiveSyntax",
+            "http://www.w3.org/ns/rdftest#TestTrigEval",
+        ],
+    )
+}
+
 fn parse_ntriples(bench: &mut Bencher, data: Vec<u8>) {
     bench.bytes = data.len() as u64;
     bench.iter(|| {
@@ -87,6 +97,18 @@ fn parse_turtle(bench: &mut Bencher, data: Vec<u8>) {
     bench.iter(|| {
         let mut count: usize = 0;
         TurtleParser::new(data.as_slice(), "http://example.com/ex")
+            .unwrap()
+            .parse_all(&mut |_| {
+                count += 1;
+            })
+    });
+}
+
+fn parse_trig(bench: &mut Bencher, data: Vec<u8>) {
+    bench.bytes = data.len() as u64;
+    bench.iter(|| {
+        let mut count: usize = 0;
+        TriGParser::new(data.as_slice(), "http://example.com/ex")
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
@@ -146,11 +168,25 @@ fn bench_parse_turtle_with_turtle(bench: &mut Bencher) {
     )
 }
 
+fn bench_parse_trig_with_trig(bench: &mut Bencher) {
+    parse_trig(
+        bench,
+        match trig_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+    )
+}
+
 benchmark_group!(
     w3c_testsuite,
     bench_parse_ntriples_with_ntriples,
     bench_parse_ntriples_with_turtle,
     bench_parse_nquads_with_nquads,
-    bench_parse_turtle_with_turtle
+    bench_parse_turtle_with_turtle,
+    bench_parse_trig_with_trig
 );
 benchmark_main!(w3c_testsuite);

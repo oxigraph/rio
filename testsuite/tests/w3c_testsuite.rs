@@ -41,3 +41,8 @@ fn nquads_w3c_testsuite() -> Result<(), Box<dyn Error>> {
 fn turtle_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned())
 }
+
+#[test]
+fn trig_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    run_testsuite("http://w3c.github.io/rdf-tests/trig/manifest.ttl".to_owned())
+}

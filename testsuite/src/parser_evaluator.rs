@@ -5,7 +5,7 @@ use crate::report::{TestOutcome, TestResult};
 use chrono::Utc;
 use rio_api::parser::QuadParser;
 use rio_api::parser::TripleParser;
-use rio_turtle::{NQuadsParser, NTriplesParser, TurtleParser};
+use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleParser};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -24,6 +24,7 @@ pub fn evaluate_parser_tests(
                 == "http://www.w3.org/ns/rdftest#TestNTriplesPositiveSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestNQuadsPositiveSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtlePositiveSyntax"
+                || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigPositiveSyntax"
             {
                 match file_reader(&test.action) {
                     Ok(_) => TestOutcome::Passed,
@@ -35,6 +36,8 @@ pub fn evaluate_parser_tests(
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestNQuadsNegativeSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleNegativeSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleNegativeEval"
+                || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigNegativeSyntax"
+                || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigNegativeEval"
             {
                 match file_reader(&test.action) {
                     Ok(_) => TestOutcome::Failed {
@@ -42,7 +45,7 @@ pub fn evaluate_parser_tests(
                     },
                     Err(_) => TestOutcome::Passed,
                 }
-            } else if &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleEval" {
+            } else if &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleEval" || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigEval" {
                 match file_reader(&test.action) {
                     Ok(actual_graph) => {
                         if let Some(result) = &test.result {
@@ -112,6 +115,10 @@ pub fn parse_w3c_rdf_test_file(
             .collect()
     } else if url.ends_with(".ttl") {
         TurtleParser::new(read, url)?
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".trig") {
+        TriGParser::new(read, url)?
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else {
