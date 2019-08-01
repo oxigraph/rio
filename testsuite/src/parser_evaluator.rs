@@ -72,7 +72,7 @@ pub fn evaluate_parser_tests(
                     },
                 }
             } else {
-                Err(TestManifestError::InvalidTestType(test.id.clone()))?
+                Err(TestManifestError::InvalidTestType(test.kind.clone()))?
             };
             Ok(TestResult {
                 test: test.id,

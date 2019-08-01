@@ -2,7 +2,7 @@
 
 mod isomorphism;
 pub mod manifest;
-mod model;
+pub mod model;
 pub mod parser_evaluator;
 pub mod report;
 mod vocab;

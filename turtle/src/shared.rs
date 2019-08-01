@@ -49,13 +49,14 @@ fn parse_iriref(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Resul
             }
             b'\\' => {
                 read.consume()?;
-                match match read.current() {
+                let c = match read.current() {
                     b'u' => read_hexa_char(read, 4)?,
                     b'U' => read_hexa_char(read, 8)?,
                     _ => read.unexpected_char_error()?,
-                } {
+                };
+                match c {
                     '\0'..=' ' | '<' | '>' | '"' | '{' | '}' | '|' | '^' | '`' => {
-                        read.unexpected_char_error()?
+                        Err(read.parse_error(TurtleErrorKind::UnexpectedByte(c as u8)))?
                     }
                     c => buffer.push(c),
                 }
