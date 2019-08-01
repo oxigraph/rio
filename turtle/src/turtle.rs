@@ -1,11 +1,11 @@
-//! Implementation of [Turtle](https://www.w3.org/TR/turtle/) RDF syntax
+//! Implementation of Turtle and Trig RDF syntax
 
 use crate::error::*;
 use crate::iri::IriParser;
 use crate::shared::*;
 use crate::utils::*;
 use rio_api::model::*;
-use rio_api::parser::TripleParser;
+use rio_api::parser::{QuadParser, TripleParser};
 use std::collections::HashMap;
 use std::io::BufRead;
 
@@ -82,6 +82,64 @@ impl<R: BufRead> TripleParser for TurtleParser<R> {
     }
 }
 
+/// A [TriG](https://www.w3.org/TR/trig/) streaming parser.
+///
+/// It implements the `QuadParser` trait.
+///
+///
+/// Count the number of of people using the `QuadParser` API:
+/// ```
+/// use rio_turtle::TriGParser;
+/// use rio_api::parser::QuadParser;
+/// use rio_api::model::NamedNode;
+///
+/// let file = b"@prefix schema: <http://schema.org/> .
+/// <http://example/> {
+///     <http://example.com/foo> a schema:Person ;
+///         schema:name  \"Foo\" .
+///     <http://example.com/bar> a schema:Person ;
+///         schema:name  \"Bar\" .
+/// }";
+///
+/// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
+/// let schema_person = NamedNode { iri: "http://schema.org/Person" };
+/// let mut count = 0;
+/// TriGParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
+///     if t.predicate == rdf_type && t.object == schema_person.into() {
+///         count += 1;
+///     }
+/// }).unwrap();
+/// assert_eq!(2, count)
+/// ```
+pub struct TriGParser<R: BufRead> {
+    inner: TurtleParser<R>,
+    graph_name_buf: Vec<u8>,
+}
+
+impl<R: BufRead> TriGParser<R> {
+    /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
+    ///
+    /// The base IRI might be empty to state there is no base URL.
+    pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
+        Ok(Self {
+            inner: TurtleParser::new(reader, base_iri)?,
+            graph_name_buf: Vec::default(),
+        })
+    }
+}
+
+impl<R: BufRead> QuadParser for TriGParser<R> {
+    type Error = TurtleError;
+
+    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), TurtleError> {
+        parse_block_or_directive(self, on_quad)
+    }
+
+    fn is_end(&self) -> bool {
+        self.inner.read.current() == EOF
+    }
+}
+
 const RDF_TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const RDF_NIL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
 const RDF_FIRST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
@@ -128,8 +186,202 @@ fn parse_statement<R: BufRead>(
             &mut parser.temp_buf,
         )
     } else {
-        parse_triple(parser, on_triple)
+        parse_triples(parser, on_triple)?;
+
+        parser.read.check_is_current(b'.')?;
+        parser.read.consume()?;
+        Ok(())
     }
+}
+
+fn parse_block_or_directive<R: BufRead>(
+    parser: &mut TriGParser<R>,
+    on_quad: &mut impl FnMut(Quad) -> (),
+) -> Result<(), TurtleError> {
+    // [1g] 	trigDoc 	::= 	(directive | block)*
+    // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
+    skip_whitespace(&mut parser.inner.read)?;
+
+    if parser.inner.read.current() == EOF {
+        Ok(())
+    } else if parser.inner.read.starts_with(b"@prefix") {
+        parse_prefix_id(
+            &mut parser.inner.read,
+            &mut parser.inner.namespaces,
+            &parser.inner.iri_parser,
+            &mut parser.inner.temp_buf,
+        )
+    } else if parser.inner.read.starts_with(b"@base") {
+        parse_base(
+            &mut parser.inner.read,
+            &mut parser.inner.temp_buf,
+            &mut parser.inner.object_annotation_buf,
+            &mut parser.inner.iri_parser,
+        )
+    } else if parser.inner.read.starts_with_ignore_ascii_case(b"BASE") {
+        parse_sparql_base(
+            &mut parser.inner.read,
+            &mut parser.inner.temp_buf,
+            &mut parser.inner.object_annotation_buf,
+            &mut parser.inner.iri_parser,
+        )
+    } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX") {
+        parse_sparql_prefix(
+            &mut parser.inner.read,
+            &mut parser.inner.namespaces,
+            &parser.inner.iri_parser,
+            &mut parser.inner.temp_buf,
+        )
+    } else if parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH") {
+        parser.inner.read.consume_many("GRAPH".len())?;
+        skip_whitespace(&mut parser.inner.read)?;
+
+        let graph_name = parse_label_or_subject(
+            &mut parser.inner.read,
+            &mut parser.graph_name_buf,
+            &mut parser.inner.temp_buf,
+            &parser.inner.iri_parser,
+            &parser.inner.namespaces,
+            &mut parser.inner.bnode_id_generator,
+        )?
+        .with_value(to_str(&parser.inner.read, &parser.graph_name_buf)?);
+        skip_whitespace(&mut parser.inner.read)?;
+
+        parse_wrapped_graph(
+            &mut parser.inner,
+            &mut on_triple_in_graph(on_quad, Some(graph_name)),
+        )?;
+        parser.graph_name_buf.clear();
+        Ok(())
+    } else if parser.inner.read.current() == b'{' {
+        parse_wrapped_graph(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))
+    } else if parser.inner.read.current() == b'['
+        && !is_followed_by_space_and_closing_bracket(&parser.inner.read)
+        || parser.inner.read.current() == b'('
+    {
+        parse_triples2(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))
+    } else {
+        parse_triples_or_graph(parser, on_quad)
+    }
+}
+
+fn parse_triples_or_graph<R: BufRead>(
+    parser: &mut TriGParser<R>,
+    on_quad: &mut impl FnMut(Quad) -> (),
+) -> Result<(), TurtleError> {
+    // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
+    let front_type = parse_label_or_subject(
+        &mut parser.inner.read,
+        &mut parser.graph_name_buf,
+        &mut parser.inner.temp_buf,
+        &parser.inner.iri_parser,
+        &parser.inner.namespaces,
+        &mut parser.inner.bnode_id_generator,
+    )?;
+    skip_whitespace(&mut parser.inner.read)?;
+
+    if parser.inner.read.current() == b'{' {
+        let graph_name = front_type.with_value(to_str(&parser.inner.read, &parser.graph_name_buf)?);
+        parse_wrapped_graph(
+            &mut parser.inner,
+            &mut on_triple_in_graph(on_quad, Some(graph_name)),
+        )?;
+        parser.graph_name_buf.clear();
+    } else {
+        parser
+            .inner
+            .subject_buf_stack
+            .push()
+            .extend_from_slice(&parser.graph_name_buf);
+        parser.graph_name_buf.clear();
+        parser.inner.subject_type_stack.push(front_type);
+        parse_predicate_object_list(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))?;
+        parser.inner.subject_type_stack.pop();
+        parser.inner.subject_buf_stack.pop();
+
+        parser.inner.read.check_is_current(b'.')?;
+        parser.inner.read.consume()?;
+    }
+    Ok(())
+}
+
+fn parse_triples2<R: BufRead>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> (),
+) -> Result<(), TurtleError> {
+    // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
+    match parser.read.current() {
+        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
+            parse_blank_node_property_list(parser, on_triple)?;
+            skip_whitespace(&mut parser.read)?;
+            if parser.read.current() != b'.' {
+                parse_predicate_object_list(parser, on_triple)?;
+            }
+        }
+        _ => {
+            parse_collection(parser, on_triple)?;
+            skip_whitespace(&mut parser.read)?;
+            parse_predicate_object_list(parser, on_triple)?;
+        }
+    }
+
+    parser.subject_buf_stack.pop();
+    parser.subject_type_stack.pop();
+
+    parser.read.check_is_current(b'.')?;
+    parser.read.consume()
+}
+
+fn parse_wrapped_graph<R: BufRead>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> (),
+) -> Result<(), TurtleError> {
+    // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
+    // [6g] 	triplesBlock 	::= 	triples ('.' triplesBlock?)?
+    parser.read.check_is_current(b'{')?;
+    parser.read.consume()?;
+    skip_whitespace(&mut parser.read)?;
+
+    loop {
+        if parser.read.current() == b'}' {
+            parser.read.consume()?;
+            return Ok(());
+        }
+
+        parse_triples(parser, on_triple)?;
+        match parser.read.current() {
+            b'.' => {
+                parser.read.consume()?;
+                skip_whitespace(&mut parser.read)?;
+            }
+            b'}' => {
+                parser.read.consume()?;
+                return Ok(());
+            }
+            _ => parser.read.unexpected_char_error()?,
+        }
+    }
+}
+
+fn parse_label_or_subject(
+    read: &mut impl LookAheadByteRead,
+    buffer: &mut Vec<u8>,
+    temp_buffer: &mut Vec<u8>,
+    iri_parser: &IriParser,
+    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    bnode_id_generator: &mut BlankNodeIdGenerator,
+) -> Result<NamedOrBlankNodeType, TurtleError> {
+    //[7g] 	labelOrSubject 	::= 	iri | BlankNode
+    Ok(match read.current() {
+        b'_' | b'[' => {
+            parse_blank_node(read, buffer, bnode_id_generator)?;
+            NamedOrBlankNodeType::BlankNode
+        }
+        _ => {
+            parse_iri(read, buffer, temp_buffer, iri_parser, namespaces)?;
+            NamedOrBlankNodeType::NamedNode
+        }
+    })
 }
 
 fn parse_prefix_id(
@@ -225,7 +477,7 @@ fn parse_sparql_prefix(
     Ok(())
 }
 
-fn parse_triple<R: BufRead>(
+fn parse_triples<R: BufRead>(
     parser: &mut TurtleParser<R>,
     on_triple: &mut impl FnMut(Triple) -> (),
 ) -> Result<(), TurtleError> {
@@ -234,7 +486,7 @@ fn parse_triple<R: BufRead>(
         b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
             parse_blank_node_property_list(parser, on_triple)?;
             skip_whitespace(&mut parser.read)?;
-            if parser.read.current() != b'.' {
+            if parser.read.current() != b'.' && parser.read.current() != b'}' {
                 parse_predicate_object_list(parser, on_triple)?;
             }
         }
@@ -244,9 +496,6 @@ fn parse_triple<R: BufRead>(
             parse_predicate_object_list(parser, on_triple)?;
         }
     }
-
-    parser.read.check_is_current(b'.')?;
-    parser.read.consume()?;
 
     parser.subject_buf_stack.pop();
     parser.subject_type_stack.pop();
@@ -280,7 +529,7 @@ fn parse_predicate_object_list<R: BufRead>(
             skip_whitespace(&mut parser.read)?;
         }
         match parser.read.current() {
-            b'.' | b']' | EOF => return Ok(()),
+            b'.' | b']' | b'}' | EOF => return Ok(()),
             _ => (), //continue
         }
     }
@@ -1097,13 +1346,13 @@ fn is_followed_by_space_and_closing_bracket(read: &impl LookAheadByteRead) -> bo
 }
 
 #[derive(Clone, Copy)]
-pub enum NamedOrBlankNodeType {
+enum NamedOrBlankNodeType {
     NamedNode,
     BlankNode,
 }
 
 impl NamedOrBlankNodeType {
-    pub fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
+    fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
         match self {
             NamedOrBlankNodeType::NamedNode => NamedNode { iri: value }.into(),
             NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
@@ -1112,7 +1361,7 @@ impl NamedOrBlankNodeType {
 }
 
 #[derive(Clone, Copy)]
-pub enum TermType {
+enum TermType {
     NamedNode,
     BlankNode,
     SimpleLiteral,
@@ -1121,7 +1370,7 @@ pub enum TermType {
 }
 
 impl TermType {
-    pub fn with_value<'a>(&self, value: &'a str, annotation: &'a str) -> Term<'a> {
+    fn with_value<'a>(&self, value: &'a str, annotation: &'a str) -> Term<'a> {
         match self {
             TermType::NamedNode => NamedNode { iri: value }.into(),
             TermType::BlankNode => BlankNode { id: value }.into(),
@@ -1146,5 +1395,19 @@ impl From<NamedOrBlankNodeType> for TermType {
             NamedOrBlankNodeType::NamedNode => TermType::NamedNode,
             NamedOrBlankNodeType::BlankNode => TermType::BlankNode,
         }
+    }
+}
+
+fn on_triple_in_graph<'a>(
+    on_quad: &'a mut impl FnMut(Quad) -> (),
+    graph_name: Option<NamedOrBlankNode<'a>>,
+) -> impl FnMut(Triple) -> () + 'a {
+    move |t: Triple| {
+        on_quad(Quad {
+            subject: t.subject,
+            predicate: t.predicate,
+            object: t.object,
+            graph_name,
+        })
     }
 }
