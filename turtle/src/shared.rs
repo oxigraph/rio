@@ -45,7 +45,7 @@ fn parse_iriref(
                 read.consume()?;
                 return Ok(());
             }
-            b'\0'..=b' ' | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' => {
+            b'\0'..=b' ' | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' | EOF => {
                 read.unexpected_char_error()?
             }
             b'\\' => {
