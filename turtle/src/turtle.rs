@@ -1325,7 +1325,7 @@ fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError>
         match read.current() {
             b' ' | b'\t' | b'\n' | b'\r' => read.consume()?,
             b'#' => {
-                while read.current() != b'\n' && read.current() != EOF {
+                while read.current() != b'\r' && read.current() != b'\n' && read.current() != EOF {
                     read.consume()?;
                 }
             }
