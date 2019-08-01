@@ -231,8 +231,7 @@ fn parse_triple<R: BufRead>(
 ) -> Result<(), TurtleError> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
-        b'[' => {
-            //TODO: ANON
+        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
             parse_blank_node_property_list(parser, on_triple)?;
             skip_whitespace(&mut parser.read)?;
             if parser.read.current() != b'.' {
@@ -379,7 +378,6 @@ fn parse_object<R: BufRead>(
     on_triple: &mut impl FnMut(Triple) -> (),
 ) -> Result<(), TurtleError> {
     //[12] 	object 	::= 	iri | BlankNode | collection | blankNodePropertyList | literal
-    //TODO: anon []
 
     match parser.read.current() {
         EOF => parser.read.unexpected_char_error()?,
@@ -393,25 +391,25 @@ fn parse_object<R: BufRead>(
             )?;
             emit_triple(parser, TermType::NamedNode, on_triple)?;
         }
-        b'_' => {
-            parse_blank_node(
-                &mut parser.read,
-                &mut parser.subject_buf_stack.push(),
-                &mut parser.bnode_id_generator,
-            )?;
-            emit_triple(parser, TermType::BlankNode, on_triple)?;
-        }
         b'(' => {
             parse_collection(parser, on_triple)?;
             let object_type = *parser.subject_type_stack.last().unwrap();
             parser.subject_type_stack.pop();
             emit_triple(parser, object_type.into(), on_triple)?;
         }
-        b'[' => {
+        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
             parse_blank_node_property_list(parser, on_triple)?;
             let object_type = *parser.subject_type_stack.last().unwrap();
             parser.subject_type_stack.pop();
             emit_triple(parser, object_type.into(), on_triple)?;
+        }
+        b'_' | b'[' => {
+            parse_blank_node(
+                &mut parser.read,
+                &mut parser.subject_buf_stack.push(),
+                &mut parser.bnode_id_generator,
+            )?;
+            emit_triple(parser, TermType::BlankNode, on_triple)?;
         }
         b'"' | b'\'' | b'+' | b'-' | b'.' | b'0'..=b'9' => {
             let object_type = parse_literal(
@@ -511,6 +509,7 @@ fn parse_blank_node_property_list<R: BufRead>(
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'[')?;
     parser.read.consume()?;
+    skip_whitespace(&mut parser.read)?;
 
     parser
         .subject_buf_stack
@@ -521,14 +520,12 @@ fn parse_blank_node_property_list<R: BufRead>(
         .push(NamedOrBlankNodeType::BlankNode);
 
     loop {
+        parse_predicate_object_list(parser, on_triple)?;
         skip_whitespace(&mut parser.read)?;
-        if parser.read.current() == EOF {
-            return parser.read.unexpected_char_error();
-        } else if parser.read.current() == b']' {
+
+        if parser.read.current() == b']' {
             parser.read.consume()?;
             return Ok(());
-        } else {
-            parse_predicate_object_list(parser, on_triple)?;
         }
     }
 }
@@ -995,11 +992,13 @@ fn parse_anon(
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<(), TurtleError> {
     read.check_is_current(b'[')?;
+    read.consume()?;
     skip_whitespace(read)?;
+
     read.check_is_current(b']')?;
+    read.consume()?;
 
     buffer.extend_from_slice(&bnode_id_generator.generate());
-
     Ok(())
 }
 
@@ -1084,6 +1083,17 @@ fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError>
             _ => return Ok(()),
         }
     }
+}
+
+fn is_followed_by_space_and_closing_bracket(read: &impl LookAheadByteRead) -> bool {
+    for i in 1.. {
+        match read.ahead(i) {
+            Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') => (),
+            Some(b']') => return true,
+            _ => return false,
+        }
+    }
+    false
 }
 
 #[derive(Clone, Copy)]
