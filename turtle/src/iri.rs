@@ -391,8 +391,9 @@ fn parse_iauthority(value: &[u8], start: usize) -> IriParserState {
     // iauthority = [ iuserinfo "@" ] ihost [ ":" port ]
     //TODO: implement properly
     for (i, c) in value[start..].iter().enumerate() {
-        if *c == b'/' {
-            return Ok(start + i);
+        match *c {
+            b'/' | b'?' | b'#' => return Ok(start + i),
+            _ => ()
         }
     }
     Ok(value.len())
