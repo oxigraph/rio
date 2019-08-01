@@ -1,10 +1,10 @@
 use bencher::{benchmark_group, benchmark_main, Bencher};
-use rio_api::parser::TripleParser;
+use rio_api::parser::{QuadParser, TripleParser};
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
     parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,
 };
-use rio_turtle::{NTriplesParser, TurtleParser};
+use rio_turtle::{NQuadsParser, NTriplesParser, TurtleParser};
 use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
@@ -41,6 +41,13 @@ fn ntriples_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     )
 }
 
+fn nquads_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
+    test_data_from_testsuite(
+        "http://w3c.github.io/rdf-tests/nquads/manifest.ttl".to_owned(),
+        &["http://www.w3.org/ns/rdftest#TestNQuadsPositiveSyntax"],
+    )
+}
+
 fn turtle_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     test_data_from_testsuite(
         "http://w3c.github.io/rdf-tests/turtle/manifest.ttl".to_owned(),
@@ -56,6 +63,18 @@ fn parse_ntriples(bench: &mut Bencher, data: Vec<u8>) {
     bench.iter(|| {
         let mut count: usize = 0;
         NTriplesParser::new(data.as_slice())
+            .unwrap()
+            .parse_all(&mut |_| {
+                count += 1;
+            })
+    });
+}
+
+fn parse_nquads(bench: &mut Bencher, data: Vec<u8>) {
+    bench.bytes = data.len() as u64;
+    bench.iter(|| {
+        let mut count: usize = 0;
+        NQuadsParser::new(data.as_slice())
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
@@ -101,6 +120,19 @@ fn bench_parse_ntriples_with_turtle(bench: &mut Bencher) {
     )
 }
 
+fn bench_parse_nquads_with_nquads(bench: &mut Bencher) {
+    parse_nquads(
+        bench,
+        match nquads_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+    )
+}
+
 fn bench_parse_turtle_with_turtle(bench: &mut Bencher) {
     parse_turtle(
         bench,
@@ -118,6 +150,7 @@ benchmark_group!(
     w3c_testsuite,
     bench_parse_ntriples_with_ntriples,
     bench_parse_ntriples_with_turtle,
+    bench_parse_nquads_with_nquads,
     bench_parse_turtle_with_turtle
 );
 benchmark_main!(w3c_testsuite);

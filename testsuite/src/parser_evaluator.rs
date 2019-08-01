@@ -1,10 +1,11 @@
-use crate::isomorphism::are_graphs_isomorphic;
+use crate::isomorphism::are_datasets_isomorphic;
 use crate::manifest::{Test, TestManifestError};
-use crate::model::OwnedGraph;
+use crate::model::OwnedDataset;
 use crate::report::{TestOutcome, TestResult};
 use chrono::Utc;
+use rio_api::parser::QuadParser;
 use rio_api::parser::TripleParser;
-use rio_turtle::{NTriplesParser, TurtleParser};
+use rio_turtle::{NQuadsParser, NTriplesParser, TurtleParser};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -14,13 +15,14 @@ use std::path::Path;
 
 pub fn evaluate_parser_tests(
     manifest: impl Iterator<Item = Result<Test, Box<dyn Error>>>,
-    file_reader: impl Fn(&str) -> Result<OwnedGraph, Box<dyn Error>>,
+    file_reader: impl Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>,
 ) -> Result<Vec<TestResult>, Box<dyn Error>> {
     manifest
         .map(|test| {
             let test = test?;
             let outcome = if &test.kind.iri
                 == "http://www.w3.org/ns/rdftest#TestNTriplesPositiveSyntax"
+                || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestNQuadsPositiveSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtlePositiveSyntax"
             {
                 match file_reader(&test.action) {
@@ -30,6 +32,7 @@ pub fn evaluate_parser_tests(
                     },
                 }
             } else if &test.kind.iri == "http://www.w3.org/ns/rdftest#TestNTriplesNegativeSyntax"
+                || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestNQuadsNegativeSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleNegativeSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleNegativeEval"
             {
@@ -44,7 +47,7 @@ pub fn evaluate_parser_tests(
                     Ok(actual_graph) => {
                         if let Some(result) = &test.result {
                             match file_reader(result) {
-                                Ok(expected_graph) => if are_graphs_isomorphic(&expected_graph, &actual_graph) {
+                                Ok(expected_graph) => if are_datasets_isomorphic(&expected_graph, &actual_graph) {
                                     TestOutcome::Passed
                                 } else {
                                     TestOutcome::Failed {
@@ -93,11 +96,18 @@ pub fn read_w3c_rdf_test_file(
     })?))
 }
 
-pub fn parse_w3c_rdf_test_file(url: &str, tests_path: &Path) -> Result<OwnedGraph, Box<dyn Error>> {
+pub fn parse_w3c_rdf_test_file(
+    url: &str,
+    tests_path: &Path,
+) -> Result<OwnedDataset, Box<dyn Error>> {
     let read = read_w3c_rdf_test_file(url, tests_path)?;
 
     if url.ends_with(".nt") {
         NTriplesParser::new(read)?
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".nq") {
+        NQuadsParser::new(read)?
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".ttl") {

@@ -231,6 +231,45 @@ impl<'a> fmt::Display for Triple<'a> {
     }
 }
 
+/// A [RDF triple](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-triple) in a [RDF dataset](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-dataset).
+///
+/// The default string formatter is returning a N-Quads representation.
+///
+/// ```
+/// use rio_api::model::NamedNode;
+/// use rio_api::model::Quad;
+///
+/// assert_eq!(
+///     "<http://example.com/foo> <http://schema.org/sameAs> <http://example.com/foo> <http://example.com/> .",
+///     Quad {
+///         subject: NamedNode { iri: "http://example.com/foo" }.into(),
+///         predicate: NamedNode { iri: "http://schema.org/sameAs" },
+///         object: NamedNode { iri: "http://example.com/foo" }.into(),
+///         graph_name: Some(NamedNode { iri: "http://example.com/" }.into()),
+///     }.to_string()
+/// )
+/// ```
+#[derive(Eq, PartialEq, Debug, Clone, Hash)]
+pub struct Quad<'a> {
+    pub subject: NamedOrBlankNode<'a>,
+    pub predicate: NamedNode<'a>,
+    pub object: Term<'a>,
+    pub graph_name: Option<NamedOrBlankNode<'a>>,
+}
+
+impl<'a> fmt::Display for Quad<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.graph_name {
+            Some(graph_name) => write!(
+                f,
+                "{} {} {} {} .",
+                self.subject, self.predicate, self.object, graph_name
+            ),
+            None => write!(f, "{} {} {} .", self.subject, self.predicate, self.object),
+        }
+    }
+}
+
 fn escape<'a>(s: &'a str) -> impl Iterator<Item = char> + 'a {
     s.chars().flat_map(EscapeRDF::new)
 }

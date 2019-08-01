@@ -19,28 +19,32 @@ struct PredicateObject<'a> {
 }
 
 fn subject_predicates_for_object<'a>(
-    graph: &'a OwnedGraph,
+    dataset: &'a OwnedDataset,
     object: &'a OwnedTerm,
 ) -> impl Iterator<Item = SubjectPredicate<'a>> + 'a {
-    graph.triples_for_object(object).map(|t| SubjectPredicate {
-        subject: &t.subject,
-        predicate: &t.predicate,
-    })
+    dataset
+        .triples_for_object(object)
+        .map(|t| SubjectPredicate {
+            subject: &t.subject,
+            predicate: &t.predicate,
+        })
 }
 
 fn predicate_objects_for_subject<'a>(
-    graph: &'a OwnedGraph,
+    dataset: &'a OwnedDataset,
     subject: &'a OwnedNamedOrBlankNode,
 ) -> impl Iterator<Item = PredicateObject<'a>> + 'a {
-    graph.triples_for_subject(subject).map(|t| PredicateObject {
-        predicate: &t.predicate,
-        object: &t.object,
-    })
+    dataset
+        .triples_for_subject(subject)
+        .map(|t| PredicateObject {
+            predicate: &t.predicate,
+            object: &t.object,
+        })
 }
 
 fn hash_blank_nodes<'a>(
     bnodes: HashSet<&'a OwnedBlankNode>,
-    graph: &'a OwnedGraph,
+    dataset: &'a OwnedDataset,
 ) -> HashMap<u64, Vec<&'a OwnedBlankNode>> {
     let mut bnodes_by_hash = HashMap::default();
 
@@ -51,7 +55,7 @@ fn hash_blank_nodes<'a>(
         {
             let subject = OwnedNamedOrBlankNode::from(bnode.clone());
             let mut po_set: BTreeSet<PredicateObject> = BTreeSet::default();
-            for po in predicate_objects_for_subject(graph, &subject) {
+            for po in predicate_objects_for_subject(dataset, &subject) {
                 match &po.object {
                     OwnedTerm::BlankNode(_) => (),
                     _ => {
@@ -67,7 +71,7 @@ fn hash_blank_nodes<'a>(
         {
             let object = OwnedTerm::from(bnode.clone());
             let mut sp_set: BTreeSet<SubjectPredicate> = BTreeSet::default();
-            for sp in subject_predicates_for_object(graph, &object) {
+            for sp in subject_predicates_for_object(dataset, &object) {
                 match &sp.subject {
                     OwnedNamedOrBlankNode::BlankNode(_) => (),
                     _ => {
@@ -93,8 +97,8 @@ fn build_and_check_containment_from_hashes<'a>(
     a_bnodes_by_hash: &'a HashMap<u64, Vec<&'a OwnedBlankNode>>,
     b_bnodes_by_hash: &'a HashMap<u64, Vec<&'a OwnedBlankNode>>,
     a_to_b_mapping: &mut HashMap<&'a OwnedBlankNode, &'a OwnedBlankNode>,
-    a: &OwnedGraph,
-    b: &OwnedGraph,
+    a: &OwnedDataset,
+    b: &OwnedDataset,
 ) -> bool {
     let hash = match hashes_to_see.pop() {
         Some(h) => h,
@@ -160,35 +164,32 @@ fn build_and_check_containment_from_hashes<'a>(
 
 fn check_is_contained<'a>(
     a_to_b_mapping: &mut HashMap<&'a OwnedBlankNode, &'a OwnedBlankNode>,
-    a: &OwnedGraph,
-    b: &OwnedGraph,
+    a: &OwnedDataset,
+    b: &OwnedDataset,
 ) -> bool {
     for t_a in a.iter() {
-        if let OwnedNamedOrBlankNode::BlankNode(s_a) = &t_a.subject {
-            if let OwnedTerm::BlankNode(o_a) = &t_a.object {
-                if !b.contains(&OwnedTriple {
-                    subject: a_to_b_mapping[s_a].clone().into(),
-                    predicate: t_a.predicate.clone(),
-                    object: a_to_b_mapping[o_a].clone().into(),
-                }) {
-                    return false;
-                }
-            } else if !b.contains(&OwnedTriple {
-                subject: a_to_b_mapping[s_a].clone().into(),
-                predicate: t_a.predicate.clone(),
-                object: t_a.object.clone(),
-            }) {
-                return false;
-            }
-        } else if let OwnedTerm::BlankNode(o_a) = &t_a.object {
-            if !b.contains(&OwnedTriple {
-                subject: t_a.subject.clone(),
-                predicate: t_a.predicate.clone(),
-                object: a_to_b_mapping[o_a].clone().into(),
-            }) {
-                return false;
-            }
-        } else if !b.contains(t_a) {
+        let subject = if let OwnedNamedOrBlankNode::BlankNode(s_a) = &t_a.subject {
+            a_to_b_mapping[s_a].clone().into()
+        } else {
+            t_a.subject.clone()
+        };
+        let predicate = t_a.predicate.clone();
+        let object = if let OwnedTerm::BlankNode(o_a) = &t_a.object {
+            a_to_b_mapping[o_a].clone().into()
+        } else {
+            t_a.object.clone()
+        };
+        let graph_name = if let Some(OwnedNamedOrBlankNode::BlankNode(g_a)) = &t_a.graph_name {
+            Some(a_to_b_mapping[g_a].clone().into())
+        } else {
+            t_a.graph_name.clone()
+        };
+        if !b.contains(&OwnedQuad {
+            subject,
+            predicate,
+            object,
+            graph_name,
+        }) {
             return false;
         }
     }
@@ -196,53 +197,36 @@ fn check_is_contained<'a>(
     true
 }
 
-pub fn are_graphs_isomorphic(a: &OwnedGraph, b: &OwnedGraph) -> bool {
+fn dataset_blank_nodes(dataset: &OwnedDataset) -> HashSet<&OwnedBlankNode> {
+    let mut blank_nodes = HashSet::default();
+    for t in dataset.iter() {
+        if let OwnedNamedOrBlankNode::BlankNode(subject) = &t.subject {
+            blank_nodes.insert(subject);
+        }
+        if let OwnedTerm::BlankNode(object) = &t.object {
+            blank_nodes.insert(object);
+        }
+        if let Some(OwnedNamedOrBlankNode::BlankNode(graph_name)) = &t.graph_name {
+            blank_nodes.insert(graph_name);
+        }
+    }
+    blank_nodes
+}
+
+pub fn are_datasets_isomorphic(a: &OwnedDataset, b: &OwnedDataset) -> bool {
     if a.len() != b.len() {
         return false;
     }
 
-    let mut a_bnodes: HashSet<&OwnedBlankNode> = HashSet::default();
-    let mut b_bnodes: HashSet<&OwnedBlankNode> = HashSet::default();
-
-    for t in a.iter() {
-        if let OwnedNamedOrBlankNode::BlankNode(subject) = &t.subject {
-            a_bnodes.insert(subject);
-            if let OwnedTerm::BlankNode(object) = &t.object {
-                a_bnodes.insert(object);
-            }
-        } else if let OwnedTerm::BlankNode(object) = &t.object {
-            a_bnodes.insert(object);
-        } else if !b.contains(&t) {
-            return false;
-        }
-    }
-    for t in b.iter() {
-        if let OwnedNamedOrBlankNode::BlankNode(subject) = &t.subject {
-            b_bnodes.insert(subject);
-            if let OwnedTerm::BlankNode(object) = &t.object {
-                b_bnodes.insert(object);
-            }
-        } else if let OwnedTerm::BlankNode(object) = &t.object {
-            b_bnodes.insert(object);
-        } else if !a.contains(&t) {
-            return false;
-        }
-    }
-
+    let a_bnodes = dataset_blank_nodes(a);
     let a_bnodes_by_hash = hash_blank_nodes(a_bnodes, a);
+
+    let b_bnodes = dataset_blank_nodes(b);
     let b_bnodes_by_hash = hash_blank_nodes(b_bnodes, b);
 
     // Hashes should have the same size everywhere
     if a_bnodes_by_hash.len() != b_bnodes_by_hash.len() {
         return false;
-    }
-
-    for hash in a_bnodes_by_hash.keys() {
-        if a_bnodes_by_hash.get(hash).map(|l| l.len())
-            != b_bnodes_by_hash.get(hash).map(|l| l.len())
-        {
-            return false;
-        }
     }
 
     build_and_check_containment_from_hashes(

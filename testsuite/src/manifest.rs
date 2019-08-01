@@ -28,17 +28,17 @@ impl fmt::Display for Test {
     }
 }
 
-pub struct TestManifest<R: Fn(&str) -> Result<OwnedGraph, Box<dyn Error>>> {
-    graph: OwnedGraph,
+pub struct TestManifest<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> {
+    graph: OwnedDataset,
     tests_to_do: Vec<OwnedTerm>,
     manifests_to_do: Vec<String>,
     file_reader: R,
 }
 
-impl<R: Fn(&str) -> Result<OwnedGraph, Box<dyn Error>>> TestManifest<R> {
+impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> TestManifest<R> {
     pub fn new(manifest_url: String, file_reader: R) -> Self {
         Self {
-            graph: OwnedGraph::default(),
+            graph: OwnedDataset::default(),
             tests_to_do: Vec::default(),
             manifests_to_do: vec![manifest_url],
             file_reader,
@@ -46,7 +46,7 @@ impl<R: Fn(&str) -> Result<OwnedGraph, Box<dyn Error>>> TestManifest<R> {
     }
 }
 
-impl<R: Fn(&str) -> Result<OwnedGraph, Box<dyn Error>>> Iterator for TestManifest<R> {
+impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManifest<R> {
     type Item = Result<Test, Box<dyn Error>>;
 
     fn next(&mut self) -> Option<Result<Test, Box<dyn Error>>> {
@@ -200,12 +200,12 @@ impl fmt::Display for TestManifestError {
 impl Error for TestManifestError {}
 
 pub struct RdfListIterator<'a> {
-    graph: &'a OwnedGraph,
+    graph: &'a OwnedDataset,
     current_node: Option<OwnedNamedOrBlankNode>,
 }
 
 impl<'a> RdfListIterator<'a> {
-    fn iter(graph: &'a OwnedGraph, root: OwnedNamedOrBlankNode) -> RdfListIterator<'a> {
+    fn iter(graph: &'a OwnedDataset, root: OwnedNamedOrBlankNode) -> RdfListIterator<'a> {
         RdfListIterator {
             graph,
             current_node: Some(root),

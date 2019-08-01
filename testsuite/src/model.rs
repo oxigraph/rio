@@ -216,49 +216,63 @@ impl From<OwnedNamedOrBlankNode> for OwnedTerm {
 
 /// A [RDF triple](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-triple)
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
-pub struct OwnedTriple {
+pub struct OwnedQuad {
     pub subject: OwnedNamedOrBlankNode,
     pub predicate: OwnedNamedNode,
     pub object: OwnedTerm,
+    pub graph_name: Option<OwnedNamedOrBlankNode>,
 }
 
-impl fmt::Display for OwnedTriple {
+impl fmt::Display for OwnedQuad {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Triple::from(self).fmt(f)
+        Quad::from(self).fmt(f)
     }
 }
 
-impl From<Triple<'_>> for OwnedTriple {
+impl From<Triple<'_>> for OwnedQuad {
     fn from(t: Triple) -> Self {
         Self {
             subject: t.subject.into(),
             predicate: t.predicate.into(),
             object: t.object.into(),
+            graph_name: None,
         }
     }
 }
 
-impl<'a> From<&'a OwnedTriple> for Triple<'a> {
-    fn from(t: &'a OwnedTriple) -> Self {
+impl From<Quad<'_>> for OwnedQuad {
+    fn from(q: Quad) -> Self {
         Self {
-            subject: (&t.subject).into(),
-            predicate: (&t.predicate).into(),
-            object: (&t.object).into(),
+            subject: q.subject.into(),
+            predicate: q.predicate.into(),
+            object: q.object.into(),
+            graph_name: q.graph_name.map(|g| g.into()),
+        }
+    }
+}
+
+impl<'a> From<&'a OwnedQuad> for Quad<'a> {
+    fn from(q: &'a OwnedQuad) -> Self {
+        Self {
+            subject: (&q.subject).into(),
+            predicate: (&q.predicate).into(),
+            object: (&q.object).into(),
+            graph_name: q.graph_name.as_ref().map(|g| g.into()),
         }
     }
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct OwnedGraph {
-    inner: HashSet<OwnedTriple>,
+pub struct OwnedDataset {
+    inner: HashSet<OwnedQuad>,
 }
 
-impl OwnedGraph {
-    pub fn insert(&mut self, t: impl Into<OwnedTriple>) {
+impl OwnedDataset {
+    pub fn insert(&mut self, t: impl Into<OwnedQuad>) {
         self.inner.insert(t.into());
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &OwnedTriple> {
+    pub fn iter(&self) -> impl Iterator<Item = &OwnedQuad> {
         self.inner.iter()
     }
 
@@ -266,14 +280,14 @@ impl OwnedGraph {
         self.inner.len()
     }
 
-    pub fn contains(&self, t: &OwnedTriple) -> bool {
+    pub fn contains(&self, t: &OwnedQuad) -> bool {
         self.inner.contains(t)
     }
 
     pub fn triples_for_subject<'a>(
         &'a self,
         subject: impl Into<NamedOrBlankNode<'a>>,
-    ) -> impl Iterator<Item = &'a OwnedTriple> + 'a {
+    ) -> impl Iterator<Item = &'a OwnedQuad> + 'a {
         let subject: NamedOrBlankNode = subject.into();
         self.inner
             .iter()
@@ -283,7 +297,7 @@ impl OwnedGraph {
     pub fn triples_for_object<'a>(
         &'a self,
         object: impl Into<Term<'a>>,
-    ) -> impl Iterator<Item = &'a OwnedTriple> + 'a {
+    ) -> impl Iterator<Item = &'a OwnedQuad> + 'a {
         let object: Term = object.into();
         self.inner
             .iter()
@@ -308,24 +322,24 @@ impl OwnedGraph {
     }
 }
 
-impl IntoIterator for OwnedGraph {
-    type Item = OwnedTriple;
-    type IntoIter = <HashSet<OwnedTriple> as IntoIterator>::IntoIter;
+impl IntoIterator for OwnedDataset {
+    type Item = OwnedQuad;
+    type IntoIter = <HashSet<OwnedQuad> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.inner.into_iter()
     }
 }
 
-impl FromIterator<OwnedTriple> for OwnedGraph {
-    fn from_iter<I: IntoIterator<Item = OwnedTriple>>(iter: I) -> Self {
+impl FromIterator<OwnedQuad> for OwnedDataset {
+    fn from_iter<I: IntoIterator<Item = OwnedQuad>>(iter: I) -> Self {
         Self {
             inner: HashSet::from_iter(iter),
         }
     }
 }
 
-impl fmt::Display for OwnedGraph {
+impl fmt::Display for OwnedDataset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for t in &self.inner {
             writeln!(f, "{}", t)?;
