@@ -1,64 +1,63 @@
+use crate::error::{RdfXmlError, RdfXmlErrorKind};
+use std::str;
+
+#[derive(Clone)]
 pub struct IriParser {
     base_iri: Vec<u8>,
     base_positions: IriElementsPositions,
 }
 
 impl IriParser {
-    pub fn new(base_iri: &[u8]) -> Result<Self, usize> {
-        let mut this = Self {
-            base_iri: Vec::default(),
-            base_positions: IriElementsPositions::default(),
-        };
-        if !base_iri.is_empty() {
-            this.set_base_iri(base_iri)?;
-        }
-        Ok(this)
-    }
-
-    pub fn set_base_iri(&mut self, base_iri: &[u8]) -> Result<(), usize> {
-        self.base_iri.clear();
-        self.base_iri.extend_from_slice(base_iri);
-        self.base_positions = parse_iri(&self.base_iri, 0)?;
-        Ok(())
-    }
-
-    pub fn has_base_iri(&self) -> bool {
-        !self.base_iri.is_empty()
-    }
-
-    pub fn resolve(&self, iri: &[u8], target_buffer: &mut Vec<u8>) -> Result<(), usize> {
-        if self.base_iri.is_empty() {
-            parse_iri(iri, 0)?;
-            target_buffer.extend_from_slice(iri);
-            Ok(())
+    pub fn new(base_iri: &str) -> Result<Self, RdfXmlError> {
+        Ok(if base_iri.is_empty() {
+            Self {
+                base_iri: Vec::default(),
+                base_positions: IriElementsPositions::default(),
+            }
         } else {
-            resolve_relative_iri(iri, &self.base_iri, &self.base_positions, target_buffer)
+            let base_positions = parse_iri(base_iri.as_bytes(), 0).map_err(|_| RdfXmlError {
+                kind: RdfXmlErrorKind::InvalidIri(base_iri.to_owned()),
+            })?;
+            Self {
+                base_iri: base_iri.as_bytes().to_owned(),
+                base_positions,
+            }
+        })
+    }
+
+    pub fn resolve(&self, iri: String) -> Result<String, RdfXmlError> {
+        if self.base_iri.is_empty() {
+            parse_iri(iri.as_bytes(), 0).map_err(|_| RdfXmlError {
+                kind: RdfXmlErrorKind::InvalidIri(iri.to_owned()),
+            })?;
+            Ok(iri)
+        } else {
+            let mut target_buffer = Vec::default();
+            resolve_relative_iri(
+                iri.as_bytes(),
+                &self.base_iri,
+                &self.base_positions,
+                &mut target_buffer,
+            )
+            .map_err(|_| RdfXmlError {
+                kind: RdfXmlErrorKind::InvalidIri(iri.to_owned()),
+            })?;
+            String::from_utf8(target_buffer).map_err(|_| RdfXmlError {
+                kind: RdfXmlErrorKind::InvalidIri(iri.to_owned()),
+            })
         }
     }
 }
 
 type IriParserState = Result<usize, usize>; // usize = the end position
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct IriElementsPositions {
     scheme_end: usize,
     authority_end: usize,
     path_end: usize,
     query_end: usize,
     fragment_end: usize,
-}
-
-pub fn validate_iri(value: &[u8]) -> Result<(), usize> {
-    match parse_iri(value, 0) {
-        Ok(i) => {
-            if i.fragment_end == value.len() {
-                Ok(())
-            } else {
-                Err(i.fragment_end)
-            }
-        }
-        Err(i) => Err(i),
-    }
 }
 
 // RFC 3986 5.2 Relative Resolution algorithm
@@ -538,7 +537,7 @@ fn test_parsing() {
 
     for e in &examples {
         assert!(
-            validate_iri(e.as_bytes()).is_ok(),
+            parse_iri(e.as_bytes(), 0).is_ok(),
             "{} is not recognized as an IRI",
             e
         );
@@ -547,8 +546,6 @@ fn test_parsing() {
 
 #[test]
 fn test_resolve_relative_iri() {
-    use std::str;
-
     let base = "http://a/b/c/d;p?q";
 
     let examples = [
@@ -596,22 +593,20 @@ fn test_resolve_relative_iri() {
         ("http:g", "http:g"),
     ];
 
-    let mut buffer = Vec::default();
-    let iri_parser = IriParser::new(base.as_bytes()).unwrap();
+    let iri_parser = IriParser::new(base).unwrap();
     for (input, output) in examples.iter() {
-        let result = iri_parser.resolve(input.as_bytes(), &mut buffer);
+        let result = iri_parser.resolve(input.to_string());
         assert!(
             result.is_ok(),
             "Resolving of {} failed at byte {}",
             input,
             result.unwrap_err()
         );
-        let result = str::from_utf8(&buffer).unwrap();
+        let result = result.unwrap();
         assert_eq!(
-            result, *output,
+            &result, output,
             "Resolving of {} is wrong. Found {} and expecting {}",
-            input, result, output
+            input, &result, output
         );
-        buffer.clear();
     }
 }

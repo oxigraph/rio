@@ -2,9 +2,11 @@
 members = [
     "api",
     "turtle",
-    "testsuite"
+    "testsuite",
+    "xml"
 ]
 
 [patch.crates-io]
 rio_api = { path = "api" }
 rio_turtle = { path = "turtle" }
+rio_xml = { path = "xml" }

@@ -46,3 +46,8 @@ fn turtle_w3c_testsuite() -> Result<(), Box<dyn Error>> {
 fn trig_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("http://w3c.github.io/rdf-tests/trig/manifest.ttl".to_owned())
 }
+
+#[test]
+fn rdf_xml_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    run_testsuite("http://www.w3.org/2013/RDFXMLTests/manifest.ttl".to_owned())
+}

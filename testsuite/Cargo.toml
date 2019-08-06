@@ -14,6 +14,7 @@ publish = false
 [dependencies]
 rio_api = "0.1"
 rio_turtle = "0.1"
+rio_xml = "0.1"
 chrono = "0.4"
 permutohedron = "0.2"
 

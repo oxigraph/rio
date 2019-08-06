@@ -6,6 +6,7 @@ use chrono::Utc;
 use rio_api::parser::QuadParser;
 use rio_api::parser::TripleParser;
 use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleParser};
+use rio_xml::RdfXmlParser;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -38,6 +39,7 @@ pub fn evaluate_parser_tests(
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleNegativeEval"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigNegativeSyntax"
                 || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigNegativeEval"
+                || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestXMLNegativeSyntax"
             {
                 match file_reader(&test.action) {
                     Ok(_) => TestOutcome::Failed {
@@ -45,7 +47,7 @@ pub fn evaluate_parser_tests(
                     },
                     Err(_) => TestOutcome::Passed,
                 }
-            } else if &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleEval" || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigEval" {
+            } else if &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTurtleEval" || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestTrigEval" || &test.kind.iri == "http://www.w3.org/ns/rdftest#TestXMLEval" {
                 match file_reader(&test.action) {
                     Ok(actual_graph) => {
                         if let Some(result) = &test.result {
@@ -88,6 +90,8 @@ pub fn read_w3c_rdf_test_file(
     let mut path = tests_path.to_owned();
     path.push(if url.starts_with("http://w3c.github.io/rdf-tests/") {
         Ok(url.replace("http://w3c.github.io/rdf-tests/", ""))
+    } else if url.starts_with("http://www.w3.org/2013/RDFXMLTests/") {
+        Ok(url.replace("http://www.w3.org/2013/RDFXMLTests/", "rdf-xml/"))
     } else {
         Err(Box::new(TestEvaluationError::UnknownTestUrl(
             url.to_owned(),
@@ -119,6 +123,10 @@ pub fn parse_w3c_rdf_test_file(
             .collect()
     } else if url.ends_with(".trig") {
         TriGParser::new(read, url)?
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".rdf") {
+        RdfXmlParser::new(read, url)?
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else {

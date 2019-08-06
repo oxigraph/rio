@@ -5,16 +5,18 @@ Rio
 [![Build Status](https://travis-ci.org/Tpt/rio.svg?branch=master)](https://travis-ci.org/Tpt/rio)
 [![Latest Version](https://img.shields.io/crates/v/rio_api.svg)](https://crates.io/crates/rio_api)
 [![Latest Version](https://img.shields.io/crates/v/rio_turtle.svg)](https://crates.io/crates/rio_turtle)
+[![Latest Version](https://img.shields.io/crates/v/rio_xml.svg)](https://crates.io/crates/rio_xml)
 
 Rio is a library aiming at providing conformant and fast parsers for RDF related file formats.
 
-It currently provides [N-Triples](https://www.w3.org/TR/n-triples/), [N-Quads](https://www.w3.org/TR/n-quads/), [Turtle](https://www.w3.org/TR/turtle/) and [TriG](https://www.w3.org/TR/trig/) parsers.
+It currently provides [N-Triples](https://www.w3.org/TR/n-triples/), [N-Quads](https://www.w3.org/TR/n-quads/), [Turtle](https://www.w3.org/TR/turtle/), [TriG](https://www.w3.org/TR/trig/) and [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) parsers.
 
 It is design primarily to be embedded inside of RDF libraries written in Rust, or exposed to other programming languages.
 
 It provides multiple crates:
 * `rio_api` provides common traits and data structures to be used in Rio parsers (`Triple`, `TripleParser`...).
-* `rio_turtle` provides conformant streaming parsers for [Turtle](https://www.w3.org/TR/turtle/), [TriG](https://www.w3.org/TR/trig/), [N-Triples](https://www.w3.org/TR/n-triples/) and [N-Quads](https://www.w3.org/TR/n-quads/) formats.
+* `rio_turtle` provides conformant streaming parsers for [Turtle](https://www.w3.org/TR/turtle/), [TriG](https://www.w3.org/TR/trig/), [N-Triples](https://www.w3.org/TR/n-triples/) and [N-Quads](https://www.w3.org/TR/n-quads/).
+* `rio_xml` provides a conformant streaming parser for [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/).
 
 There is also the `rio_testsuite` crate that is used for testing Rio parsers against the [W3C RDF tests](http://w3c.github.io/rdf-tests/) to ensure their conformance.
 It provides both an executable for building implementation reports and integration test to quickly ensure that the parsers stay conformant.
