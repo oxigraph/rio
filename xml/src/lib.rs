@@ -1,4 +1,22 @@
-//! Implementation of an [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) parser.
+//! Implementation of an [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
+//!
+//! How to read a file `foo.rdf` and count the number of `rdf:type` triples:
+//! ```no_run
+//! use rio_xml::RdfXmlParser;
+//! use rio_api::parser::TripleParser;
+//! use rio_api::model::NamedNode;
+//! use std::io::BufReader;
+//! use std::fs::File;
+//!
+//! let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
+//! let mut count = 0;
+//! RdfXmlParser::new(BufReader::new(File::open("foo.rdf").unwrap()), "file:foo.rdf").unwrap().parse_all(&mut |t| {
+//! println!("{}", t);
+//!     if t.predicate == rdf_type {
+//!         count += 1;
+//!     }
+//! }).unwrap();
+//! ```
 
 use crate::iri::IriParser;
 use quick_xml::events::*;
@@ -17,9 +35,13 @@ use std::collections::HashSet;
 /// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 ///
 /// It implements the `TripleParser` trait.
+/// It reads the file in streaming. It does not keep data in memory except a stack for handling nested XML tags
+/// and a set of all seen `rdf:ID`s to detect duplicate ids and fail according to the specification.
 ///
+/// Its performances are not optimized yet and hopefully could be significantly enhanced by reducing the
+/// number of allocations and copies done by the parser.
 ///
-/// Count the number of of people using the `TripleParser` API:
+/// Count the number of of people using the `TripleParser` API without proper error management:
 /// ```
 /// use rio_xml::RdfXmlParser;
 /// use rio_api::parser::TripleParser;
@@ -52,6 +74,9 @@ pub struct RdfXmlParser<R: BufRead> {
 }
 
 impl<R: BufRead> RdfXmlParser<R> {
+    /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
+    ///
+    /// The base IRI might be empty to state there is no base IRI.
     pub fn new(reader: R, base_iri: &str) -> Result<Self, RdfXmlError> {
         let mut reader = Reader::from_reader(reader);
         reader.expand_empty_elements(true);
@@ -307,7 +332,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     } else if *attribute_url == *RDF_NODE_ID {
                         let id = attribute.unescape_and_decode_value(&self.reader)?;
                         if !is_nc_name(&id) {
-                            return Err(format!("{} is not a valid rdf:nodeId value", &id).into());
+                            return Err(format!("{} is not a valid rdf:nodeID value", &id).into());
                         }
                         node_id_attr = Some(OwnedBlankNode { id });
                     } else if *attribute_url == *RDF_ABOUT {
@@ -460,7 +485,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                                         .unwrap()
                                         .to_owned(),
                                 }.into(),
-                                (Some(_), Some(_)) => return Err("Not both rdf:resource and rdf:nodeId could be set at the same time".into())
+                                (Some(_), Some(_)) => return Err("Not both rdf:resource and rdf:nodeID could be set at the same time".into())
                             };
                             self.emit_property_attrs(
                                 (&object).into(),
@@ -623,15 +648,15 @@ impl<R: BufRead> RdfXmlReader<R> {
             }
             .into(),
             (Some(_), Some(_), _) => {
-                return Err("Not both rdf:id and rdf:nodeId could be set at the same time".into())
+                return Err("Not both rdf:ID and rdf:nodeID could be set at the same time".into())
             }
             (_, Some(_), Some(_)) => {
                 return Err(
-                    "Not both rdf:nodeId and rdf:resource could be set at the same time".into(),
+                    "Not both rdf:nodeID and rdf:resource could be set at the same time".into(),
                 )
             }
             (Some(_), _, Some(_)) => {
-                return Err("Not both rdf:id and rdf:resource could be set at the same time".into())
+                return Err("Not both rdf:ID and rdf:resource could be set at the same time".into())
             }
         };
 

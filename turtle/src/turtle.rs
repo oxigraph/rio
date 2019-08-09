@@ -51,7 +51,7 @@ pub struct TurtleParser<R: BufRead> {
 impl<R: BufRead> TurtleParser<R> {
     /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
     ///
-    /// The base IRI might be empty to state there is no base URL.
+    /// The base IRI might be empty to state there is no base IRI.
     pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
         let read = LookAheadLineBasedByteReader::new(reader)?;
         let iri_parser = IriParser::new(base_iri.as_bytes())

@@ -21,10 +21,10 @@ pub trait TripleParser: Sized {
     ///
     /// This method should be called as long as `is_end` returns false.
     ///
-    /// I could be a line for line based formats like N-Triples...
+    /// A "small chunk" could be a line for an N-Triples parser.
     fn parse_step(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), Self::Error>;
 
-    /// Return `true` if the complete file has been consumed by the parser.
+    /// Returns `true` if the file has been completely consumed by the parser.
     fn is_end(&self) -> bool;
 
     /// Converts the parser into a `Result<T, E>` iterator.
@@ -94,14 +94,14 @@ pub trait QuadParser: Sized {
         Ok(())
     }
 
-    /// Parses a small chunk of the file and calls `on_triple` each time a new triple is read.
+    /// Parses a small chunk of the file and calls `on_quad` each time a new triple is read.
     ///
     /// This method should be called as long as `is_end` returns false.
     ///
-    /// I could be a line for line based formats like N-Triples...
+    /// A "small chunk" could be a line for an N-Quads parser.
     fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), Self::Error>;
 
-    /// Return `true` if the complete file has been consumed by the parser.
+    /// Returns `true` if the file has been completely consumed by the parser.
     fn is_end(&self) -> bool;
 
     /// Converts the parser into a `Result<T, E>` iterator.
@@ -119,7 +119,7 @@ pub trait QuadParser: Sized {
     }
 }
 
-/// Created with the method [`into_iter`](trait.TripleParser.html#method.into_iter).
+/// Created with the method [`into_iter`](trait.QuadParser.html#method.into_iter).
 pub struct QuadsParserIterator<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser>
 {
     parser: P,
