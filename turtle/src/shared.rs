@@ -256,7 +256,7 @@ pub fn is_possible_pn_chars_u(c: u8) -> bool {
 pub fn is_possible_pn_chars(c: u8) -> bool {
     match c {
         c if is_possible_pn_chars_u(c) => true,
-        b'-' | b'0'...b'9' | 0x00B7 => true,
+        b'-' | b'0'..=b'9' | 0x00B7 => true,
         _ => false,
     }
 }
