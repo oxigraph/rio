@@ -1,7 +1,7 @@
 //! Interfaces for RDF parsers.
 
 use crate::model::{Quad, Triple};
-use std::error::Error;
+use std::num::NonZeroUsize;
 
 /// A parser returning [`Triple`](../model/struct.Triple.html).
 pub trait TripleParser: Sized {
@@ -150,5 +150,20 @@ impl<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser> Iterat
                 return Some(Err(e.into()));
             }
         }
+    }
+}
+
+/// Parser-specific Error trait
+pub trait Error: std::error::Error {
+    /// The line number where the error occured, if known (otherwise, None).
+    fn line_number(&self) -> Option<NonZeroUsize> {
+        None
+    }
+    /// The byte number (in the line) where the error occured.
+    ///
+    /// If ``line_number`` returns ``None``,
+    /// the result of this method is unspecified.
+    fn byte_number(&self) -> usize {
+        0
     }
 }

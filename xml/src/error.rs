@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fmt;
 
 /// Error that might be returned during parsing.
@@ -26,7 +25,9 @@ impl fmt::Display for RdfXmlError {
     }
 }
 
-impl Error for RdfXmlError {}
+impl std::error::Error for RdfXmlError {}
+
+impl rio_api::parser::Error for RdfXmlError {}
 
 impl From<quick_xml::Error> for RdfXmlError {
     fn from(error: quick_xml::Error) -> Self {

@@ -1,7 +1,8 @@
 use std::char;
-use std::error::Error;
+use std::error::Error as StdError;
 use std::fmt;
 use std::io;
+use std::num::NonZeroUsize;
 
 /// Error that might be returned during parsing.
 ///
@@ -48,12 +49,21 @@ impl fmt::Display for TurtleError {
     }
 }
 
-impl Error for TurtleError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
+impl StdError for TurtleError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match &self.kind {
             TurtleErrorKind::IO(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl rio_api::parser::Error for TurtleError {
+    fn line_number(&self) -> Option<NonZeroUsize> {
+        NonZeroUsize::new(self.line_number)
+    }
+    fn byte_number(&self) -> usize {
+        self.byte_number
     }
 }
 
