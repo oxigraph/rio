@@ -122,21 +122,58 @@ pub trait QuadParser: Sized {
     type Error: Error;
 
     /// Parses the complete file and calls `on_quad` each time a new quad is read.
+    ///
+    /// May fail on errors caused by the parser itself.
+    ///
+    /// See also [`try_parse_all`](#method.try_parse_all).
     fn parse_all(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), Self::Error> {
         while !self.is_end() {
-            if let Err(error) = self.parse_step(on_quad) {
-                return Err(error);
-            }
+            self.parse_step(on_quad)?
         }
         Ok(())
     }
 
-    /// Parses a small chunk of the file and calls `on_quad` each time a new triple is read.
+    /// Parses the complete file and calls `on_quad` each time a new quad is read.
     ///
-    /// This method should be called as long as `is_end` returns false.
+    /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
     ///
-    /// A "small chunk" could be a line for an N-Quads parser.
-    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), Self::Error>;
+    /// See also [`parse_all`](#method.parse_all).
+    fn try_parse_all<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Quad) -> Result<(), E>,
+        E: Error + From<Self::Error>,
+    {
+        while !self.is_end() {
+            self.try_parse_step(on_quad)?
+        }
+        Ok(())
+    }
+
+    /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
+    /// (A "small chunk" could be a line for an N-Quads parser.)
+    ///
+    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+    /// It may fail on errors caused by the parser itself.
+    ///
+    /// See also [`try_parse_step`](#tymethod.try_parse_step).
+    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), Self::Error> {
+        self.try_parse_step(&mut |q| {
+            on_quad(q);
+            Ok(())
+        })
+    }
+
+    /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
+    /// (A "small chunk" could be a line for an N-Quads parser.)
+    ///
+    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+    /// It may fail on errors caused by the parser itself or by the callback function ``on_quad``.
+    ///
+    /// See also [`parse_step`](#method.parse_step).
+    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Quad) -> Result<(), E>,
+        E: Error + From<Self::Error>;
 
     /// Returns `true` if the file has been completely consumed by the parser.
     fn is_end(&self) -> bool;

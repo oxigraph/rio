@@ -76,7 +76,7 @@ impl<R: BufRead> TripleParser for TurtleParser<R> {
     fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
     where
         F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<Self::Error>,
+        E: std::error::Error + From<TurtleError>,
     {
         parse_statement(self, on_triple)
     }
@@ -135,7 +135,11 @@ impl<R: BufRead> TriGParser<R> {
 impl<R: BufRead> QuadParser for TriGParser<R> {
     type Error = TurtleError;
 
-    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), TurtleError> {
+    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Quad) -> Result<(), E>,
+        E: std::error::Error + From<TurtleError>,
+    {
         parse_block_or_directive(self, on_quad)
     }
 
@@ -204,10 +208,12 @@ where
     }
 }
 
-fn parse_block_or_directive<R: BufRead>(
-    parser: &mut TriGParser<R>,
-    on_quad: &mut impl FnMut(Quad) -> (),
-) -> Result<(), TurtleError> {
+fn parse_block_or_directive<R, F, E>(parser: &mut TriGParser<R>, on_quad: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Quad) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [1g] 	trigDoc 	::= 	(directive | block)*
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
     skip_whitespace(&mut parser.inner.read)?;
@@ -220,28 +226,32 @@ fn parse_block_or_directive<R: BufRead>(
             &mut parser.inner.namespaces,
             &parser.inner.iri_parser,
             &mut parser.inner.temp_buf,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with(b"@base") {
         parse_base(
             &mut parser.inner.read,
             &mut parser.inner.temp_buf,
             &mut parser.inner.object_annotation_buf,
             &mut parser.inner.iri_parser,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"BASE") {
         parse_sparql_base(
             &mut parser.inner.read,
             &mut parser.inner.temp_buf,
             &mut parser.inner.object_annotation_buf,
             &mut parser.inner.iri_parser,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX") {
         parse_sparql_prefix(
             &mut parser.inner.read,
             &mut parser.inner.namespaces,
             &parser.inner.iri_parser,
             &mut parser.inner.temp_buf,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH") {
         parser.inner.read.consume_many("GRAPH".len())?;
         skip_whitespace(&mut parser.inner.read)?;
@@ -275,10 +285,12 @@ fn parse_block_or_directive<R: BufRead>(
     }
 }
 
-fn parse_triples_or_graph<R: BufRead>(
-    parser: &mut TriGParser<R>,
-    on_quad: &mut impl FnMut(Quad) -> (),
-) -> Result<(), TurtleError> {
+fn parse_triples_or_graph<R, F, E>(parser: &mut TriGParser<R>, on_quad: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Quad) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
     let front_type = parse_label_or_subject(
         &mut parser.inner.read,
@@ -1438,17 +1450,19 @@ impl From<NamedOrBlankNodeType> for TermType {
     }
 }
 
-fn on_triple_in_graph<'a>(
-    on_quad: &'a mut impl FnMut(Quad) -> (),
+fn on_triple_in_graph<'a, F, E>(
+    on_quad: &'a mut F,
     graph_name: Option<NamedOrBlankNode<'a>>,
-) -> impl FnMut(Triple) -> Result<(), TurtleError> + 'a {
+) -> impl FnMut(Triple) -> Result<(), E> + 'a
+where
+    F: FnMut(Quad) -> Result<(), E>,
+{
     move |t: Triple| {
         on_quad(Quad {
             subject: t.subject,
             predicate: t.predicate,
             object: t.object,
             graph_name,
-        });
-        Ok(())
+        })
     }
 }

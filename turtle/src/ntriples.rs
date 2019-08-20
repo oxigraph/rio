@@ -144,7 +144,11 @@ impl<R: BufRead> NQuadsParser<R> {
 impl<R: BufRead> QuadParser for NQuadsParser<R> {
     type Error = TurtleError;
 
-    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), TurtleError> {
+    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Quad) -> Result<(), E>,
+        E: std::error::Error + From<TurtleError>,
+    {
         if let Some(result) = parse_quad_line(
             &mut self.read,
             &mut self.subject_buf,
@@ -153,7 +157,7 @@ impl<R: BufRead> QuadParser for NQuadsParser<R> {
             &mut self.object_annotation_buf,
             &mut self.graph_name_buf,
         )? {
-            on_quad(result);
+            on_quad(result)?;
 
             //We clear the buffers
             self.subject_buf.clear();
