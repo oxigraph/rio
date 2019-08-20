@@ -101,21 +101,26 @@ impl<R: BufRead> RdfXmlParser<R> {
 impl<R: BufRead> TripleParser for RdfXmlParser<R> {
     type Error = RdfXmlError;
 
-    fn parse_step(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), RdfXmlError> {
+    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         let (_, event) = self
             .reader
             .reader
-            .read_namespaced_event(&mut self.reader_buffer, &mut self.reader.namespace_buffer)?;
+            .read_namespaced_event(&mut self.reader_buffer, &mut self.reader.namespace_buffer)
+            .map_err(RdfXmlError::from)?;
         match event {
-            Event::Start(event) => self.reader.parse_start_event(event, on_triple),
-            Event::Text(event) => self.reader.parse_text_event(event),
-            Event::End(event) => self.reader.parse_end_event(event, on_triple),
+            Event::Start(event) => self.reader.parse_start_event(event, on_triple)?,
+            Event::Text(event) => self.reader.parse_text_event(event)?,
+            Event::End(event) => self.reader.parse_end_event(event, on_triple)?,
             Event::Eof => {
                 self.is_end = true;
-                Ok(())
             }
-            _ => Ok(()),
-        }
+            _ => {}
+        };
+        Ok(())
     }
 
     fn is_end(&self) -> bool {
@@ -249,19 +254,21 @@ struct RdfXmlReader<R: BufRead> {
 }
 
 impl<R: BufRead> RdfXmlReader<R> {
-    fn parse_start_event(
-        &mut self,
-        event: BytesStart<'_>,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) -> Result<(), RdfXmlError> {
+    fn parse_start_event<F, E>(&mut self, event: BytesStart<'_>, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         //Literal case
         if let Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) = self.state.last_mut()
         {
             let mut clean_event = BytesStart::borrowed_name(event.name());
             for attr in event.attributes() {
-                clean_event.push_attribute(attr?);
+                clean_event.push_attribute(attr.map_err(RdfXmlError::from)?);
             }
-            writer.write_event(Event::Start(clean_event))?;
+            writer
+                .write_event(Event::Start(clean_event))
+                .map_err(RdfXmlError::from)?;
             self.in_literal_depth += 1;
             return Ok(());
         }
@@ -304,43 +311,78 @@ impl<R: BufRead> RdfXmlReader<R> {
         let mut type_attr = None;
 
         for attribute in event.attributes() {
-            let attribute = attribute?;
+            let attribute = attribute.map_err(RdfXmlError::from)?;
             match attribute.key {
                 b"xml:lang" => {
-                    language = Some(attribute.unescape_and_decode_value(&self.reader)?);
+                    language = Some(
+                        attribute
+                            .unescape_and_decode_value(&self.reader)
+                            .map_err(RdfXmlError::from)?,
+                    );
                 }
                 b"xml:base" => {
-                    iri_parser =
-                        IriParser::new(&attribute.unescape_and_decode_value(&self.reader)?)?
+                    iri_parser = IriParser::new(
+                        &attribute
+                            .unescape_and_decode_value(&self.reader)
+                            .map_err(RdfXmlError::from)?,
+                    )?
                 }
                 key if !key.starts_with(b"xml") => {
                     let attribute_url = self.resolve_attribute_name(key)?;
                     if *attribute_url == *RDF_ID {
-                        let mut id = attribute.unescape_and_decode_value(&self.reader)?;
+                        let mut id = attribute
+                            .unescape_and_decode_value(&self.reader)
+                            .map_err(RdfXmlError::from)?;
                         if !is_nc_name(&id) {
-                            return Err(format!("{} is not a valid rdf:ID value", &id).into());
+                            return Err(RdfXmlError::from(format!(
+                                "{} is not a valid rdf:ID value",
+                                &id
+                            ))
+                            .into());
                         }
                         id.insert(0, '#');
                         id_attr = Some(id);
                     } else if *attribute_url == *RDF_BAG_ID {
-                        let bag_id = attribute.unescape_and_decode_value(&self.reader)?;
+                        let bag_id = attribute
+                            .unescape_and_decode_value(&self.reader)
+                            .map_err(RdfXmlError::from)?;
                         if !is_nc_name(&bag_id) {
-                            return Err(
-                                format!("{} is not a valid rdf:bagID value", &bag_id).into()
-                            );
+                            return Err(RdfXmlError::from(format!(
+                                "{} is not a valid rdf:bagID value",
+                                &bag_id
+                            ))
+                            .into());
                         }
                     } else if *attribute_url == *RDF_NODE_ID {
-                        let id = attribute.unescape_and_decode_value(&self.reader)?;
+                        let id = attribute
+                            .unescape_and_decode_value(&self.reader)
+                            .map_err(RdfXmlError::from)?;
                         if !is_nc_name(&id) {
-                            return Err(format!("{} is not a valid rdf:nodeID value", &id).into());
+                            return Err(RdfXmlError::from(format!(
+                                "{} is not a valid rdf:nodeID value",
+                                &id
+                            ))
+                            .into());
                         }
                         node_id_attr = Some(OwnedBlankNode { id });
                     } else if *attribute_url == *RDF_ABOUT {
-                        about_attr = Some(attribute.unescape_and_decode_value(&self.reader)?);
+                        about_attr = Some(
+                            attribute
+                                .unescape_and_decode_value(&self.reader)
+                                .map_err(RdfXmlError::from)?,
+                        );
                     } else if *attribute_url == *RDF_RESOURCE {
-                        resource_attr = Some(attribute.unescape_and_decode_value(&self.reader)?);
+                        resource_attr = Some(
+                            attribute
+                                .unescape_and_decode_value(&self.reader)
+                                .map_err(RdfXmlError::from)?,
+                        );
                     } else if *attribute_url == *RDF_DATATYPE {
-                        datatype_attr = Some(attribute.unescape_and_decode_value(&self.reader)?);
+                        datatype_attr = Some(
+                            attribute
+                                .unescape_and_decode_value(&self.reader)
+                                .map_err(RdfXmlError::from)?,
+                        );
                     } else if *attribute_url == *RDF_PARSE_TYPE {
                         parse_type = match attribute.value.as_ref() {
                             b"Collection" => RdfXmlParseType::Collection,
@@ -349,13 +391,23 @@ impl<R: BufRead> RdfXmlReader<R> {
                             _ => RdfXmlParseType::Other,
                         };
                     } else if *attribute_url == *RDF_TYPE {
-                        type_attr = Some(attribute.unescape_and_decode_value(&self.reader)?);
+                        type_attr = Some(
+                            attribute
+                                .unescape_and_decode_value(&self.reader)
+                                .map_err(RdfXmlError::from)?,
+                        );
                     } else if RESERVED_RDF_ATTRIBUTES.contains(&&*attribute_url) {
-                        return Err(format!("{} is not a valid attribute", &attribute_url).into());
+                        return Err(RdfXmlError::from(format!(
+                            "{} is not a valid attribute",
+                            &attribute_url
+                        ))
+                        .into());
                     } else {
                         property_attrs.push((
                             OwnedNamedNode { iri: attribute_url },
-                            attribute.unescape_and_decode_value(&self.reader)?,
+                            attribute
+                                .unescape_and_decode_value(&self.reader)
+                                .map_err(RdfXmlError::from)?,
                         ));
                     }
                 }
@@ -368,7 +420,11 @@ impl<R: BufRead> RdfXmlReader<R> {
             Some(iri) => {
                 let iri = iri_parser.resolve(iri)?;
                 if self.known_rdf_id.contains(&iri) {
-                    return Err(format!("{} has already been used as rdf:ID value", &iri).into());
+                    return Err(RdfXmlError::from(format!(
+                        "{} has already been used as rdf:ID value",
+                        &iri
+                    ))
+                    .into());
                 }
                 self.known_rdf_id.insert(iri.clone());
                 Some(OwnedNamedNode { iri })
@@ -414,7 +470,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 panic!("ParseTypeLiteralPropertyElt production children should never be considered as a RDF/XML content")
             }
             None => {
-                return Err("No state in the stack: the XML is not balanced".into());
+                return Err(RdfXmlError::from("No state in the stack: the XML is not balanced").into());
             }
         };
 
@@ -426,7 +482,11 @@ impl<R: BufRead> RdfXmlReader<R> {
                         language,
                     }
                 } else if RESERVED_RDF_ELEMENTS.contains(&&*iri) {
-                    return Err(format!("Invalid node element tag name: {}", &iri).into());
+                    return Err(RdfXmlError::from(format!(
+                        "Invalid node element tag name: {}",
+                        &iri
+                    ))
+                    .into());
                 } else {
                     self.build_node_elt(
                         OwnedNamedNode { iri },
@@ -443,7 +503,11 @@ impl<R: BufRead> RdfXmlReader<R> {
             }
             RdfXmlNextProduction::NodeElt => {
                 if RESERVED_RDF_ELEMENTS.contains(&&*iri) {
-                    return Err(format!("Invalid property element tag name: {}", &iri).into());
+                    return Err(RdfXmlError::from(format!(
+                        "Invalid property element tag name: {}",
+                        &iri
+                    ))
+                    .into());
                 }
                 self.build_node_elt(
                     OwnedNamedNode { iri },
@@ -463,10 +527,18 @@ impl<R: BufRead> RdfXmlReader<R> {
                         *li_counter += 1;
                         format!("http://www.w3.org/1999/02/22-rdf-syntax-ns#_{}", li_counter)
                     } else {
-                        return Err(format!("Invalid property element tag name: {}", &iri).into());
+                        return Err(RdfXmlError::from(format!(
+                            "Invalid property element tag name: {}",
+                            &iri
+                        ))
+                        .into());
                     }
                 } else if RESERVED_RDF_ELEMENTS.contains(&&*iri) || *iri == *RDF_DESCRIPTION {
-                    return Err(format!("Invalid property element tag name: {}", &iri).into());
+                    return Err(RdfXmlError::from(format!(
+                        "Invalid property element tag name: {}",
+                        &iri
+                    ))
+                    .into());
                 } else {
                     iri
                 };
@@ -485,20 +557,20 @@ impl<R: BufRead> RdfXmlReader<R> {
                                         .unwrap()
                                         .to_owned(),
                                 }.into(),
-                                (Some(_), Some(_)) => return Err("Not both rdf:resource and rdf:nodeID could be set at the same time".into())
+                                (Some(_), Some(_)) => return Err(RdfXmlError::from("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
                             };
                             self.emit_property_attrs(
                                 (&object).into(),
                                 property_attrs,
                                 &language,
                                 on_triple,
-                            );
+                            )?;
                             if let Some(type_attr) = type_attr {
                                 on_triple(Triple {
                                     subject: (&object).into(),
                                     predicate: NamedNode { iri: RDF_TYPE },
                                     object: NamedNode::from(&type_attr).into(),
-                                });
+                                })?;
                             }
                             RdfXmlState::PropertyElt {
                                 iri,
@@ -537,7 +609,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                         subject,
                         id_attr,
                         on_triple,
-                    ),
+                    )?,
                     RdfXmlParseType::Collection => RdfXmlState::ParseTypeCollectionPropertyElt {
                         iri,
                         iri_parser,
@@ -562,17 +634,19 @@ impl<R: BufRead> RdfXmlReader<R> {
         Ok(())
     }
 
-    fn parse_end_event(
-        &mut self,
-        event: BytesEnd<'_>,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) -> Result<(), RdfXmlError> {
+    fn parse_end_event<F, E>(&mut self, event: BytesEnd<'_>, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         //Literal case
         if self.in_literal_depth > 0 {
             if let Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) =
                 self.state.last_mut()
             {
-                writer.write_event(Event::End(BytesEnd::borrowed(event.name())))?;
+                writer
+                    .write_event(Event::End(BytesEnd::borrowed(event.name())))
+                    .map_err(RdfXmlError::from)?;
                 self.in_literal_depth -= 1;
                 return Ok(());
             }
@@ -626,7 +700,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         .to_string())
     }
 
-    fn build_node_elt(
+    fn build_node_elt<F, E>(
         &mut self,
         iri: OwnedNamedNode,
         iri_parser: IriParser,
@@ -636,8 +710,12 @@ impl<R: BufRead> RdfXmlReader<R> {
         about_attr: Option<OwnedNamedNode>,
         type_attr: Option<OwnedNamedNode>,
         property_attrs: Vec<(OwnedNamedNode, String)>,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) -> Result<RdfXmlState, RdfXmlError> {
+        on_triple: &mut F,
+    ) -> Result<RdfXmlState, E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         let subject_id = self.bnode_id_generator.generate(); //TODO: avoid to run it everytime
         let subject: NamedOrBlankNode = match (&id_attr, &node_id_attr, &about_attr) {
             (Some(id_attr), None, None) => NamedNode::from(id_attr).into(),
@@ -648,26 +726,33 @@ impl<R: BufRead> RdfXmlReader<R> {
             }
             .into(),
             (Some(_), Some(_), _) => {
-                return Err("Not both rdf:ID and rdf:nodeID could be set at the same time".into())
+                return Err(RdfXmlError::from(
+                    "Not both rdf:ID and rdf:nodeID could be set at the same time",
+                )
+                .into())
             }
             (_, Some(_), Some(_)) => {
-                return Err(
-                    "Not both rdf:nodeID and rdf:resource could be set at the same time".into(),
+                return Err(RdfXmlError::from(
+                    "Not both rdf:nodeID and rdf:resource could be set at the same time",
                 )
+                .into())
             }
             (Some(_), _, Some(_)) => {
-                return Err("Not both rdf:ID and rdf:resource could be set at the same time".into())
+                return Err(RdfXmlError::from(
+                    "Not both rdf:ID and rdf:resource could be set at the same time",
+                )
+                .into())
             }
         };
 
-        self.emit_property_attrs(subject, property_attrs, &language, on_triple);
+        self.emit_property_attrs(subject, property_attrs, &language, on_triple)?;
 
         if let Some(type_attr) = type_attr {
             on_triple(Triple {
                 subject,
                 predicate: NamedNode { iri: RDF_TYPE },
                 object: NamedNode::from(&type_attr).into(),
-            });
+            })?;
         }
 
         if *iri.iri != *RDF_DESCRIPTION {
@@ -675,7 +760,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 subject,
                 predicate: NamedNode { iri: RDF_TYPE },
                 object: NamedNode::from(&iri).into(),
-            });
+            })?;
         }
         Ok(RdfXmlState::NodeElt {
             iri_parser,
@@ -685,15 +770,19 @@ impl<R: BufRead> RdfXmlReader<R> {
         })
     }
 
-    fn build_parse_type_resource_property_elt(
+    fn build_parse_type_resource_property_elt<F, E>(
         &mut self,
         iri: OwnedNamedNode,
         iri_parser: IriParser,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         id_attr: Option<OwnedNamedNode>,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) -> RdfXmlState {
+        on_triple: &mut F,
+    ) -> Result<RdfXmlState, E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         let object_id = self.bnode_id_generator.generate();
         let object = BlankNode {
             id: str::from_utf8(&object_id).unwrap(),
@@ -704,22 +793,22 @@ impl<R: BufRead> RdfXmlReader<R> {
             object: object.into(),
         };
         if let Some(id_attr) = &id_attr {
-            self.reify(&triple, NamedNode::from(id_attr).into(), on_triple);
+            self.reify(&triple, NamedNode::from(id_attr).into(), on_triple)?;
         }
-        on_triple(triple);
-        RdfXmlState::NodeElt {
+        on_triple(triple)?;
+        Ok(RdfXmlState::NodeElt {
             iri_parser,
             language,
             subject: OwnedBlankNode::from(object).into(),
             li_counter: 0,
-        }
+        })
     }
 
-    fn end_state(
-        &mut self,
-        state: RdfXmlState,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) -> Result<(), RdfXmlError> {
+    fn end_state<F, E>(&mut self, state: RdfXmlState, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         match state {
             RdfXmlState::PropertyElt {
                 iri,
@@ -743,9 +832,9 @@ impl<R: BufRead> RdfXmlReader<R> {
                     object,
                 };
                 if let Some(id_attr) = &id_attr {
-                    self.reify(&triple, NamedNode::from(id_attr).into(), on_triple);
+                    self.reify(&triple, NamedNode::from(id_attr).into(), on_triple)?;
                 }
-                on_triple(triple);
+                on_triple(triple)?;
             }
             RdfXmlState::ParseTypeCollectionPropertyElt {
                 iri,
@@ -769,12 +858,12 @@ impl<R: BufRead> RdfXmlReader<R> {
                         subject: (&subject).into(),
                         predicate: NamedNode { iri: RDF_FIRST },
                         object: NamedOrBlankNode::from(object).into(),
-                    });
+                    })?;
                     on_triple(Triple {
                         subject: (&subject).into(),
                         predicate: NamedNode { iri: RDF_REST },
                         object: NamedOrBlankNode::from(&current_node).into(),
-                    });
+                    })?;
                     current_node = subject;
                 }
                 let triple = Triple {
@@ -783,9 +872,9 @@ impl<R: BufRead> RdfXmlReader<R> {
                     object: NamedOrBlankNode::from(&current_node).into(),
                 };
                 if let Some(id_attr) = &id_attr {
-                    self.reify(&triple, NamedNode::from(id_attr).into(), on_triple);
+                    self.reify(&triple, NamedNode::from(id_attr).into(), on_triple)?;
                 }
-                on_triple(triple);
+                on_triple(triple)?;
             }
             RdfXmlState::ParseTypeLiteralPropertyElt {
                 iri,
@@ -798,18 +887,21 @@ impl<R: BufRead> RdfXmlReader<R> {
                 if emit {
                     let object = writer.into_inner();
                     if object.is_empty() {
-                        return Err(format!(
+                        return Err(RdfXmlError::from(format!(
                             "No value found for rdf:XMLLiteral value of property {}",
                             iri
-                        )
+                        ))
                         .into());
                     }
                     let triple = Triple {
                         subject: (&subject).into(),
                         predicate: NamedNode { iri: &iri },
                         object: Literal::Typed {
-                            value: &str::from_utf8(&object)
-                                .map_err(|_| "The XML literal is not in valid UTF-8".to_owned())?,
+                            value: &str::from_utf8(&object).map_err(|_| {
+                                RdfXmlError::from(
+                                    "The XML literal is not in valid UTF-8".to_owned(),
+                                )
+                            })?,
                             datatype: NamedNode {
                                 iri: RDF_XML_LITERAL,
                             },
@@ -817,9 +909,9 @@ impl<R: BufRead> RdfXmlReader<R> {
                         .into(),
                     };
                     if let Some(id_attr) = &id_attr {
-                        self.reify(&triple, NamedNode::from(id_attr).into(), on_triple);
+                        self.reify(&triple, NamedNode::from(id_attr).into(), on_triple)?;
                     }
-                    on_triple(triple);
+                    on_triple(triple)?;
                 }
             }
             RdfXmlState::NodeElt { subject, .. } => match self.state.last_mut() {
@@ -854,41 +946,50 @@ impl<R: BufRead> RdfXmlReader<R> {
         }
     }
 
-    fn reify(
+    fn reify<F, E>(
         &self,
         triple: &Triple,
         statement_id: NamedOrBlankNode,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) {
+        on_triple: &mut F,
+    ) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         on_triple(Triple {
             subject: statement_id,
             predicate: NamedNode { iri: RDF_TYPE },
             object: NamedNode { iri: RDF_STATEMENT }.into(),
-        });
+        })?;
         on_triple(Triple {
             subject: statement_id,
             predicate: NamedNode { iri: RDF_SUBJECT },
             object: triple.subject.into(),
-        });
+        })?;
         on_triple(Triple {
             subject: statement_id,
             predicate: NamedNode { iri: RDF_PREDICATE },
             object: triple.predicate.into(),
-        });
+        })?;
         on_triple(Triple {
             subject: statement_id,
             predicate: NamedNode { iri: RDF_OBJECT },
             object: triple.object,
-        });
+        })?;
+        Ok(())
     }
 
-    fn emit_property_attrs(
+    fn emit_property_attrs<F, E>(
         &self,
         subject: NamedOrBlankNode,
         literal_attributes: Vec<(OwnedNamedNode, String)>,
         language: &Option<String>,
-        on_triple: &mut impl FnMut(Triple) -> (),
-    ) {
+        on_triple: &mut F,
+    ) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<RdfXmlError>,
+    {
         for (literal_predicate, literal_value) in literal_attributes {
             on_triple(Triple {
                 subject,
@@ -904,8 +1005,9 @@ impl<R: BufRead> RdfXmlReader<R> {
                     }
                 }
                 .into(),
-            });
+            })?;
         }
+        Ok(())
     }
 }
 

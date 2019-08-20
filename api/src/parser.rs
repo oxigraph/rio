@@ -8,21 +8,58 @@ pub trait TripleParser: Sized {
     type Error: Error;
 
     /// Parses the complete file and calls `on_triple` each time a new triple is read.
+    ///
+    /// May fail on errors caused by the parser itself.
+    ///
+    /// See also [`try_parse_all`](#method.try_parse_all).
     fn parse_all(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), Self::Error> {
         while !self.is_end() {
-            if let Err(error) = self.parse_step(on_triple) {
-                return Err(error);
-            }
+            self.parse_step(on_triple)?;
+        }
+        Ok(())
+    }
+
+    /// Parses the complete file and calls `on_triple` each time a new triple is read.
+    ///
+    /// May fail on errors caused by the parser itself or by the callback function ``on_triple``.
+    ///
+    /// See also [`parse_all`](#method.parse_all).
+    fn try_parse_all<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: Error + From<Self::Error>,
+    {
+        while !self.is_end() {
+            self.try_parse_step(on_triple)?;
         }
         Ok(())
     }
 
     /// Parses a small chunk of the file and calls `on_triple` each time a new triple is read.
+    /// (A "small chunk" could be a line for an N-Triples parser.)
     ///
-    /// This method should be called as long as `is_end` returns false.
+    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+    /// It may fail on errors caused by the parser itself.
     ///
-    /// A "small chunk" could be a line for an N-Triples parser.
-    fn parse_step(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), Self::Error>;
+    /// See also [`try_parse_step`](#tymethod.try_parse_step).
+    fn parse_step(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), Self::Error> {
+        self.try_parse_step(&mut |t| {
+            on_triple(t);
+            Ok(())
+        })
+    }
+
+    /// Parses a small chunk of the file and calls `on_triple` each time a new triple is read.
+    /// (A "small chunk" could be a line for an N-Triples parser.)
+    ///
+    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+    /// It may fail on errors caused by the parser itself or by the callback function ``on_triple``.
+    ///
+    /// See also [`parse_step`](#method.parse_step).
+    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: Error + From<Self::Error>;
 
     /// Returns `true` if the file has been completely consumed by the parser.
     fn is_end(&self) -> bool;
