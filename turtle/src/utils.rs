@@ -1,4 +1,5 @@
 use crate::error::*;
+use rio_api::parser::LineBytePosition;
 use std::io::BufRead;
 use std::u8;
 
@@ -23,10 +24,10 @@ pub trait LookAheadByteRead {
     /// Consumes the many chars and moves to the next one
     fn consume_many(&mut self, count: usize) -> Result<(), TurtleError>;
 
-    /// Returns the line number of the current byte starting at 1
+    /// Returns the line number of the current byte starting at 0
     fn line_number(&self) -> usize;
 
-    /// Returns the byte number of the current byte in the line starting at 1
+    /// Returns the byte number of the current byte in the line starting at 0
     fn byte_number(&self) -> usize;
 
     /// Returns if the current buffer starts with a given byte string. Does not work cross line boundaries
@@ -55,8 +56,10 @@ pub trait LookAheadByteRead {
     fn parse_error(&self, kind: TurtleErrorKind) -> TurtleError {
         TurtleError {
             kind,
-            line_number: self.line_number(),
-            byte_number: self.byte_number(),
+            position: Some(LineBytePosition::new(
+                self.line_number(),
+                self.byte_number(),
+            )),
         }
     }
 }
@@ -76,12 +79,12 @@ impl<R: BufRead> LookAheadLineBasedByteReader<R> {
             inner,
             line: Vec::default(),
             current: EOF,
-            line_number: 1,
+            line_number: 0,
             byte_number: 0,
         };
         // We fill current and next with the appropriate values and we reset properly the line and byte numbers
         this.consume()?;
-        this.line_number = 1;
+        this.line_number = 0;
         Ok(this)
     }
 }

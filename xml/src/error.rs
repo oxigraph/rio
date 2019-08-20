@@ -1,3 +1,4 @@
+use rio_api::parser::{LineBytePosition, ParseError};
 use std::error::Error;
 use std::fmt;
 
@@ -26,7 +27,21 @@ impl fmt::Display for RdfXmlError {
     }
 }
 
-impl Error for RdfXmlError {}
+impl Error for RdfXmlError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.kind {
+            RdfXmlErrorKind::Xml(quick_xml::Error::Io(error)) => Some(error),
+            RdfXmlErrorKind::Xml(quick_xml::Error::Utf8(error)) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl ParseError for RdfXmlError {
+    fn textual_position(&self) -> Option<LineBytePosition> {
+        None
+    }
+}
 
 impl From<quick_xml::Error> for RdfXmlError {
     fn from(error: quick_xml::Error) -> Self {
