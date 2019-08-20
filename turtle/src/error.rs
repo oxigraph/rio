@@ -1,3 +1,4 @@
+use rio_api::parser::{LineBytePosition, ParseError};
 use std::char;
 use std::error::Error;
 use std::fmt;
@@ -9,8 +10,7 @@ use std::io;
 #[derive(Debug)]
 pub struct TurtleError {
     pub(crate) kind: TurtleErrorKind,
-    pub(crate) line_number: usize,
-    pub(crate) byte_number: usize,
+    pub(crate) position: Option<LineBytePosition>,
 }
 
 #[derive(Debug)]
@@ -40,11 +40,15 @@ impl fmt::Display for TurtleError {
             TurtleErrorKind::InvalidBaseIRI => write!(f, "invalid base URI"),
             TurtleErrorKind::InvalidIRI => write!(f, "invalid URI"),
         }?;
-        write!(
-            f,
-            " on line {} at position {}",
-            self.line_number, self.byte_number
-        )
+        if let Some(position) = self.position {
+            write!(
+                f,
+                " on line {} at position {}",
+                position.line_number() + 1,
+                position.byte_number() + 1
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -57,12 +61,17 @@ impl Error for TurtleError {
     }
 }
 
+impl ParseError for TurtleError {
+    fn textual_position(&self) -> Option<LineBytePosition> {
+        self.position
+    }
+}
+
 impl From<io::Error> for TurtleError {
     fn from(error: io::Error) -> Self {
         Self {
             kind: TurtleErrorKind::IO(error),
-            line_number: 0,
-            byte_number: 0,
+            position: None,
         }
     }
 }

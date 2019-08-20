@@ -152,3 +152,35 @@ impl<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser> Iterat
         }
     }
 }
+
+/// Error trait that allows to get the textual position of the error
+pub trait ParseError: Error {
+    /// Returns the position of the error in the text, if known.
+    fn textual_position(&self) -> Option<LineBytePosition>;
+}
+
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
+pub struct LineBytePosition {
+    line_number: usize,
+    byte_number: usize,
+}
+
+impl LineBytePosition {
+    /// Creates a new position where `line_number` and `byte_number` are both starting from zero
+    pub fn new(line_number: usize, byte_number: usize) -> Self {
+        Self {
+            line_number,
+            byte_number,
+        }
+    }
+
+    /// The line number where the error occurred starting from 0
+    pub fn line_number(&self) -> usize {
+        self.line_number
+    }
+
+    /// The byte number where the error occurred starting from 0
+    pub fn byte_number(&self) -> usize {
+        self.byte_number
+    }
+}
