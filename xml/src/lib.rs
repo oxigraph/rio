@@ -2,7 +2,7 @@
 //!
 //! How to read a file `foo.rdf` and count the number of `rdf:type` triples:
 //! ```no_run
-//! use rio_xml::RdfXmlParser;
+//! use rio_xml::{RdfXmlParser, RdfXmlError};
 //! use rio_api::parser::TripleParser;
 //! use rio_api::model::NamedNode;
 //! use std::io::BufReader;
@@ -11,10 +11,10 @@
 //! let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 //! let mut count = 0;
 //! RdfXmlParser::new(BufReader::new(File::open("foo.rdf").unwrap()), "file:foo.rdf").unwrap().parse_all(&mut |t| {
-//! println!("{}", t);
 //!     if t.predicate == rdf_type {
 //!         count += 1;
 //!     }
+//!     Ok(()) as Result<(), RdfXmlError>
 //! }).unwrap();
 //! ```
 
@@ -43,7 +43,7 @@ use std::collections::HashSet;
 ///
 /// Count the number of of people using the `TripleParser` API without proper error management:
 /// ```
-/// use rio_xml::RdfXmlParser;
+/// use rio_xml::{RdfXmlParser, RdfXmlError};
 /// use rio_api::parser::TripleParser;
 /// use rio_api::model::NamedNode;
 ///
@@ -60,10 +60,10 @@ use std::collections::HashSet;
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
 /// RdfXmlParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
-/// println!("{}", t);
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
+///     Ok(()) as Result<(), RdfXmlError>
 /// }).unwrap();
 /// assert_eq!(2, count)
 /// ```
@@ -101,11 +101,10 @@ impl<R: BufRead> RdfXmlParser<R> {
 impl<R: BufRead> TripleParser for RdfXmlParser<R> {
     type Error = RdfXmlError;
 
-    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+    fn parse_step<E: From<RdfXmlError>>(
+        &mut self,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         let (_, event) = self
             .reader
             .reader
@@ -254,11 +253,11 @@ struct RdfXmlReader<R: BufRead> {
 }
 
 impl<R: BufRead> RdfXmlReader<R> {
-    fn parse_start_event<F, E>(&mut self, event: BytesStart<'_>, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+    fn parse_start_event<E: From<RdfXmlError>>(
+        &mut self,
+        event: BytesStart<'_>,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         //Literal case
         if let Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) = self.state.last_mut()
         {
@@ -634,11 +633,11 @@ impl<R: BufRead> RdfXmlReader<R> {
         Ok(())
     }
 
-    fn parse_end_event<F, E>(&mut self, event: BytesEnd<'_>, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+    fn parse_end_event<E: From<RdfXmlError>>(
+        &mut self,
+        event: BytesEnd<'_>,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         //Literal case
         if self.in_literal_depth > 0 {
             if let Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) =
@@ -700,7 +699,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         .to_string())
     }
 
-    fn build_node_elt<F, E>(
+    fn build_node_elt<E: From<RdfXmlError>>(
         &mut self,
         iri: OwnedNamedNode,
         iri_parser: IriParser,
@@ -710,12 +709,8 @@ impl<R: BufRead> RdfXmlReader<R> {
         about_attr: Option<OwnedNamedNode>,
         type_attr: Option<OwnedNamedNode>,
         property_attrs: Vec<(OwnedNamedNode, String)>,
-        on_triple: &mut F,
-    ) -> Result<RdfXmlState, E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<RdfXmlState, E> {
         let subject_id = self.bnode_id_generator.generate(); //TODO: avoid to run it everytime
         let subject: NamedOrBlankNode = match (&id_attr, &node_id_attr, &about_attr) {
             (Some(id_attr), None, None) => NamedNode::from(id_attr).into(),
@@ -770,19 +765,15 @@ impl<R: BufRead> RdfXmlReader<R> {
         })
     }
 
-    fn build_parse_type_resource_property_elt<F, E>(
+    fn build_parse_type_resource_property_elt<E: From<RdfXmlError>>(
         &mut self,
         iri: OwnedNamedNode,
         iri_parser: IriParser,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         id_attr: Option<OwnedNamedNode>,
-        on_triple: &mut F,
-    ) -> Result<RdfXmlState, E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<RdfXmlState, E> {
         let object_id = self.bnode_id_generator.generate();
         let object = BlankNode {
             id: str::from_utf8(&object_id).unwrap(),
@@ -804,11 +795,11 @@ impl<R: BufRead> RdfXmlReader<R> {
         })
     }
 
-    fn end_state<F, E>(&mut self, state: RdfXmlState, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+    fn end_state<E: From<RdfXmlError>>(
+        &mut self,
+        state: RdfXmlState,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         match state {
             RdfXmlState::PropertyElt {
                 iri,
@@ -946,16 +937,12 @@ impl<R: BufRead> RdfXmlReader<R> {
         }
     }
 
-    fn reify<F, E>(
+    fn reify<E: From<RdfXmlError>>(
         &self,
         triple: &Triple,
         statement_id: NamedOrBlankNode,
-        on_triple: &mut F,
-    ) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         on_triple(Triple {
             subject: statement_id,
             predicate: NamedNode { iri: RDF_TYPE },
@@ -979,17 +966,13 @@ impl<R: BufRead> RdfXmlReader<R> {
         Ok(())
     }
 
-    fn emit_property_attrs<F, E>(
+    fn emit_property_attrs<E: From<RdfXmlError>>(
         &self,
         subject: NamedOrBlankNode,
         literal_attributes: Vec<(OwnedNamedNode, String)>,
         language: &Option<String>,
-        on_triple: &mut F,
-    ) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<RdfXmlError>,
-    {
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         for (literal_predicate, literal_value) in literal_attributes {
             on_triple(Triple {
                 subject,

@@ -4,7 +4,7 @@ use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
     parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,
 };
-use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleParser};
+use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleError, TurtleParser};
 use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
@@ -76,6 +76,7 @@ fn parse_ntriples(bench: &mut Bencher, data: Vec<u8>) {
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
+                Ok(()) as Result<(), TurtleError>
             })
     });
 }
@@ -88,6 +89,7 @@ fn parse_nquads(bench: &mut Bencher, data: Vec<u8>) {
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
+                Ok(()) as Result<(), TurtleError>
             })
     });
 }
@@ -100,6 +102,7 @@ fn parse_turtle(bench: &mut Bencher, data: Vec<u8>) {
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
+                Ok(()) as Result<(), TurtleError>
             })
     });
 }
@@ -112,6 +115,7 @@ fn parse_trig(bench: &mut Bencher, data: Vec<u8>) {
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
+                Ok(()) as Result<(), TurtleError>
             })
     });
 }

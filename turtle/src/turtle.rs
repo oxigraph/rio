@@ -16,7 +16,7 @@ use std::io::BufRead;
 ///
 /// Count the number of of people using the `TripleParser` API:
 /// ```
-/// use rio_turtle::TurtleParser;
+/// use rio_turtle::{TurtleParser, TurtleError};
 /// use rio_api::parser::TripleParser;
 /// use rio_api::model::NamedNode;
 ///
@@ -33,6 +33,7 @@ use std::io::BufRead;
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
+///     Ok(()) as Result<(), TurtleError>
 /// }).unwrap();
 /// assert_eq!(2, count)
 /// ```
@@ -73,11 +74,10 @@ impl<R: BufRead> TurtleParser<R> {
 impl<R: BufRead> TripleParser for TurtleParser<R> {
     type Error = TurtleError;
 
-    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<TurtleError>,
-    {
+    fn parse_step<E: From<TurtleError>>(
+        &mut self,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         parse_statement(self, on_triple)
     }
 
@@ -93,7 +93,7 @@ impl<R: BufRead> TripleParser for TurtleParser<R> {
 ///
 /// Count the number of of people using the `QuadParser` API:
 /// ```
-/// use rio_turtle::TriGParser;
+/// use rio_turtle::{TriGParser, TurtleError};
 /// use rio_api::parser::QuadParser;
 /// use rio_api::model::NamedNode;
 ///
@@ -112,6 +112,7 @@ impl<R: BufRead> TripleParser for TurtleParser<R> {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
+///     Ok(()) as Result<(), TurtleError>
 /// }).unwrap();
 /// assert_eq!(2, count)
 /// ```
@@ -135,11 +136,10 @@ impl<R: BufRead> TriGParser<R> {
 impl<R: BufRead> QuadParser for TriGParser<R> {
     type Error = TurtleError;
 
-    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Quad) -> Result<(), E>,
-        E: std::error::Error + From<TurtleError>,
-    {
+    fn parse_step<E: From<TurtleError>>(
+        &mut self,
+        on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+    ) -> Result<(), E> {
         parse_block_or_directive(self, on_quad)
     }
 
@@ -157,12 +157,10 @@ const XSD_DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
 const XSD_DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
 const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
-fn parse_statement<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_statement<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     skip_whitespace(&mut parser.read)?;
 
     if parser.read.current() == EOF {
@@ -208,12 +206,10 @@ where
     }
 }
 
-fn parse_block_or_directive<R, F, E>(parser: &mut TriGParser<R>, on_quad: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Quad) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TriGParser<R>,
+    on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+) -> Result<(), E> {
     // [1g] 	trigDoc 	::= 	(directive | block)*
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
     skip_whitespace(&mut parser.inner.read)?;
@@ -285,12 +281,10 @@ where
     }
 }
 
-fn parse_triples_or_graph<R, F, E>(parser: &mut TriGParser<R>, on_quad: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Quad) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TriGParser<R>,
+    on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
     let front_type = parse_label_or_subject(
         &mut parser.inner.read,
@@ -327,12 +321,10 @@ where
     Ok(())
 }
 
-fn parse_triples2<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_triples2<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
         b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
@@ -357,12 +349,10 @@ where
     Ok(())
 }
 
-fn parse_wrapped_graph<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
     // [6g] 	triplesBlock 	::= 	triples ('.' triplesBlock?)?
     parser.read.check_is_current(b'{')?;
@@ -504,12 +494,10 @@ fn parse_sparql_prefix(
     Ok(())
 }
 
-fn parse_triples<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_triples<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
         b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
@@ -531,15 +519,10 @@ where
     Ok(())
 }
 
-fn parse_predicate_object_list<R, F, E>(
+fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut F,
-) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
     loop {
         parse_verb(
@@ -569,12 +552,10 @@ where
     }
 }
 
-fn parse_object_list<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_object_list<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [8] 	objectList 	::= 	object (',' object)*
     loop {
         parse_object(parser, on_triple)?;
@@ -614,12 +595,10 @@ fn parse_verb<'a>(
     }
 }
 
-fn parse_subject<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_subject<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
         b'_' | b'[' => {
@@ -660,12 +639,10 @@ fn parse_predicate<'a>(
     parse_iri(read, buffer, temp_buffer, iri_parser, namespaces)
 }
 
-fn parse_object<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_object<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     //[12] 	object 	::= 	iri | BlankNode | collection | blankNodePropertyList | literal
 
     match parser.read.current() {
@@ -740,16 +717,11 @@ where
     Ok(())
 }
 
-fn emit_triple<'a, R, F, E>(
+fn emit_triple<'a, R: BufRead, E: From<TurtleError>>(
     parser: &'a TurtleParser<R>,
     object_type: TermType,
-    on_triple: &mut F,
-) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     let subject_buf = parser.subject_buf_stack.before_last();
     let subject_type = parser.subject_type_stack[parser.subject_type_stack.len() - 1];
     let predicate_buf = parser.predicate_buf_stack.last();
@@ -796,15 +768,10 @@ fn parse_literal<'a>(
     }
 }
 
-fn parse_blank_node_property_list<R, F, E>(
+fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut F,
-) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'[')?;
     parser.read.consume()?;
@@ -829,12 +796,10 @@ where
     }
 }
 
-fn parse_collection<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
-where
-    R: BufRead,
-    F: FnMut(Triple) -> Result<(), E>,
-    E: std::error::Error + From<TurtleError>,
-{
+fn parse_collection<R: BufRead, E: From<TurtleError>>(
+    parser: &mut TurtleParser<R>,
+    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+) -> Result<(), E> {
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
@@ -1450,13 +1415,10 @@ impl From<NamedOrBlankNodeType> for TermType {
     }
 }
 
-fn on_triple_in_graph<'a, F, E>(
-    on_quad: &'a mut F,
+fn on_triple_in_graph<'a, E>(
+    on_quad: &'a mut impl FnMut(Quad) -> Result<(), E>,
     graph_name: Option<NamedOrBlankNode<'a>>,
-) -> impl FnMut(Triple) -> Result<(), E> + 'a
-where
-    F: FnMut(Quad) -> Result<(), E>,
-{
+) -> impl FnMut(Triple) -> Result<(), E> + 'a {
     move |t: Triple| {
         on_quad(Quad {
             subject: t.subject,

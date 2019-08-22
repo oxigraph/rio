@@ -19,7 +19,7 @@ use std::u8;
 ///
 /// Count the number of of people using the `TripleParser` API:
 /// ```
-/// use rio_turtle::NTriplesParser;
+/// use rio_turtle::{NTriplesParser, TurtleError};
 /// use rio_api::parser::TripleParser;
 /// use rio_api::model::NamedNode;
 ///
@@ -35,6 +35,7 @@ use std::u8;
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
+///     Ok(()) as Result<(), TurtleError>
 /// }).unwrap();
 /// assert_eq!(2, count)
 /// ```
@@ -61,11 +62,10 @@ impl<R: BufRead> NTriplesParser<R> {
 impl<R: BufRead> TripleParser for NTriplesParser<R> {
     type Error = TurtleError;
 
-    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: std::error::Error + From<Self::Error>,
-    {
+    fn parse_step<E: From<TurtleError>>(
+        &mut self,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         if let Some(result) = parse_triple_line(
             &mut self.read,
             &mut self.subject_buf,
@@ -100,7 +100,7 @@ impl<R: BufRead> TripleParser for NTriplesParser<R> {
 ///
 /// Count the number of of people using the `QuadParser` API:
 /// ```
-/// use rio_turtle::NQuadsParser;
+/// use rio_turtle::{NQuadsParser, TurtleError};
 /// use rio_api::parser::QuadParser;
 /// use rio_api::model::NamedNode;
 ///
@@ -116,6 +116,7 @@ impl<R: BufRead> TripleParser for NTriplesParser<R> {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
+///     Ok(()) as Result<(), TurtleError>
 /// }).unwrap();
 /// assert_eq!(2, count)
 /// ```
@@ -144,11 +145,10 @@ impl<R: BufRead> NQuadsParser<R> {
 impl<R: BufRead> QuadParser for NQuadsParser<R> {
     type Error = TurtleError;
 
-    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Quad) -> Result<(), E>,
-        E: std::error::Error + From<TurtleError>,
-    {
+    fn parse_step<E: From<TurtleError>>(
+        &mut self,
+        on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+    ) -> Result<(), E> {
         if let Some(result) = parse_quad_line(
             &mut self.read,
             &mut self.subject_buf,

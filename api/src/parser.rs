@@ -9,57 +9,27 @@ pub trait TripleParser: Sized {
 
     /// Parses the complete file and calls `on_triple` each time a new triple is read.
     ///
-    /// May fail on errors caused by the parser itself.
-    ///
-    /// See also [`try_parse_all`](#method.try_parse_all).
-    fn parse_all(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), Self::Error> {
+    /// May fail on errors caused by the parser itself or by the callback function ``on_triple``.
+    fn parse_all<E: From<Self::Error>>(
+        &mut self,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E> {
         while !self.is_end() {
             self.parse_step(on_triple)?;
         }
         Ok(())
     }
 
-    /// Parses the complete file and calls `on_triple` each time a new triple is read.
-    ///
-    /// May fail on errors caused by the parser itself or by the callback function ``on_triple``.
-    ///
-    /// See also [`parse_all`](#method.parse_all).
-    fn try_parse_all<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: Error + From<Self::Error>,
-    {
-        while !self.is_end() {
-            self.try_parse_step(on_triple)?;
-        }
-        Ok(())
-    }
-
     /// Parses a small chunk of the file and calls `on_triple` each time a new triple is read.
     /// (A "small chunk" could be a line for an N-Triples parser.)
     ///
     /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
-    /// It may fail on errors caused by the parser itself.
     ///
-    /// See also [`try_parse_step`](#tymethod.try_parse_step).
-    fn parse_step(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), Self::Error> {
-        self.try_parse_step(&mut |t| {
-            on_triple(t);
-            Ok(())
-        })
-    }
-
-    /// Parses a small chunk of the file and calls `on_triple` each time a new triple is read.
-    /// (A "small chunk" could be a line for an N-Triples parser.)
-    ///
-    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
     /// It may fail on errors caused by the parser itself or by the callback function ``on_triple``.
-    ///
-    /// See also [`parse_step`](#method.parse_step).
-    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Triple) -> Result<(), E>,
-        E: Error + From<Self::Error>;
+    fn parse_step<E: From<Self::Error>>(
+        &mut self,
+        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    ) -> Result<(), E>;
 
     /// Returns `true` if the file has been completely consumed by the parser.
     fn is_end(&self) -> bool;
@@ -87,7 +57,7 @@ pub struct TriplesParserIterator<
     P: TripleParser,
 > {
     parser: P,
-    buffer: Vec<Result<T, E>>,
+    buffer: Vec<T>,
     convert_triple: F,
 }
 
@@ -99,7 +69,7 @@ impl<T, E: From<P::Error>, F: FnMut(Triple) -> Result<T, E>, P: TripleParser> It
     fn next(&mut self) -> Option<Result<T, E>> {
         loop {
             if let Some(r) = self.buffer.pop() {
-                return Some(r);
+                return Some(Ok(r));
             }
             if self.parser.is_end() {
                 return None;
@@ -109,9 +79,9 @@ impl<T, E: From<P::Error>, F: FnMut(Triple) -> Result<T, E>, P: TripleParser> It
             let convert_triple = &mut self.convert_triple;
             if let Err(e) = self
                 .parser
-                .parse_step(&mut |t| buffer.push(convert_triple(t)))
+                .parse_step(&mut |t| convert_triple(t).map(|t| buffer.push(t)))
             {
-                return Some(Err(e.into()));
+                return Some(Err(e));
             }
         }
     }
@@ -123,57 +93,27 @@ pub trait QuadParser: Sized {
 
     /// Parses the complete file and calls `on_quad` each time a new quad is read.
     ///
-    /// May fail on errors caused by the parser itself.
-    ///
-    /// See also [`try_parse_all`](#method.try_parse_all).
-    fn parse_all(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), Self::Error> {
+    /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
+    fn parse_all<E: From<Self::Error>>(
+        &mut self,
+        on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+    ) -> Result<(), E> {
         while !self.is_end() {
             self.parse_step(on_quad)?
         }
         Ok(())
     }
 
-    /// Parses the complete file and calls `on_quad` each time a new quad is read.
+    /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
+    /// (A "small chunk" could be a line for an N-Quads parser.)
+    ///
+    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
     ///
     /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
-    ///
-    /// See also [`parse_all`](#method.parse_all).
-    fn try_parse_all<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Quad) -> Result<(), E>,
-        E: Error + From<Self::Error>,
-    {
-        while !self.is_end() {
-            self.try_parse_step(on_quad)?
-        }
-        Ok(())
-    }
-
-    /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
-    /// (A "small chunk" could be a line for an N-Quads parser.)
-    ///
-    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
-    /// It may fail on errors caused by the parser itself.
-    ///
-    /// See also [`try_parse_step`](#tymethod.try_parse_step).
-    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), Self::Error> {
-        self.try_parse_step(&mut |q| {
-            on_quad(q);
-            Ok(())
-        })
-    }
-
-    /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
-    /// (A "small chunk" could be a line for an N-Quads parser.)
-    ///
-    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
-    /// It may fail on errors caused by the parser itself or by the callback function ``on_quad``.
-    ///
-    /// See also [`parse_step`](#method.parse_step).
-    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
-    where
-        F: FnMut(Quad) -> Result<(), E>,
-        E: Error + From<Self::Error>;
+    fn parse_step<E: From<Self::Error>>(
+        &mut self,
+        on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+    ) -> Result<(), E>;
 
     /// Returns `true` if the file has been completely consumed by the parser.
     fn is_end(&self) -> bool;
@@ -197,7 +137,7 @@ pub trait QuadParser: Sized {
 pub struct QuadsParserIterator<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser>
 {
     parser: P,
-    buffer: Vec<Result<T, E>>,
+    buffer: Vec<T>,
     convert_quad: F,
 }
 
@@ -209,7 +149,7 @@ impl<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser> Iterat
     fn next(&mut self) -> Option<Result<T, E>> {
         loop {
             if let Some(r) = self.buffer.pop() {
-                return Some(r);
+                return Some(Ok(r));
             }
             if self.parser.is_end() {
                 return None;
@@ -219,9 +159,9 @@ impl<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser> Iterat
             let convert_quad = &mut self.convert_quad;
             if let Err(e) = self
                 .parser
-                .parse_step(&mut |t| buffer.push(convert_quad(t)))
+                .parse_step(&mut |q| convert_quad(q).map(|q| buffer.push(q)))
             {
-                return Some(Err(e.into()));
+                return Some(Err(e));
             }
         }
     }
