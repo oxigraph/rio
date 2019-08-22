@@ -73,7 +73,11 @@ impl<R: BufRead> TurtleParser<R> {
 impl<R: BufRead> TripleParser for TurtleParser<R> {
     type Error = TurtleError;
 
-    fn parse_step(&mut self, on_triple: &mut impl FnMut(Triple) -> ()) -> Result<(), TurtleError> {
+    fn try_parse_step<F, E>(&mut self, on_triple: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Triple) -> Result<(), E>,
+        E: std::error::Error + From<TurtleError>,
+    {
         parse_statement(self, on_triple)
     }
 
@@ -131,7 +135,11 @@ impl<R: BufRead> TriGParser<R> {
 impl<R: BufRead> QuadParser for TriGParser<R> {
     type Error = TurtleError;
 
-    fn parse_step(&mut self, on_quad: &mut impl FnMut(Quad) -> ()) -> Result<(), TurtleError> {
+    fn try_parse_step<F, E>(&mut self, on_quad: &mut F) -> Result<(), E>
+    where
+        F: FnMut(Quad) -> Result<(), E>,
+        E: std::error::Error + From<TurtleError>,
+    {
         parse_block_or_directive(self, on_quad)
     }
 
@@ -149,10 +157,12 @@ const XSD_DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
 const XSD_DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
 const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
-fn parse_statement<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_statement<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     skip_whitespace(&mut parser.read)?;
 
     if parser.read.current() == EOF {
@@ -164,6 +174,7 @@ fn parse_statement<R: BufRead>(
             &parser.iri_parser,
             &mut parser.temp_buf,
         )
+        .map_err(E::from)
     } else if parser.read.starts_with(b"@base") {
         parse_base(
             &mut parser.read,
@@ -171,6 +182,7 @@ fn parse_statement<R: BufRead>(
             &mut parser.object_annotation_buf,
             &mut parser.iri_parser,
         )
+        .map_err(E::from)
     } else if parser.read.starts_with_ignore_ascii_case(b"BASE") {
         parse_sparql_base(
             &mut parser.read,
@@ -178,6 +190,7 @@ fn parse_statement<R: BufRead>(
             &mut parser.object_annotation_buf,
             &mut parser.iri_parser,
         )
+        .map_err(E::from)
     } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX") {
         parse_sparql_prefix(
             &mut parser.read,
@@ -185,6 +198,7 @@ fn parse_statement<R: BufRead>(
             &parser.iri_parser,
             &mut parser.temp_buf,
         )
+        .map_err(E::from)
     } else {
         parse_triples(parser, on_triple)?;
 
@@ -194,10 +208,12 @@ fn parse_statement<R: BufRead>(
     }
 }
 
-fn parse_block_or_directive<R: BufRead>(
-    parser: &mut TriGParser<R>,
-    on_quad: &mut impl FnMut(Quad) -> (),
-) -> Result<(), TurtleError> {
+fn parse_block_or_directive<R, F, E>(parser: &mut TriGParser<R>, on_quad: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Quad) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [1g] 	trigDoc 	::= 	(directive | block)*
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
     skip_whitespace(&mut parser.inner.read)?;
@@ -210,28 +226,32 @@ fn parse_block_or_directive<R: BufRead>(
             &mut parser.inner.namespaces,
             &parser.inner.iri_parser,
             &mut parser.inner.temp_buf,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with(b"@base") {
         parse_base(
             &mut parser.inner.read,
             &mut parser.inner.temp_buf,
             &mut parser.inner.object_annotation_buf,
             &mut parser.inner.iri_parser,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"BASE") {
         parse_sparql_base(
             &mut parser.inner.read,
             &mut parser.inner.temp_buf,
             &mut parser.inner.object_annotation_buf,
             &mut parser.inner.iri_parser,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX") {
         parse_sparql_prefix(
             &mut parser.inner.read,
             &mut parser.inner.namespaces,
             &parser.inner.iri_parser,
             &mut parser.inner.temp_buf,
-        )
+        )?;
+        Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH") {
         parser.inner.read.consume_many("GRAPH".len())?;
         skip_whitespace(&mut parser.inner.read)?;
@@ -265,10 +285,12 @@ fn parse_block_or_directive<R: BufRead>(
     }
 }
 
-fn parse_triples_or_graph<R: BufRead>(
-    parser: &mut TriGParser<R>,
-    on_quad: &mut impl FnMut(Quad) -> (),
-) -> Result<(), TurtleError> {
+fn parse_triples_or_graph<R, F, E>(parser: &mut TriGParser<R>, on_quad: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Quad) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
     let front_type = parse_label_or_subject(
         &mut parser.inner.read,
@@ -305,10 +327,12 @@ fn parse_triples_or_graph<R: BufRead>(
     Ok(())
 }
 
-fn parse_triples2<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_triples2<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
         b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
@@ -329,13 +353,16 @@ fn parse_triples2<R: BufRead>(
     parser.subject_type_stack.pop();
 
     parser.read.check_is_current(b'.')?;
-    parser.read.consume()
+    parser.read.consume()?;
+    Ok(())
 }
 
-fn parse_wrapped_graph<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_wrapped_graph<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
     // [6g] 	triplesBlock 	::= 	triples ('.' triplesBlock?)?
     parser.read.check_is_current(b'{')?;
@@ -477,10 +504,12 @@ fn parse_sparql_prefix(
     Ok(())
 }
 
-fn parse_triples<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_triples<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
         b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
@@ -502,10 +531,15 @@ fn parse_triples<R: BufRead>(
     Ok(())
 }
 
-fn parse_predicate_object_list<R: BufRead>(
+fn parse_predicate_object_list<R, F, E>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+    on_triple: &mut F,
+) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
     loop {
         parse_verb(
@@ -535,10 +569,12 @@ fn parse_predicate_object_list<R: BufRead>(
     }
 }
 
-fn parse_object_list<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_object_list<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [8] 	objectList 	::= 	object (',' object)*
     loop {
         parse_object(parser, on_triple)?;
@@ -578,10 +614,12 @@ fn parse_verb<'a>(
     }
 }
 
-fn parse_subject<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_subject<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
         b'_' | b'[' => {
@@ -622,10 +660,12 @@ fn parse_predicate<'a>(
     parse_iri(read, buffer, temp_buffer, iri_parser, namespaces)
 }
 
-fn parse_object<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_object<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     //[12] 	object 	::= 	iri | BlankNode | collection | blankNodePropertyList | literal
 
     match parser.read.current() {
@@ -700,11 +740,16 @@ fn parse_object<R: BufRead>(
     Ok(())
 }
 
-fn emit_triple<'a, R: BufRead>(
+fn emit_triple<'a, R, F, E>(
     parser: &'a TurtleParser<R>,
     object_type: TermType,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+    on_triple: &mut F,
+) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     let subject_buf = parser.subject_buf_stack.before_last();
     let subject_type = parser.subject_type_stack[parser.subject_type_stack.len() - 1];
     let predicate_buf = parser.predicate_buf_stack.last();
@@ -718,7 +763,7 @@ fn emit_triple<'a, R: BufRead>(
             to_str(&parser.read, object_buf)?,
             to_str(&parser.read, parser.object_annotation_buf.as_slice())?,
         ),
-    });
+    })?;
     Ok(())
 }
 
@@ -751,10 +796,15 @@ fn parse_literal<'a>(
     }
 }
 
-fn parse_blank_node_property_list<R: BufRead>(
+fn parse_blank_node_property_list<R, F, E>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+    on_triple: &mut F,
+) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'[')?;
     parser.read.consume()?;
@@ -779,10 +829,12 @@ fn parse_blank_node_property_list<R: BufRead>(
     }
 }
 
-fn parse_collection<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> (),
-) -> Result<(), TurtleError> {
+fn parse_collection<R, F, E>(parser: &mut TurtleParser<R>, on_triple: &mut F) -> Result<(), E>
+where
+    R: BufRead,
+    F: FnMut(Triple) -> Result<(), E>,
+    E: std::error::Error + From<TurtleError>,
+{
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
@@ -800,7 +852,7 @@ fn parse_collection<R: BufRead>(
         skip_whitespace(&mut parser.read)?;
 
         if parser.read.current() == EOF {
-            return parser.read.unexpected_char_error();
+            return Ok(parser.read.unexpected_char_error()?);
         } else if parser.read.current() == b')' {
             parser.read.consume()?;
             match root {
@@ -812,7 +864,7 @@ fn parse_collection<R: BufRead>(
                         .into(),
                         predicate: NamedNode { iri: RDF_REST },
                         object: NamedNode { iri: RDF_NIL }.into(),
-                    });
+                    })?;
                     parser.subject_buf_stack.pop();
                     parser.subject_buf_stack.push().extend_from_slice(&id);
                 }
@@ -844,7 +896,7 @@ fn parse_collection<R: BufRead>(
                         id: to_str(&parser.read, &new)?,
                     }
                     .into(),
-                });
+                })?;
                 parser.subject_buf_stack.pop();
             }
             parser.subject_buf_stack.push().extend_from_slice(&new);
@@ -1398,10 +1450,13 @@ impl From<NamedOrBlankNodeType> for TermType {
     }
 }
 
-fn on_triple_in_graph<'a>(
-    on_quad: &'a mut impl FnMut(Quad) -> (),
+fn on_triple_in_graph<'a, F, E>(
+    on_quad: &'a mut F,
     graph_name: Option<NamedOrBlankNode<'a>>,
-) -> impl FnMut(Triple) -> () + 'a {
+) -> impl FnMut(Triple) -> Result<(), E> + 'a
+where
+    F: FnMut(Quad) -> Result<(), E>,
+{
     move |t: Triple| {
         on_quad(Quad {
             subject: t.subject,
