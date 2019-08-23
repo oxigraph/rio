@@ -6,7 +6,6 @@ use crate::utils::*;
 use rio_api::model::*;
 use rio_api::parser::*;
 use std::io::BufRead;
-use std::u8;
 
 /// A [N-Triples](https://www.w3.org/TR/n-triples/) streaming parser.
 ///
@@ -41,20 +40,20 @@ use std::u8;
 /// ```
 pub struct NTriplesParser<R: BufRead> {
     read: LookAheadLineBasedByteReader<R>,
-    subject_buf: Vec<u8>,
-    predicate_buf: Vec<u8>,
-    object_buf: Vec<u8>,
-    object_annotation_buf: Vec<u8>, // datatype or language tag
+    subject_buf: String,
+    predicate_buf: String,
+    object_buf: String,
+    object_annotation_buf: String, // datatype or language tag
 }
 
 impl<R: BufRead> NTriplesParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
             read: LookAheadLineBasedByteReader::new(reader)?,
-            subject_buf: Vec::default(),
-            predicate_buf: Vec::default(),
-            object_buf: Vec::default(),
-            object_annotation_buf: Vec::default(),
+            subject_buf: String::default(),
+            predicate_buf: String::default(),
+            object_buf: String::default(),
+            object_annotation_buf: String::default(),
         })
     }
 }
@@ -122,22 +121,22 @@ impl<R: BufRead> TripleParser for NTriplesParser<R> {
 /// ```
 pub struct NQuadsParser<R: BufRead> {
     read: LookAheadLineBasedByteReader<R>,
-    subject_buf: Vec<u8>,
-    predicate_buf: Vec<u8>,
-    object_buf: Vec<u8>,
-    object_annotation_buf: Vec<u8>, // datatype or language tag
-    graph_name_buf: Vec<u8>,
+    subject_buf: String,
+    predicate_buf: String,
+    object_buf: String,
+    object_annotation_buf: String, // datatype or language tag
+    graph_name_buf: String,
 }
 
 impl<R: BufRead> NQuadsParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
             read: LookAheadLineBasedByteReader::new(reader)?,
-            subject_buf: Vec::default(),
-            predicate_buf: Vec::default(),
-            object_buf: Vec::default(),
-            object_annotation_buf: Vec::default(),
-            graph_name_buf: Vec::default(),
+            subject_buf: String::default(),
+            predicate_buf: String::default(),
+            object_buf: String::default(),
+            object_annotation_buf: String::default(),
+            graph_name_buf: String::default(),
         })
     }
 }
@@ -176,10 +175,10 @@ impl<R: BufRead> QuadParser for NQuadsParser<R> {
 
 fn parse_triple_line<'a>(
     read: &mut impl LookAheadByteRead,
-    subject_buf: &'a mut Vec<u8>,
-    predicate_buf: &'a mut Vec<u8>,
-    object_buf: &'a mut Vec<u8>,
-    object_annotation_buf: &'a mut Vec<u8>,
+    subject_buf: &'a mut String,
+    predicate_buf: &'a mut String,
+    object_buf: &'a mut String,
+    object_annotation_buf: &'a mut String,
 ) -> Result<Option<Triple<'a>>, TurtleError> {
     skip_whitespace(read)?;
 
@@ -216,11 +215,11 @@ fn parse_triple_line<'a>(
 
 fn parse_quad_line<'a>(
     read: &mut impl LookAheadByteRead,
-    subject_buf: &'a mut Vec<u8>,
-    predicate_buf: &'a mut Vec<u8>,
-    object_buf: &'a mut Vec<u8>,
-    object_annotation_buf: &'a mut Vec<u8>,
-    graph_name_buf: &'a mut Vec<u8>,
+    subject_buf: &'a mut String,
+    predicate_buf: &'a mut String,
+    object_buf: &'a mut String,
+    object_annotation_buf: &'a mut String,
+    graph_name_buf: &'a mut String,
 ) -> Result<Option<Quad<'a>>, TurtleError> {
     skip_whitespace(read)?;
 
@@ -264,8 +263,8 @@ fn parse_quad_line<'a>(
 
 fn parse_term<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
-    annotation_buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
+    annotation_buffer: &'a mut String,
 ) -> Result<Term<'a>, TurtleError> {
     match read.current() {
         b'<' => Ok(parse_iriref(read, buffer)?.into()),
@@ -277,7 +276,7 @@ fn parse_term<'a>(
 
 fn parse_named_or_blank_node<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
 ) -> Result<NamedOrBlankNode<'a>, TurtleError> {
     match read.current() {
         b'<' => Ok(parse_iriref(read, buffer)?.into()),
@@ -288,8 +287,8 @@ fn parse_named_or_blank_node<'a>(
 
 fn parse_literal<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
-    annotation_buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
+    annotation_buffer: &'a mut String,
 ) -> Result<Literal<'a>, TurtleError> {
     parse_string_literal_quote(read, buffer)?;
     skip_whitespace(read)?;
@@ -298,8 +297,8 @@ fn parse_literal<'a>(
         b'@' => {
             parse_langtag(read, annotation_buffer)?;
             Ok(Literal::LanguageTaggedString {
-                value: to_str(read, buffer)?,
-                language: to_str(read, annotation_buffer)?,
+                value: buffer,
+                language: annotation_buffer,
             })
         }
         b'^' => {
@@ -308,13 +307,11 @@ fn parse_literal<'a>(
             read.consume()?;
             skip_whitespace(read)?;
             Ok(Literal::Typed {
-                value: to_str(read, buffer)?,
+                value: buffer,
                 datatype: parse_iriref(read, annotation_buffer)?,
             })
         }
-        _ => Ok(Literal::Simple {
-            value: to_str(read, buffer)?,
-        }),
+        _ => Ok(Literal::Simple { value: buffer }),
     }
 }
 
@@ -343,10 +340,8 @@ fn skip_until_eol(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> 
 
 fn parse_iriref<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
 ) -> Result<NamedNode<'a>, TurtleError> {
     parse_iriref_absolute(read, buffer)?;
-    Ok(NamedNode {
-        iri: to_str(read, buffer)?,
-    })
+    Ok(NamedNode { iri: buffer })
 }

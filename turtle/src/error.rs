@@ -16,10 +16,10 @@ pub struct TurtleError {
 #[derive(Debug)]
 pub enum TurtleErrorKind {
     IO(io::Error),
+    UnknownPrefix(String),
     PrematureEOF,
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
-    InvalidUTF8,
     InvalidBaseIRI,
     InvalidIRI,
 }
@@ -28,6 +28,7 @@ impl fmt::Display for TurtleError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
             TurtleErrorKind::IO(error) => return error.fmt(f),
+            TurtleErrorKind::UnknownPrefix(prefix) => write!(f, "unknown prefix '{}'", prefix),
             TurtleErrorKind::PrematureEOF => write!(f, "premature end of file"),
             TurtleErrorKind::UnexpectedByte(c) => match char::from_u32(u32::from(*c)) {
                 Some(c) => write!(f, "unexpected character '{}'", c.escape_debug()),
@@ -36,7 +37,6 @@ impl fmt::Display for TurtleError {
             TurtleErrorKind::InvalidUnicodeCodePoint(point) => {
                 write!(f, "invalid unicode code point '{}'", point)
             }
-            TurtleErrorKind::InvalidUTF8 => write!(f, "invalid UTF-8 encoding"),
             TurtleErrorKind::InvalidBaseIRI => write!(f, "invalid base URI"),
             TurtleErrorKind::InvalidIRI => write!(f, "invalid URI"),
         }?;

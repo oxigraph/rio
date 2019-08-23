@@ -1,6 +1,7 @@
 use crate::error::*;
 use rio_api::parser::LineBytePosition;
 use std::io::BufRead;
+use std::str;
 use std::u8;
 
 pub const EOF: u8 = u8::MAX;
@@ -150,30 +151,17 @@ impl<R: BufRead> LookAheadByteRead for LookAheadLineBasedByteReader<R> {
     }
 }
 
-pub trait PushChar {
-    fn push_char(&mut self, c: char);
-}
-
-impl PushChar for Vec<u8> {
-    fn push_char(&mut self, c: char) {
-        match c.len_utf8() {
-            1 => self.push(c as u8),
-            _ => self.extend_from_slice(c.encode_utf8(&mut [0; 4]).as_bytes()),
-        }
-    }
-}
-
 #[derive(Default)]
-pub struct BufferStack<T> {
-    inner: Vec<Vec<T>>,
+pub struct StringBufferStack {
+    inner: Vec<String>,
     len: usize,
 }
 
-impl<T> BufferStack<T> {
-    pub fn push(&mut self) -> &mut Vec<T> {
+impl StringBufferStack {
+    pub fn push(&mut self) -> &mut String {
         self.len += 1;
         if self.len > self.inner.len() {
-            self.inner.push(Vec::default())
+            self.inner.push(String::default())
         }
         &mut self.inner[self.len - 1]
     }
@@ -183,12 +171,12 @@ impl<T> BufferStack<T> {
         self.len -= 1;
     }
 
-    pub fn last(&self) -> &[T] {
-        self.inner[self.len - 1].as_slice()
+    pub fn last(&self) -> &str {
+        &self.inner[self.len - 1]
     }
 
-    pub fn before_last(&self) -> &[T] {
-        self.inner[self.len - 2].as_slice()
+    pub fn before_last(&self) -> &str {
+        &self.inner[self.len - 2]
     }
 }
 
@@ -199,13 +187,13 @@ pub struct BlankNodeIdGenerator {
 }
 
 impl BlankNodeIdGenerator {
-    pub fn generate(&mut self) -> [u8; 12] {
+    pub fn generate(&mut self) -> BlankNodeId {
         let mut id: [u8; 12] = [
             b'r', b'i', b'o', b'g', b'0', b'0', b'0', b'0', b'0', b'0', b'0', b'0',
         ];
         self.counter += 1;
         write_usize_to_slice(self.counter, &mut id[4..]);
-        id
+        BlankNodeId { id }
     }
 }
 
@@ -213,5 +201,17 @@ fn write_usize_to_slice(mut v: usize, s: &mut [u8]) {
     for i in (0..s.len()).rev() {
         s[i] = b'0' + (v % 10) as u8;
         v /= 10;
+    }
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Hash)]
+pub struct BlankNodeId {
+    id: [u8; 12],
+}
+
+impl AsRef<str> for BlankNodeId {
+    fn as_ref(&self) -> &str {
+        // We know what id is and it's always valid UTF8
+        unsafe { str::from_utf8_unchecked(&self.id) }
     }
 }

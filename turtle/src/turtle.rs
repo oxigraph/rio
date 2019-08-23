@@ -8,6 +8,7 @@ use rio_api::model::*;
 use rio_api::parser::{QuadParser, TripleParser};
 use std::collections::HashMap;
 use std::io::BufRead;
+use std::str;
 
 /// A [Turtle](https://www.w3.org/TR/turtle/) streaming parser.
 ///
@@ -40,13 +41,13 @@ use std::io::BufRead;
 pub struct TurtleParser<R: BufRead> {
     read: LookAheadLineBasedByteReader<R>,
     iri_parser: IriParser,
-    namespaces: HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
-    subject_buf_stack: BufferStack<u8>,
+    subject_buf_stack: StringBufferStack,
     subject_type_stack: Vec<NamedOrBlankNodeType>,
-    predicate_buf_stack: BufferStack<u8>,
-    object_annotation_buf: Vec<u8>, // datatype or language tag
-    temp_buf: Vec<u8>,
+    predicate_buf_stack: StringBufferStack,
+    object_annotation_buf: String, // datatype or language tag
+    temp_buf: String,
 }
 
 impl<R: BufRead> TurtleParser<R> {
@@ -62,11 +63,11 @@ impl<R: BufRead> TurtleParser<R> {
             iri_parser,
             namespaces: HashMap::default(),
             bnode_id_generator: BlankNodeIdGenerator::default(),
-            subject_buf_stack: BufferStack::default(),
+            subject_buf_stack: StringBufferStack::default(),
             subject_type_stack: Vec::default(),
-            predicate_buf_stack: BufferStack::default(),
-            object_annotation_buf: Vec::default(),
-            temp_buf: Vec::default(),
+            predicate_buf_stack: StringBufferStack::default(),
+            object_annotation_buf: String::default(),
+            temp_buf: String::default(),
         })
     }
 }
@@ -118,7 +119,7 @@ impl<R: BufRead> TripleParser for TurtleParser<R> {
 /// ```
 pub struct TriGParser<R: BufRead> {
     inner: TurtleParser<R>,
-    graph_name_buf: Vec<u8>,
+    graph_name_buf: String,
 }
 
 impl<R: BufRead> TriGParser<R> {
@@ -128,7 +129,7 @@ impl<R: BufRead> TriGParser<R> {
     pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
         Ok(Self {
             inner: TurtleParser::new(reader, base_iri)?,
-            graph_name_buf: Vec::default(),
+            graph_name_buf: String::default(),
         })
     }
 }
@@ -260,7 +261,7 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
             &parser.inner.namespaces,
             &mut parser.inner.bnode_id_generator,
         )?
-        .with_value(to_str(&parser.inner.read, &parser.graph_name_buf)?);
+        .with_value(&parser.graph_name_buf);
         skip_whitespace(&mut parser.inner.read)?;
 
         parse_wrapped_graph(
@@ -297,7 +298,7 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     skip_whitespace(&mut parser.inner.read)?;
 
     if parser.inner.read.current() == b'{' {
-        let graph_name = front_type.with_value(to_str(&parser.inner.read, &parser.graph_name_buf)?);
+        let graph_name = front_type.with_value(&parser.graph_name_buf);
         parse_wrapped_graph(
             &mut parser.inner,
             &mut on_triple_in_graph(on_quad, Some(graph_name)),
@@ -308,7 +309,7 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
             .inner
             .subject_buf_stack
             .push()
-            .extend_from_slice(&parser.graph_name_buf);
+            .push_str(&parser.graph_name_buf);
         parser.graph_name_buf.clear();
         parser.inner.subject_type_stack.push(front_type);
         parse_predicate_object_list(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))?;
@@ -382,10 +383,10 @@ fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
 
 fn parse_label_or_subject(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    temp_buffer: &mut String,
     iri_parser: &IriParser,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &HashMap<String, String>,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<NamedOrBlankNodeType, TurtleError> {
     //[7g] 	labelOrSubject 	::= 	iri | BlankNode
@@ -403,19 +404,19 @@ fn parse_label_or_subject(
 
 fn parse_prefix_id(
     read: &mut impl LookAheadByteRead,
-    namespaces: &mut HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &mut HashMap<String, String>,
     iri_parser: &IriParser,
-    temp_buffer: &mut Vec<u8>,
+    temp_buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [4] 	prefixID 	::= 	'@prefix' PNAME_NS IRIREF '.'
     read.consume_many("@prefix".len())?;
     skip_whitespace(read)?;
 
-    let mut prefix = Vec::default();
+    let mut prefix = String::default();
     parse_pname_ns(read, &mut prefix)?;
     skip_whitespace(read)?;
 
-    let mut value = Vec::default();
+    let mut value = String::default();
     parse_iriref_relative(read, &mut value, temp_buffer, iri_parser)?;
     skip_whitespace(read)?;
 
@@ -428,8 +429,8 @@ fn parse_prefix_id(
 
 fn parse_base(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    temp_buffer: &mut String,
     iri_parser: &mut IriParser,
 ) -> Result<(), TurtleError> {
     // [5] 	base 	::= 	'@base' IRIREF '.'
@@ -447,8 +448,8 @@ fn parse_base(
 
 fn parse_sparql_base(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    temp_buffer: &mut String,
     iri_parser: &mut IriParser,
 ) -> Result<(), TurtleError> {
     // [5s] 	sparqlBase 	::= 	"BASE" IRIREF
@@ -460,13 +461,13 @@ fn parse_sparql_base(
 
 fn parse_base_iriref(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    temp_buffer: &mut String,
     iri_parser: &mut IriParser,
 ) -> Result<(), TurtleError> {
     parse_iriref_relative(read, buffer, temp_buffer, iri_parser)?;
     let result = iri_parser
-        .set_base_iri(&buffer)
+        .set_base_iri(buffer.as_bytes())
         .map_err(|_| read.parse_error(TurtleErrorKind::InvalidBaseIRI));
     buffer.clear();
     result
@@ -474,19 +475,19 @@ fn parse_base_iriref(
 
 fn parse_sparql_prefix(
     read: &mut impl LookAheadByteRead,
-    namespaces: &mut HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &mut HashMap<String, String>,
     iri_parser: &IriParser,
-    temp_buffer: &mut Vec<u8>,
+    temp_buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [6s] 	sparqlPrefix 	::= 	"PREFIX" PNAME_NS IRIREF
     read.consume_many("PREFIX".len())?;
     skip_whitespace(read)?;
 
-    let mut prefix = Vec::default();
+    let mut prefix = String::default();
     parse_pname_ns(read, &mut prefix)?;
     skip_whitespace(read)?;
 
-    let mut value = Vec::default();
+    let mut value = String::default();
     parse_iriref_relative(read, &mut value, temp_buffer, iri_parser)?;
     skip_whitespace(read)?;
 
@@ -571,21 +572,23 @@ fn parse_object_list<R: BufRead, E: From<TurtleError>>(
 
 fn parse_verb<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
-    temp_buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
+    temp_buffer: &'a mut String,
     iri_parser: &IriParser,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [9] 	verb 	::= 	predicate | 'a'
     match read.current() {
         b'a' => {
             match read.next() {
                 // We check that it is not a prefixed URI
-                Some(c) if is_possible_pn_chars(c) || c == b'.' || c == b':' => {
+                Some(c)
+                    if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII =>
+                {
                     parse_predicate(read, buffer, temp_buffer, iri_parser, namespaces)
                 }
                 _ => {
-                    buffer.extend_from_slice(RDF_TYPE.as_bytes());
+                    buffer.push_str(RDF_TYPE);
                     read.consume()?;
                     Ok(())
                 }
@@ -630,10 +633,10 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
 
 fn parse_predicate<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
-    temp_buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
+    temp_buffer: &'a mut String,
     iri_parser: &IriParser,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     //[11] 	predicate 	::= 	iri
     parse_iri(read, buffer, temp_buffer, iri_parser, namespaces)
@@ -727,25 +730,20 @@ fn emit_triple<'a, R: BufRead, E: From<TurtleError>>(
     let predicate_buf = parser.predicate_buf_stack.last();
     let object_buf = parser.subject_buf_stack.last();
     on_triple(Triple {
-        subject: subject_type.with_value(to_str(&parser.read, subject_buf)?),
-        predicate: NamedNode {
-            iri: to_str(&parser.read, predicate_buf)?,
-        },
-        object: object_type.with_value(
-            to_str(&parser.read, object_buf)?,
-            to_str(&parser.read, parser.object_annotation_buf.as_slice())?,
-        ),
+        subject: subject_type.with_value(subject_buf),
+        predicate: NamedNode { iri: predicate_buf },
+        object: object_type.with_value(object_buf, &parser.object_annotation_buf),
     })?;
     Ok(())
 }
 
 fn parse_literal<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
-    annotation_buffer: &'a mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &'a mut String,
+    annotation_buffer: &'a mut String,
+    temp_buffer: &mut String,
     iri_parser: &IriParser,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &HashMap<String, String>,
 ) -> Result<TermType, TurtleError> {
     // [13] 	literal 	::= 	RDFLiteral | NumericLiteral | BooleanLiteral
     match read.current() {
@@ -780,7 +778,7 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     parser
         .subject_buf_stack
         .push()
-        .extend_from_slice(&parser.bnode_id_generator.generate());
+        .push_str(parser.bnode_id_generator.generate().as_ref());
     parser
         .subject_type_stack
         .push(NamedOrBlankNodeType::BlankNode);
@@ -807,12 +805,9 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
     parser
         .subject_type_stack
         .push(NamedOrBlankNodeType::BlankNode);
-    parser
-        .predicate_buf_stack
-        .push()
-        .extend_from_slice(RDF_FIRST.as_bytes());
+    parser.predicate_buf_stack.push().push_str(RDF_FIRST);
 
-    let mut root: Option<[u8; 12]> = None;
+    let mut root: Option<BlankNodeId> = None;
     loop {
         skip_whitespace(&mut parser.read)?;
 
@@ -824,20 +819,17 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
                 Some(id) => {
                     on_triple(Triple {
                         subject: BlankNode {
-                            id: to_str(&parser.read, parser.subject_buf_stack.last())?,
+                            id: parser.subject_buf_stack.last(),
                         }
                         .into(),
                         predicate: NamedNode { iri: RDF_REST },
                         object: NamedNode { iri: RDF_NIL }.into(),
                     })?;
                     parser.subject_buf_stack.pop();
-                    parser.subject_buf_stack.push().extend_from_slice(&id);
+                    parser.subject_buf_stack.push().push_str(id.as_ref());
                 }
                 None => {
-                    parser
-                        .subject_buf_stack
-                        .push()
-                        .extend_from_slice(RDF_NIL.as_bytes());
+                    parser.subject_buf_stack.push().push_str(RDF_NIL);
                     parser.subject_type_stack.pop();
                     parser
                         .subject_type_stack
@@ -853,18 +845,15 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
             } else {
                 on_triple(Triple {
                     subject: BlankNode {
-                        id: to_str(&parser.read, parser.subject_buf_stack.last())?,
+                        id: parser.subject_buf_stack.last(),
                     }
                     .into(),
                     predicate: NamedNode { iri: RDF_REST },
-                    object: BlankNode {
-                        id: to_str(&parser.read, &new)?,
-                    }
-                    .into(),
+                    object: BlankNode { id: new.as_ref() }.into(),
                 })?;
                 parser.subject_buf_stack.pop();
             }
-            parser.subject_buf_stack.push().extend_from_slice(&new);
+            parser.subject_buf_stack.push().push_str(new.as_ref());
 
             parse_object(parser, on_triple)?;
         }
@@ -873,8 +862,8 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
 
 fn parse_numeric_literal(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    annotation_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    annotation_buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [16] 	NumericLiteral 	::= 	INTEGER | DECIMAL | DOUBLE
     // [19] 	INTEGER 	::= 	[+-]? [0-9]+
@@ -884,7 +873,7 @@ fn parse_numeric_literal(
     let c = read.current();
     match c {
         b'+' | b'-' => {
-            buffer.push(c);
+            buffer.push(char::from(c));
             read.consume()?
         }
         _ => (),
@@ -896,7 +885,7 @@ fn parse_numeric_literal(
         let c = read.current();
         match c {
             b'0'..=b'9' => {
-                buffer.push(c);
+                buffer.push(char::from(c));
                 read.consume()?;
                 count_before += 1;
             }
@@ -912,7 +901,7 @@ fn parse_numeric_literal(
                 b'0'..=b'9' | b'e' | b'E' => (),
                 _ => {
                     return if count_before > 0 {
-                        annotation_buffer.extend_from_slice(XSD_INTEGER.as_bytes());
+                        annotation_buffer.push_str(XSD_INTEGER);
                         Ok(())
                     } else {
                         read.unexpected_char_error()
@@ -921,14 +910,14 @@ fn parse_numeric_literal(
             }
         } else {
             return if count_before > 0 {
-                annotation_buffer.extend_from_slice(XSD_INTEGER.as_bytes());
+                annotation_buffer.push_str(XSD_INTEGER);
                 Ok(())
             } else {
                 read.unexpected_char_error()
             };
         }
 
-        buffer.push(b'.');
+        buffer.push('.');
         let mut count_after = 0;
 
         loop {
@@ -936,7 +925,7 @@ fn parse_numeric_literal(
             let c = read.current();
             match c {
                 b'0'..=b'9' => {
-                    buffer.push(c);
+                    buffer.push(char::from(c));
                     count_after += 1;
                 }
                 _ => break,
@@ -953,7 +942,7 @@ fn parse_numeric_literal(
         b'e' | b'E' => {
             if count_before > 0 || count_after.unwrap_or(0) > 0 {
                 parse_exponent(read, buffer)?;
-                annotation_buffer.extend_from_slice(XSD_DOUBLE.as_bytes());
+                annotation_buffer.push_str(XSD_DOUBLE);
                 Ok(())
             } else {
                 read.unexpected_char_error()
@@ -961,10 +950,10 @@ fn parse_numeric_literal(
         }
         _ => {
             if count_after.is_none() && count_before > 0 {
-                annotation_buffer.extend_from_slice(XSD_INTEGER.as_bytes());
+                annotation_buffer.push_str(XSD_INTEGER);
                 Ok(())
             } else if count_after != None && count_after != Some(0) {
-                annotation_buffer.extend_from_slice(XSD_DECIMAL.as_bytes());
+                annotation_buffer.push_str(XSD_DECIMAL);
                 Ok(())
             } else {
                 read.unexpected_char_error()
@@ -975,11 +964,11 @@ fn parse_numeric_literal(
 
 fn parse_rdf_literal(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    annotation_buffer: &mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    annotation_buffer: &mut String,
+    temp_buffer: &mut String,
     iri_parser: &IriParser,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &HashMap<String, String>,
 ) -> Result<TermType, TurtleError> {
     // [128s] 	RDFLiteral 	::= 	String (LANGTAG | '^^' iri)?
     parse_string(read, buffer)?;
@@ -1004,28 +993,25 @@ fn parse_rdf_literal(
 
 fn parse_boolean_literal(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    annotation_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    annotation_buffer: &mut String,
 ) -> Result<(), TurtleError> {
     if read.starts_with(b"true") {
         read.consume_many("true".len())?;
-        buffer.extend_from_slice(b"true");
-        annotation_buffer.extend_from_slice(XSD_BOOLEAN.as_bytes());
+        buffer.push_str("true");
+        annotation_buffer.push_str(XSD_BOOLEAN);
         Ok(())
     } else if read.starts_with(b"false") {
         read.consume_many("false".len())?;
-        buffer.extend_from_slice(b"false");
-        annotation_buffer.extend_from_slice(XSD_BOOLEAN.as_bytes());
+        buffer.push_str("false");
+        annotation_buffer.push_str(XSD_BOOLEAN);
         Ok(())
     } else {
         read.unexpected_char_error()
     }
 }
 
-fn parse_string(
-    read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-) -> Result<(), TurtleError> {
+fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
     match read.current() {
         b'"' => {
             if read.starts_with(b"\"\"\"") {
@@ -1047,10 +1033,10 @@ fn parse_string(
 
 fn parse_iri(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
-    temp_buffer: &mut Vec<u8>,
+    buffer: &mut String,
+    temp_buffer: &mut String,
     iri_parser: &IriParser,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
     match read.current() {
@@ -1064,27 +1050,35 @@ fn parse_iri(
 
 fn parse_prefixed_name<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
-    namespaces: &HashMap<Vec<u8>, Vec<u8>>,
+    buffer: &'a mut String,
+    namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [136s] 	PrefixedName 	::= 	PNAME_LN | PNAME_NS
     // It could be written: PNAME_NS PN_LOCAL?
 
     // PNAME_NS
     parse_pname_ns(read, buffer)?;
-    if let Some(value) = namespaces.get(buffer.as_slice()) {
+    if let Some(value) = namespaces.get(buffer.as_str()) {
         buffer.clear();
-        buffer.extend_from_slice(value);
+        buffer.push_str(value);
     } else {
-        return Err(read.parse_error(TurtleErrorKind::InvalidUTF8)); //TODO
+        return Err(read.parse_error(TurtleErrorKind::UnknownPrefix(buffer.clone())));
     }
 
     // [168s] 	PN_LOCAL 	::= 	(PN_CHARS_U | ':' | [0-9] | PLX) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX))?
     match read.current() {
-        c if is_possible_pn_chars_u(c) || c == b':' || b'0' <= c && c <= b'9' => buffer.push(c),
         b'\\' => parse_pn_local_esc(read, buffer)?,
         b'%' => parse_percent(read, buffer)?,
-        _ => return Ok(()),
+        b':' | b'0'..=b'9' => buffer.push(char::from(read.current())),
+        c if is_possible_pn_chars_u_ascii(c) => buffer.push(char::from(c)),
+        _ => {
+            let c = read_utf8_char(read)?;
+            if is_possible_pn_chars_u_unicode(c) {
+                buffer.push(c)
+            } else {
+                return Ok(());
+            }
+        }
     }
 
     loop {
@@ -1092,15 +1086,23 @@ fn parse_prefixed_name<'a>(
         match read.current() {
             b'.' => {
                 if has_future_char_valid_pname_local(read) {
-                    buffer.push(b'.')
+                    buffer.push('.')
                 } else {
                     return Ok(());
                 }
             }
-            c if is_possible_pn_chars(c) || c == b':' => buffer.push(c),
             b'\\' => parse_pn_local_esc(read, buffer)?,
             b'%' => parse_percent(read, buffer)?,
-            _ => return Ok(()),
+            b':' => buffer.push(':'),
+            c if is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
+            _ => {
+                let c = read_utf8_char(read)?;
+                if is_possible_pn_chars_unicode(c) {
+                    buffer.push(c)
+                } else {
+                    return Ok(());
+                }
+            }
         }
     }
 }
@@ -1109,9 +1111,8 @@ fn has_future_char_valid_pname_local(read: &impl LookAheadByteRead) -> bool {
     let mut i = 1;
     loop {
         match read.ahead(i) {
-            Some(c) if is_possible_pn_chars(c) || c == b':' || c == b'%' || c == b'\\' => {
-                return true;
-            }
+            Some(b':') | Some(b'%') | Some(b'\\') => return true,
+            Some(c) if c > MAX_ASCII || is_possible_pn_chars_ascii(c) => return true,
             Some(b'.') => (),
             _ => return false,
         }
@@ -1121,7 +1122,7 @@ fn has_future_char_valid_pname_local(read: &impl LookAheadByteRead) -> bool {
 
 fn parse_blank_node<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut Vec<u8>,
+    buffer: &'a mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<(), TurtleError> {
     // [137s] 	BlankNode 	::= 	BLANK_NODE_LABEL | ANON
@@ -1139,7 +1140,7 @@ fn parse_blank_node<'a>(
 
 fn parse_pname_ns(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [139s] 	PNAME_NS 	::= 	PN_PREFIX? ':'
     parse_pn_prefix(read, buffer)?;
@@ -1154,12 +1155,12 @@ fn parse_pname_ns(
 
 fn parse_exponent(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [154s] 	EXPONENT 	::= 	[eE] [+-]? [0-9]+
     let c = read.current();
     match c {
-        b'e' | b'E' => buffer.push(c),
+        b'e' | b'E' => buffer.push(char::from(c)),
         _ => read.unexpected_char_error()?,
     };
     read.consume()?;
@@ -1167,7 +1168,7 @@ fn parse_exponent(
     let c = read.current();
     match c {
         b'+' | b'-' => {
-            buffer.push(c);
+            buffer.push(char::from(c));
             read.consume()?
         }
         _ => (),
@@ -1175,7 +1176,7 @@ fn parse_exponent(
 
     let c = read.current();
     match c {
-        b'0'..=b'9' => buffer.push(c),
+        b'0'..=b'9' => buffer.push(char::from(c)),
         _ => read.unexpected_char_error()?,
     }
 
@@ -1183,7 +1184,7 @@ fn parse_exponent(
         read.consume()?;
         let c = read.current();
         match c {
-            b'0'..=b'9' => buffer.push(c),
+            b'0'..=b'9' => buffer.push(char::from(c)),
             _ => return Ok(()),
         }
     }
@@ -1191,7 +1192,7 @@ fn parse_exponent(
 
 fn parse_string_literal_single_quote(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [23] 	STRING_LITERAL_SINGLE_QUOTE 	::= 	"'" ([^#x27#x5C#xA#xD] | ECHAR | UCHAR)* "'" /* #x27=' #x5C=\ #xA=new line #xD=carriage return */
     parse_string_literal_quote_inner(read, buffer, b'\'')
@@ -1199,7 +1200,7 @@ fn parse_string_literal_single_quote(
 
 fn parse_string_literal_long_single_quote(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [24] 	STRING_LITERAL_LONG_SINGLE_QUOTE 	::= 	"'''" (("'" | "''")? ([^'\] | ECHAR | UCHAR))* "'''"
     parse_string_literal_long_quote_inner(read, buffer, b'\'')
@@ -1207,7 +1208,7 @@ fn parse_string_literal_long_single_quote(
 
 fn parse_string_literal_long_quote(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [25] 	STRING_LITERAL_LONG_QUOTE 	::= 	'"""' (('"' | '""')? ([^"\] | ECHAR | UCHAR))* '"""'
     parse_string_literal_long_quote_inner(read, buffer, b'"')
@@ -1215,46 +1216,32 @@ fn parse_string_literal_long_quote(
 
 fn parse_string_literal_long_quote_inner(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
     quote: u8,
 ) -> Result<(), TurtleError> {
-    read.check_is_current(quote)?;
-    read.consume()?;
-    read.check_is_current(quote)?;
-    read.consume()?;
-    read.check_is_current(quote)?;
+    let prefix = [quote; 3];
+    read.consume_many(2)?;
     loop {
         read.consume()?;
         match read.current() {
-            c if c == quote => {
-                read.consume()?;
-                let c2 = read.current();
-                if c2 == quote {
-                    read.consume()?;
-                    let c3 = read.current();
-                    if c3 == quote {
-                        read.consume()?;
-                        return Ok(());
-                    } else {
-                        buffer.push(c);
-                        buffer.push(c2);
-                        buffer.push(c3);
-                    }
-                } else {
-                    buffer.push(c);
-                    buffer.push(c2);
-                }
+            c if c == quote && read.starts_with(&prefix) => {
+                read.consume_many(3)?;
+                return Ok(());
             }
             b'\\' => parse_echar_or_uchar(read, buffer)?,
             EOF => read.unexpected_char_error()?,
-            c => buffer.push(c),
+            c => buffer.push(if c <= 0x7F {
+                char::from(c) //optimization to avoid UTF-8 decoding
+            } else {
+                read_utf8_char(read)?
+            }),
         }
     }
 }
 
 fn parse_anon(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<(), TurtleError> {
     read.check_is_current(b'[')?;
@@ -1264,42 +1251,56 @@ fn parse_anon(
     read.check_is_current(b']')?;
     read.consume()?;
 
-    buffer.extend_from_slice(&bnode_id_generator.generate());
+    buffer.push_str(bnode_id_generator.generate().as_ref());
     Ok(())
 }
 
 fn parse_pn_prefix(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [167s] 	PN_PREFIX 	::= 	PN_CHARS_BASE ((PN_CHARS | '.')* PN_CHARS)?
     match read.current() {
-        c if is_possible_pn_chars_base(c) => buffer.push(c),
-        _ => return Ok(()), //PN_PREFIX is always optional
+        c if c <= MAX_ASCII && is_possible_pn_chars_base_ascii(c) => buffer.push(char::from(c)),
+        _ => {
+            let c = read_utf8_char(read)?;
+            if is_possible_pn_chars_base_unicode(c) {
+                buffer.push(c)
+            } else {
+                return Ok(()); //PN_PREFIX is always optional
+            }
+        }
     }
 
     loop {
         read.consume()?;
         match read.current() {
             b'.' => match read.next() {
-                Some(c) if is_possible_pn_chars(c) => buffer.push(b'.'),
+                Some(c) if is_possible_pn_chars_ascii(c) || c > MAX_ASCII => buffer.push('.'),
                 _ => {
                     return Ok(());
                 }
             },
-            c if is_possible_pn_chars(c) => buffer.push(c),
-            _ => return Ok(()),
+            c if c <= MAX_ASCII && is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
+            _ => {
+                let c = read_utf8_char(read)?;
+                if is_possible_pn_chars_unicode(c) {
+                    buffer.push(c)
+                } else {
+                    return Ok(());
+                }
+            }
         }
     }
 }
 
 fn parse_percent(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [170s] 	PERCENT 	::= 	'%' HEX HEX
     read.check_is_current(b'%')?;
-    buffer.push(b'%');
+    buffer.push('%');
     read.consume()?;
     parse_hex(read, buffer)?;
     read.consume()?;
@@ -1307,12 +1308,12 @@ fn parse_percent(
     Ok(())
 }
 
-fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut Vec<u8>) -> Result<(), TurtleError> {
+fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
     // [171s] 	HEX 	::= 	[0-9] | [A-F] | [a-f]
     let c = read.current();
     match c {
         b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {
-            buffer.push(c);
+            buffer.push(char::from(c));
             Ok(())
         }
         _ => read.unexpected_char_error(),
@@ -1321,7 +1322,7 @@ fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut Vec<u8>) -> Result<
 
 fn parse_pn_local_esc(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut Vec<u8>,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [172s] 	PN_LOCAL_ESC 	::= 	'\' ('_' | '~' | '.' | '-' | '!' | '$' | '&' | "'" | '(' | ')' | '*' | '+' | ',' | ';' | '=' | '/' | '?' | '#' | '@' | '%')
     read.check_is_current(b'\\')?;
@@ -1330,7 +1331,7 @@ fn parse_pn_local_esc(
     match c {
         b'_' | b'~' | b'.' | b'-' | b'!' | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+'
         | b',' | b';' | b'=' | b'/' | b'?' | b'#' | b'@' | b'%' => {
-            buffer.push(c);
+            buffer.push(char::from(c));
             Ok(())
         }
         _ => read.unexpected_char_error(),

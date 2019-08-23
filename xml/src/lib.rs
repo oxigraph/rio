@@ -552,9 +552,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                                 (Some(resource_attr), None) => resource_attr.into(),
                                 (None, Some(node_id_attr)) => node_id_attr.into(),
                                 (None, None) => OwnedBlankNode {
-                                    id: str::from_utf8(&self.bnode_id_generator.generate())
-                                        .unwrap()
-                                        .to_owned(),
+                                    id: self.bnode_id_generator.generate().as_ref().to_owned(),
                                 }.into(),
                                 (Some(_), Some(_)) => return Err(RdfXmlError::from("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
                             };
@@ -717,7 +715,7 @@ impl<R: BufRead> RdfXmlReader<R> {
             (None, Some(node_id_attr), None) => BlankNode::from(node_id_attr).into(),
             (None, None, Some(about_attr)) => NamedNode::from(about_attr).into(),
             (None, None, None) => BlankNode {
-                id: str::from_utf8(&subject_id).unwrap(),
+                id: subject_id.as_ref(),
             }
             .into(),
             (Some(_), Some(_), _) => {
@@ -776,7 +774,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     ) -> Result<RdfXmlState, E> {
         let object_id = self.bnode_id_generator.generate();
         let object = BlankNode {
-            id: str::from_utf8(&object_id).unwrap(),
+            id: object_id.as_ref(),
         };
         let triple = Triple {
             subject: (&subject).into(),
@@ -840,9 +838,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 .into();
                 for object in objects.iter().rev() {
                     let subject: OwnedNamedOrBlankNode = OwnedBlankNode {
-                        id: str::from_utf8(&self.bnode_id_generator.generate())
-                            .unwrap()
-                            .to_owned(),
+                        id: self.bnode_id_generator.generate().as_ref().to_owned(),
                     }
                     .into();
                     on_triple(Triple {
@@ -1225,19 +1221,19 @@ impl From<OwnedNamedOrBlankNode> for OwnedTerm {
 }
 
 #[derive(Default)]
-struct BlankNodeIdGenerator {
+pub struct BlankNodeIdGenerator {
     //TODO: avoid collisions
     counter: usize,
 }
 
 impl BlankNodeIdGenerator {
-    pub fn generate(&mut self) -> [u8; 12] {
+    pub fn generate(&mut self) -> BlankNodeId {
         let mut id: [u8; 12] = [
             b'r', b'i', b'o', b'g', b'0', b'0', b'0', b'0', b'0', b'0', b'0', b'0',
         ];
         self.counter += 1;
         write_usize_to_slice(self.counter, &mut id[4..]);
-        id
+        BlankNodeId { id }
     }
 }
 
@@ -1245,5 +1241,16 @@ fn write_usize_to_slice(mut v: usize, s: &mut [u8]) {
     for i in (0..s.len()).rev() {
         s[i] = b'0' + (v % 10) as u8;
         v /= 10;
+    }
+}
+
+pub struct BlankNodeId {
+    id: [u8; 12],
+}
+
+impl AsRef<str> for BlankNodeId {
+    fn as_ref(&self) -> &str {
+        // We know what id is and it's always valid UTF8
+        str::from_utf8(&self.id).unwrap()
     }
 }
