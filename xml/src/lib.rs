@@ -18,7 +18,6 @@
 //! }).unwrap();
 //! ```
 
-use crate::iri::IriParser;
 use quick_xml::events::*;
 use quick_xml::{Reader, Writer};
 use rio_api::model::*;
@@ -27,9 +26,10 @@ use std::io::BufRead;
 use std::str;
 
 mod error;
-mod iri;
 
 pub use error::RdfXmlError;
+use quick_xml::events::attributes::Attribute;
+use rio_api::iri::Iri;
 use std::collections::HashSet;
 
 /// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
@@ -85,7 +85,11 @@ impl<R: BufRead> RdfXmlParser<R> {
             reader: RdfXmlReader {
                 reader,
                 state: vec![RdfXmlState::Doc {
-                    iri_parser: IriParser::new(base_iri)?,
+                    base_iri: if base_iri.is_empty() {
+                        None
+                    } else {
+                        Some(Iri::parse(base_iri.to_owned())?)
+                    },
                 }],
                 namespace_buffer: Vec::default(),
                 bnode_id_generator: BlankNodeIdGenerator::default(),
@@ -178,14 +182,14 @@ enum NodeOrText {
 
 enum RdfXmlState {
     Doc {
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
     },
     RDF {
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
     },
     NodeElt {
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         li_counter: usize,
@@ -193,7 +197,7 @@ enum RdfXmlState {
     PropertyElt {
         //Resource, Literal or Empty property element
         iri: String,
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         object: Option<NodeOrText>,
@@ -202,7 +206,7 @@ enum RdfXmlState {
     },
     ParseTypeCollectionPropertyElt {
         iri: String,
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         objects: Vec<OwnedNamedOrBlankNode>,
@@ -210,7 +214,7 @@ enum RdfXmlState {
     },
     ParseTypeLiteralPropertyElt {
         iri: String,
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         writer: Writer<Vec<u8>>,
@@ -220,14 +224,14 @@ enum RdfXmlState {
 }
 
 impl RdfXmlState {
-    fn iri_parser(&self) -> &IriParser {
+    fn base_iri(&self) -> &Option<Iri<String>> {
         match self {
-            RdfXmlState::Doc { iri_parser, .. } => iri_parser,
-            RdfXmlState::RDF { iri_parser, .. } => iri_parser,
-            RdfXmlState::NodeElt { iri_parser, .. } => iri_parser,
-            RdfXmlState::PropertyElt { iri_parser, .. } => iri_parser,
-            RdfXmlState::ParseTypeCollectionPropertyElt { iri_parser, .. } => iri_parser,
-            RdfXmlState::ParseTypeLiteralPropertyElt { iri_parser, .. } => iri_parser,
+            RdfXmlState::Doc { base_iri, .. } => base_iri,
+            RdfXmlState::RDF { base_iri, .. } => base_iri,
+            RdfXmlState::NodeElt { base_iri, .. } => base_iri,
+            RdfXmlState::PropertyElt { base_iri, .. } => base_iri,
+            RdfXmlState::ParseTypeCollectionPropertyElt { base_iri, .. } => base_iri,
+            RdfXmlState::ParseTypeLiteralPropertyElt { base_iri, .. } => base_iri,
         }
     }
 
@@ -291,13 +295,13 @@ impl<R: BufRead> RdfXmlReader<R> {
         let iri = self.resolve_tag_name(event.name())?;
 
         //We read attributes
-        let (mut language, mut iri_parser) = if let Some(current_state) = self.state.last() {
+        let (mut language, mut base_iri) = if let Some(current_state) = self.state.last() {
             (
                 current_state.language().cloned(),
-                current_state.iri_parser().clone(),
+                current_state.base_iri().clone(),
             )
         } else {
-            (None, IriParser::new("")?)
+            (None, None)
         };
 
         let mut id_attr = None;
@@ -320,11 +324,14 @@ impl<R: BufRead> RdfXmlReader<R> {
                     );
                 }
                 b"xml:base" => {
-                    iri_parser = IriParser::new(
-                        &attribute
-                            .unescape_and_decode_value(&self.reader)
-                            .map_err(RdfXmlError::from)?,
-                    )?
+                    base_iri = Some(
+                        Iri::parse(
+                            attribute
+                                .unescape_and_decode_value(&self.reader)
+                                .map_err(RdfXmlError::from)?,
+                        )
+                        .map_err(RdfXmlError::from)?,
+                    )
                 }
                 key if !key.starts_with(b"xml") => {
                     let attribute_url = self.resolve_attribute_name(key)?;
@@ -365,23 +372,11 @@ impl<R: BufRead> RdfXmlReader<R> {
                         }
                         node_id_attr = Some(OwnedBlankNode { id });
                     } else if *attribute_url == *RDF_ABOUT {
-                        about_attr = Some(
-                            attribute
-                                .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?,
-                        );
+                        about_attr = Some(attribute);
                     } else if *attribute_url == *RDF_RESOURCE {
-                        resource_attr = Some(
-                            attribute
-                                .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?,
-                        );
+                        resource_attr = Some(attribute);
                     } else if *attribute_url == *RDF_DATATYPE {
-                        datatype_attr = Some(
-                            attribute
-                                .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?,
-                        );
+                        datatype_attr = Some(attribute);
                     } else if *attribute_url == *RDF_PARSE_TYPE {
                         parse_type = match attribute.value.as_ref() {
                             b"Collection" => RdfXmlParseType::Collection,
@@ -390,11 +385,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                             _ => RdfXmlParseType::Other,
                         };
                     } else if *attribute_url == *RDF_TYPE {
-                        type_attr = Some(
-                            attribute
-                                .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?,
-                        );
+                        type_attr = Some(attribute);
                     } else if RESERVED_RDF_ATTRIBUTES.contains(&&*attribute_url) {
                         return Err(RdfXmlError::from(format!(
                             "{} is not a valid attribute",
@@ -417,7 +408,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         //Parsing with the base URI
         let id_attr = match id_attr {
             Some(iri) => {
-                let iri = iri_parser.resolve(iri)?;
+                let iri = resolve(&base_iri, iri)?;
                 if self.known_rdf_id.contains(&iri) {
                     return Err(RdfXmlError::from(format!(
                         "{} has already been used as rdf:ID value",
@@ -431,55 +422,44 @@ impl<R: BufRead> RdfXmlReader<R> {
             None => None,
         };
         let about_attr = match about_attr {
-            Some(iri) => Some(OwnedNamedNode {
-                iri: iri_parser.resolve(iri)?,
-            }),
+            Some(attr) => Some(convert_iri_attribute(&base_iri, attr, &self.reader)?),
             None => None,
         };
         let resource_attr = match resource_attr {
-            Some(iri) => Some(OwnedNamedNode {
-                iri: iri_parser.resolve(iri)?,
-            }),
+            Some(attr) => Some(convert_iri_attribute(&base_iri, attr, &self.reader)?),
             None => None,
         };
         let datatype_attr = match datatype_attr {
-            Some(iri) => Some(OwnedNamedNode {
-                iri: iri_parser.resolve(iri)?,
-            }),
+            Some(attr) => Some(convert_iri_attribute(&base_iri, attr, &self.reader)?),
             None => None,
         };
         let type_attr = match type_attr {
-            Some(iri) => Some(OwnedNamedNode {
-                iri: iri_parser.resolve(iri)?,
-            }),
+            Some(attr) => Some(convert_iri_attribute(&base_iri, attr, &self.reader)?),
             None => None,
         };
 
         let expected_production = match self.state.last() {
-            Some(RdfXmlState::Doc { .. }) => RdfXmlNextProduction::RDF,
-            Some(RdfXmlState::RDF { .. }) => RdfXmlNextProduction::NodeElt,
-            Some(RdfXmlState::NodeElt { subject, .. }) => RdfXmlNextProduction::PropertyElt {
-                subject: subject.clone(),
-            },
-            Some(RdfXmlState::PropertyElt { .. }) => RdfXmlNextProduction::NodeElt,
-            Some(RdfXmlState::ParseTypeCollectionPropertyElt { .. }) => {
-                RdfXmlNextProduction::NodeElt
-            }
-            Some(RdfXmlState::ParseTypeLiteralPropertyElt { .. }) => {
-                panic!("ParseTypeLiteralPropertyElt production children should never be considered as a RDF/XML content")
-            }
-            None => {
-                return Err(RdfXmlError::from("No state in the stack: the XML is not balanced").into());
-            }
-        };
+    Some(RdfXmlState::Doc { .. }) => RdfXmlNextProduction::RDF,
+    Some(RdfXmlState::RDF { .. }) => RdfXmlNextProduction::NodeElt,
+    Some(RdfXmlState::NodeElt { subject, .. }) => RdfXmlNextProduction::PropertyElt {
+        subject: subject.clone(),
+    },
+    Some(RdfXmlState::PropertyElt { .. }) => RdfXmlNextProduction::NodeElt,
+    Some(RdfXmlState::ParseTypeCollectionPropertyElt { .. }) => {
+        RdfXmlNextProduction::NodeElt
+    }
+    Some(RdfXmlState::ParseTypeLiteralPropertyElt { .. }) => {
+        panic!("ParseTypeLiteralPropertyElt production children should never be considered as a RDF/XML content")
+    }
+    None => {
+        return Err(RdfXmlError::from("No state in the stack: the XML is not balanced").into());
+    }
+};
 
         let new_state = match expected_production {
             RdfXmlNextProduction::RDF => {
                 if *iri == *RDF_RDF {
-                    RdfXmlState::RDF {
-                        iri_parser,
-                        language,
-                    }
+                    RdfXmlState::RDF { base_iri, language }
                 } else if RESERVED_RDF_ELEMENTS.contains(&&*iri) {
                     return Err(RdfXmlError::from(format!(
                         "Invalid node element tag name: {}",
@@ -489,7 +469,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 } else {
                     self.build_node_elt(
                         OwnedNamedNode { iri },
-                        iri_parser,
+                        base_iri,
                         language,
                         id_attr,
                         node_id_attr,
@@ -510,7 +490,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 }
                 self.build_node_elt(
                     OwnedNamedNode { iri },
-                    iri_parser,
+                    base_iri,
                     language,
                     id_attr,
                     node_id_attr,
@@ -548,14 +528,14 @@ impl<R: BufRead> RdfXmlReader<R> {
                             || !property_attrs.is_empty()
                         {
                             let object: OwnedNamedOrBlankNode = match (resource_attr, node_id_attr)
-                            {
-                                (Some(resource_attr), None) => resource_attr.into(),
-                                (None, Some(node_id_attr)) => node_id_attr.into(),
-                                (None, None) => OwnedBlankNode {
-                                    id: self.bnode_id_generator.generate().as_ref().to_owned(),
-                                }.into(),
-                                (Some(_), Some(_)) => return Err(RdfXmlError::from("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
-                            };
+                    {
+                        (Some(resource_attr), None) => resource_attr.into(),
+                        (None, Some(node_id_attr)) => node_id_attr.into(),
+                        (None, None) => OwnedBlankNode {
+                            id: self.bnode_id_generator.generate().as_ref().to_owned(),
+                        }.into(),
+                        (Some(_), Some(_)) => return Err(RdfXmlError::from("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
+                    };
                             self.emit_property_attrs(
                                 (&object).into(),
                                 property_attrs,
@@ -571,7 +551,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                             }
                             RdfXmlState::PropertyElt {
                                 iri,
-                                iri_parser,
+                                base_iri,
                                 language,
                                 subject,
                                 object: Some(NodeOrText::Node(object)),
@@ -581,7 +561,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                         } else {
                             RdfXmlState::PropertyElt {
                                 iri,
-                                iri_parser,
+                                base_iri,
                                 language,
                                 subject,
                                 object: None,
@@ -592,7 +572,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     }
                     RdfXmlParseType::Literal => RdfXmlState::ParseTypeLiteralPropertyElt {
                         iri,
-                        iri_parser,
+                        base_iri,
                         language,
                         subject,
                         writer: Writer::new(Vec::default()),
@@ -601,7 +581,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     },
                     RdfXmlParseType::Resource => self.build_parse_type_resource_property_elt(
                         OwnedNamedNode { iri },
-                        iri_parser,
+                        base_iri,
                         language,
                         subject,
                         id_attr,
@@ -609,7 +589,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     )?,
                     RdfXmlParseType::Collection => RdfXmlState::ParseTypeCollectionPropertyElt {
                         iri,
-                        iri_parser,
+                        base_iri,
                         language,
                         subject,
                         objects: Vec::default(),
@@ -617,7 +597,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     },
                     RdfXmlParseType::Other => RdfXmlState::ParseTypeLiteralPropertyElt {
                         iri,
-                        iri_parser,
+                        base_iri,
                         language,
                         subject,
                         writer: Writer::new(Vec::default()),
@@ -700,7 +680,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     fn build_node_elt<E: From<RdfXmlError>>(
         &mut self,
         iri: OwnedNamedNode,
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
         id_attr: Option<OwnedNamedNode>,
         node_id_attr: Option<OwnedBlankNode>,
@@ -756,7 +736,7 @@ impl<R: BufRead> RdfXmlReader<R> {
             })?;
         }
         Ok(RdfXmlState::NodeElt {
-            iri_parser,
+            base_iri,
             language,
             subject: subject.into(),
             li_counter: 0,
@@ -766,7 +746,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     fn build_parse_type_resource_property_elt<E: From<RdfXmlError>>(
         &mut self,
         iri: OwnedNamedNode,
-        iri_parser: IriParser,
+        base_iri: Option<Iri<String>>,
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         id_attr: Option<OwnedNamedNode>,
@@ -786,7 +766,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         }
         on_triple(triple)?;
         Ok(RdfXmlState::NodeElt {
-            iri_parser,
+            base_iri,
             language,
             subject: OwnedBlankNode::from(object).into(),
             li_counter: 0,
@@ -988,6 +968,32 @@ impl<R: BufRead> RdfXmlReader<R> {
         }
         Ok(())
     }
+}
+
+fn convert_iri_attribute<B: BufRead>(
+    base_iri: &Option<Iri<String>>,
+    attribute: Attribute,
+    reader: &Reader<B>,
+) -> Result<OwnedNamedNode, RdfXmlError> {
+    let value = attribute.unescaped_value()?;
+    let value = reader.decode(&value);
+    Ok(OwnedNamedNode {
+        iri: if let Some(base_iri) = base_iri {
+            base_iri.resolve(&value)
+        } else {
+            Iri::parse(value.to_string())
+        }?
+        .into_inner(),
+    })
+}
+
+fn resolve(base_iri: &Option<Iri<String>>, relative_iri: String) -> Result<String, RdfXmlError> {
+    Ok(if let Some(base_iri) = base_iri {
+        base_iri.resolve(&relative_iri)
+    } else {
+        Iri::parse(relative_iri)
+    }?
+    .into_inner())
 }
 
 fn is_nc_name(name: &str) -> bool {

@@ -1,3 +1,4 @@
+use rio_api::iri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::char;
 use std::error::Error;
@@ -20,8 +21,7 @@ pub enum TurtleErrorKind {
     PrematureEOF,
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
-    InvalidBaseIRI,
-    InvalidIRI,
+    InvalidIri(IriParseError),
 }
 
 impl fmt::Display for TurtleError {
@@ -37,8 +37,7 @@ impl fmt::Display for TurtleError {
             TurtleErrorKind::InvalidUnicodeCodePoint(point) => {
                 write!(f, "invalid unicode code point '{}'", point)
             }
-            TurtleErrorKind::InvalidBaseIRI => write!(f, "invalid base URI"),
-            TurtleErrorKind::InvalidIRI => write!(f, "invalid URI"),
+            TurtleErrorKind::InvalidIri(error) => error.fmt(f),
         }?;
         if let Some(position) = self.position {
             write!(
@@ -56,6 +55,7 @@ impl Error for TurtleError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
             TurtleErrorKind::IO(error) => Some(error),
+            TurtleErrorKind::InvalidIri(error) => Some(error),
             _ => None,
         }
     }

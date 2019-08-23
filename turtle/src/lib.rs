@@ -26,7 +26,6 @@
 //! `NTriplesParser` and `NQuadsParser` do not use the second argument of the `new` function that is the IRI of the file.
 
 mod error;
-mod iri;
 mod ntriples;
 mod shared;
 mod turtle;

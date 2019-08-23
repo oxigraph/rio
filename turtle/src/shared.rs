@@ -1,6 +1,6 @@
 use crate::error::*;
-use crate::iri::*;
 use crate::utils::*;
+use rio_api::iri::Iri;
 use rio_api::model::*;
 use std::char;
 use std::u8;
@@ -12,20 +12,21 @@ pub fn parse_iriref_absolute(
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     parse_iriref(read, buffer)?;
-    validate_iri(buffer.as_bytes()).map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI)) //TODO position
+    Iri::parse(buffer.as_str()).map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)))?;
+    Ok(())
 }
 
 pub fn parse_iriref_relative(
     read: &mut impl LookAheadByteRead,
     buffer: &mut String,
     temp_buffer: &mut String,
-    iri_parser: &IriParser,
+    base_iri: &Option<Iri<String>>,
 ) -> Result<(), TurtleError> {
-    if iri_parser.has_base_iri() {
+    if let Some(base_iri) = base_iri {
         parse_iriref(read, temp_buffer)?;
-        let result = iri_parser
-            .resolve(temp_buffer.as_bytes(), unsafe { buffer.as_mut_vec() })
-            .map_err(|_| read.parse_error(TurtleErrorKind::InvalidIRI)); //TODO position
+        let result = base_iri
+            .resolve_into(temp_buffer, buffer)
+            .map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)));
         temp_buffer.clear();
         result
     } else {

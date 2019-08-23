@@ -1,3 +1,4 @@
+use rio_api::iri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::error::Error;
 use std::fmt;
@@ -7,13 +8,13 @@ use std::fmt;
 /// It might wrap an IO error or be a parsing error.
 #[derive(Debug)]
 pub struct RdfXmlError {
-    pub(crate) kind: RdfXmlErrorKind,
+    kind: RdfXmlErrorKind,
 }
 
 #[derive(Debug)]
-pub enum RdfXmlErrorKind {
+enum RdfXmlErrorKind {
     Xml(quick_xml::Error),
-    InvalidIri(String),
+    InvalidIri(IriParseError),
     Other(String),
 }
 
@@ -21,7 +22,7 @@ impl fmt::Display for RdfXmlError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => error.fmt(f),
-            RdfXmlErrorKind::InvalidIri(iri) => write!(f, "The IRI {} is invalid", iri),
+            RdfXmlErrorKind::InvalidIri(error) => error.fmt(f),
             RdfXmlErrorKind::Other(message) => write!(f, "{}", message),
         }
     }
@@ -32,6 +33,7 @@ impl Error for RdfXmlError {
         match &self.kind {
             RdfXmlErrorKind::Xml(quick_xml::Error::Io(error)) => Some(error),
             RdfXmlErrorKind::Xml(quick_xml::Error::Utf8(error)) => Some(error),
+            RdfXmlErrorKind::InvalidIri(error) => Some(error),
             _ => None,
         }
     }
@@ -47,6 +49,14 @@ impl From<quick_xml::Error> for RdfXmlError {
     fn from(error: quick_xml::Error) -> Self {
         Self {
             kind: RdfXmlErrorKind::Xml(error),
+        }
+    }
+}
+
+impl From<IriParseError> for RdfXmlError {
+    fn from(error: IriParseError) -> Self {
+        Self {
+            kind: RdfXmlErrorKind::InvalidIri(error),
         }
     }
 }

@@ -1,45 +1,132 @@
-pub struct IriParser {
-    base_iri: Vec<u8>,
-    base_positions: IriElementsPositions,
+//! Utilities to validate and resolve IRIs following [RFC 3987](https://www.ietf.org/rfc/rfc3987).
+//!
+//! Example:
+//! ```
+//! use rio_api::iri::Iri;
+//!
+//! // Parse and validate base IRI
+//! let base_iri = Iri::parse("http://foo.com/bar/baz").unwrap();
+//!
+//! // Validate and resolve relative IRI
+//! let iri = base_iri.resolve("bat#foo").unwrap();
+//! assert_eq!("http://foo.com/bar/bat#foo", iri.into_inner())
+//! ```
+
+use std::error::Error;
+use std::fmt;
+use std::ops::Deref;
+
+/// A [RFC 3987](https://www.ietf.org/rfc/rfc3987) IRI.
+///
+/// Example:
+/// ```
+/// use rio_api::iri::Iri;
+///
+/// // Parse and validate base IRI
+/// let base_iri = Iri::parse("http://foo.com/bar/baz").unwrap();
+///
+/// // Validate and resolve relative IRI
+/// let iri = base_iri.resolve("bat#foo").unwrap();
+/// assert_eq!("http://foo.com/bar/bat#foo", iri.into_inner());
+/// ```
+#[derive(Eq, PartialEq, Debug, Clone, Hash)]
+pub struct Iri<T: Deref<Target = str>> {
+    iri: T,
+    positions: IriElementsPositions,
 }
 
-impl IriParser {
-    pub fn new(base_iri: &[u8]) -> Result<Self, usize> {
-        let mut this = Self {
-            base_iri: Vec::default(),
-            base_positions: IriElementsPositions::default(),
-        };
-        if !base_iri.is_empty() {
-            this.set_base_iri(base_iri)?;
+impl<T: Deref<Target = str>> Iri<T> {
+    /// Parses and validates the IRI following [RFC 3987](https://www.ietf.org/rfc/rfc3987) IRI syntax.
+    ///
+    /// This operation keeps internally the `iri` parameter and does not allocate.
+    ///
+    /// Warning: validation is not fully implemented yet!
+    ///
+    /// Example:
+    /// ```
+    /// use rio_api::iri::Iri;
+    /// Iri::parse("http://foo.com/bar/baz").unwrap();
+    /// ```
+    pub fn parse(iri: T) -> Result<Self, IriParseError> {
+        match parse_iri(iri.as_bytes(), 0) {
+            Ok(positions) => Ok(Self { iri, positions }),
+            Err(position) => Err(IriParseError {
+                iri: iri.to_owned(),
+                position,
+            }),
         }
-        Ok(this)
     }
 
-    pub fn set_base_iri(&mut self, base_iri: &[u8]) -> Result<(), usize> {
-        self.base_iri.clear();
-        self.base_iri.extend_from_slice(base_iri);
-        self.base_positions = parse_iri(&self.base_iri, 0)?;
+    /// Validates and resolved a relative IRI against the current IRI
+    /// following [RFC 3987](https://www.ietf.org/rfc/rfc3986) relative URI resolution algorithm.
+    ///
+    /// Example:
+    /// ```
+    /// use rio_api::iri::Iri;
+    /// let base_iri = Iri::parse("http://foo.com/bar/baz").unwrap();
+    /// let iri = base_iri.resolve("bat#foo").unwrap();
+    /// assert_eq!("http://foo.com/bar/bat#foo", iri.into_inner());
+    /// ```
+    pub fn resolve(&self, iri: &str) -> Result<Iri<String>, IriParseError> {
+        let mut target_buffer = String::with_capacity(self.iri.len() + iri.len());
+        let positions = resolve_relative_iri(iri, &self.iri, &self.positions, &mut target_buffer)
+            .map_err(|position| IriParseError {
+            iri: iri.to_owned(),
+            position,
+        })?;
+        Ok(Iri {
+            iri: target_buffer,
+            positions,
+        })
+    }
+
+    /// Validates and resolved a relative IRI against the current IRI
+    /// following [RFC 3986](https://www.ietf.org/rfc/rfc3986) relative URI resolution algorithm.
+    ///
+    /// It outputs the resolved IRI into `target_buffer` to avoid any memory allocation.
+    ///
+    /// Example:
+    /// ```
+    /// use rio_api::iri::Iri;
+    /// let base_iri = Iri::parse("http://foo.com/bar/baz").unwrap();
+    /// let mut result = String::default();
+    /// let iri = base_iri.resolve_into("bat#foo", &mut result).unwrap();
+    /// assert_eq!("http://foo.com/bar/bat#foo", result);
+    /// ```
+    pub fn resolve_into(&self, iri: &str, target_buffer: &mut String) -> Result<(), IriParseError> {
+        resolve_relative_iri(iri, &self.iri, &self.positions, target_buffer).map_err(
+            |position| IriParseError {
+                iri: iri.to_owned(),
+                position,
+            },
+        )?;
         Ok(())
     }
 
-    pub fn has_base_iri(&self) -> bool {
-        !self.base_iri.is_empty()
-    }
-
-    pub fn resolve(&self, iri: &[u8], target_buffer: &mut Vec<u8>) -> Result<(), usize> {
-        if self.base_iri.is_empty() {
-            parse_iri(iri, 0)?;
-            target_buffer.extend_from_slice(iri);
-            Ok(())
-        } else {
-            resolve_relative_iri(iri, &self.base_iri, &self.base_positions, target_buffer)
-        }
+    /// Returns the underlying IRI representation.
+    pub fn into_inner(self) -> T {
+        self.iri
     }
 }
 
-type IriParserState = Result<usize, usize>; // usize = the end position
+/// An error raised during `Iri` validation.
+#[derive(Debug)]
+pub struct IriParseError {
+    iri: String,
+    position: usize,
+}
 
-#[derive(Debug, Default)]
+impl fmt::Display for IriParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Invalid IRI at char {}: {}", self.position, self.iri)
+    }
+}
+
+impl Error for IriParseError {}
+
+type IriState = Result<usize, usize>; // usize = the end position
+
+#[derive(Eq, PartialEq, Debug, Clone, Hash)]
 struct IriElementsPositions {
     scheme_end: usize,
     authority_end: usize,
@@ -48,96 +135,100 @@ struct IriElementsPositions {
     fragment_end: usize,
 }
 
-pub fn validate_iri(value: &[u8]) -> Result<(), usize> {
-    match parse_iri(value, 0) {
-        Ok(i) => {
-            if i.fragment_end == value.len() {
-                Ok(())
-            } else {
-                Err(i.fragment_end)
-            }
-        }
-        Err(i) => Err(i),
-    }
-}
-
 // RFC 3986 5.2 Relative Resolution algorithm
 fn resolve_relative_iri(
-    reference_iri: &[u8],
-    base_iri: &[u8],
+    reference_iri: &str,
+    base_iri: &str,
     base_positions: &IriElementsPositions,
-    target_buffer: &mut Vec<u8>,
-) -> Result<(), usize> {
-    let reference_positions = parse_iri_reference(reference_iri, 0)?;
+    target_buffer: &mut String,
+) -> Result<IriElementsPositions, usize> {
+    let base_scheme = &base_iri[0..base_positions.scheme_end];
+    let base_authority = &base_iri[base_positions.scheme_end..base_positions.authority_end];
+    let base_path = &base_iri[base_positions.authority_end..base_positions.path_end];
+    let base_query = &base_iri[base_positions.path_end..base_positions.query_end];
+
+    let reference_positions = parse_iri_reference(reference_iri.as_bytes(), 0)?;
+    let r_scheme = &reference_iri[0..reference_positions.scheme_end];
+    let r_authority =
+        &reference_iri[reference_positions.scheme_end..reference_positions.authority_end];
+    let r_path = &reference_iri[reference_positions.authority_end..reference_positions.path_end];
+    let r_query = &reference_iri[reference_positions.path_end..reference_positions.query_end];
+    let r_fragment = &reference_iri[reference_positions.query_end..];
+
+    let scheme_end;
+    let authority_end;
+    let path_end;
+    let query_end;
+    let fragment_end;
 
     // if defined(R.scheme) then
-    if reference_positions.scheme_end > 0 {
+    if !r_scheme.is_empty() {
         // T.scheme = R.scheme;
+        target_buffer.push_str(r_scheme);
+        scheme_end = target_buffer.len();
+
         // T.authority = R.authority;
-        target_buffer.extend_from_slice(&reference_iri[0..reference_positions.authority_end]);
+        target_buffer.push_str(r_authority);
+        authority_end = target_buffer.len();
+
         // T.path = remove_dot_segments(R.path);
-        append_and_remove_dot_segments(
-            &reference_iri[reference_positions.authority_end..reference_positions.path_end],
-            target_buffer,
-            target_buffer.len(),
-        );
+        append_and_remove_dot_segments(r_path, target_buffer, target_buffer.len());
+        path_end = target_buffer.len();
+
         // T.query = R.query;
+        target_buffer.push_str(r_query);
+        query_end = target_buffer.len();
+
         // T.fragment = R.fragment;
-        target_buffer.extend_from_slice(&reference_iri[reference_positions.path_end..]);
+        target_buffer.push_str(r_fragment);
+        fragment_end = target_buffer.len();
     } else {
         // T.scheme = Base.scheme;
-        target_buffer.extend_from_slice(&base_iri[0..base_positions.scheme_end]);
+        target_buffer.push_str(base_scheme);
+        scheme_end = target_buffer.len();
 
         // if defined(R.authority) then
-        if reference_positions.authority_end > reference_positions.scheme_end {
+        if !r_authority.is_empty() {
             // T.authority = R.authority;
-            target_buffer.extend_from_slice(
-                &reference_iri[reference_positions.scheme_end..reference_positions.authority_end],
-            );
+            target_buffer.push_str(r_authority);
+            authority_end = target_buffer.len();
+
             // T.path = remove_dot_segments(R.path);
-            append_and_remove_dot_segments(
-                &reference_iri[reference_positions.authority_end..reference_positions.path_end],
-                target_buffer,
-                target_buffer.len(),
-            );
+            append_and_remove_dot_segments(r_path, target_buffer, target_buffer.len());
+            path_end = target_buffer.len();
+
             // T.query = R.query;
+            target_buffer.push_str(r_query);
+            query_end = target_buffer.len();
+
             // T.fragment = R.fragment;
-            target_buffer.extend_from_slice(&reference_iri[reference_positions.path_end..])
+            target_buffer.push_str(r_fragment);
+            fragment_end = target_buffer.len();
         } else {
             // T.authority = Base.authority;
-            target_buffer.extend_from_slice(
-                &base_iri[base_positions.scheme_end..base_positions.authority_end],
-            );
+            target_buffer.push_str(base_authority);
+            authority_end = target_buffer.len();
+
             // if (R.path == "") then
-            if reference_positions.path_end == reference_positions.authority_end {
+            if r_path == "" {
                 // T.path = Base.path;
-                target_buffer.extend_from_slice(
-                    &base_iri[base_positions.authority_end..base_positions.path_end],
-                );
+                target_buffer.push_str(base_path);
+                path_end = target_buffer.len();
+
                 // if defined(R.query) then
-                if reference_positions.query_end > reference_positions.path_end {
+                if !r_query.is_empty() {
                     // T.query = R.query;
-                    target_buffer.extend_from_slice(
-                        &reference_iri[reference_positions.path_end..reference_positions.query_end],
-                    );
+                    target_buffer.push_str(r_query);
                 } else {
                     // T.query = Base.query;
-                    target_buffer.extend_from_slice(
-                        &base_iri[base_positions.path_end..base_positions.query_end],
-                    );
+                    target_buffer.push_str(base_query);
                 }
+                query_end = target_buffer.len();
             } else {
                 // if (R.path starts-with "/") then
-                if reference_positions.authority_end < reference_iri.len()
-                    && reference_iri[reference_positions.authority_end] == b'/'
-                {
+                if r_path.starts_with('/') {
                     // T.path = remove_dot_segments(R.path);
-                    append_and_remove_dot_segments(
-                        &reference_iri
-                            [reference_positions.authority_end..reference_positions.path_end],
-                        target_buffer,
-                        target_buffer.len(),
-                    );
+                    append_and_remove_dot_segments(r_path, target_buffer, target_buffer.len());
                 } else {
                     let path_start_in_target = target_buffer.len();
                     // T.path = merge(Base.path, R.path);
@@ -146,19 +237,15 @@ fn resolve_relative_iri(
                         && base_positions.path_end == base_positions.authority_end
                     {
                         append_and_remove_dot_segments_with_extra_slash(
-                            &reference_iri
-                                [reference_positions.authority_end..reference_positions.path_end],
+                            r_path,
                             target_buffer,
                             path_start_in_target,
                         );
                     } else {
-                        let last_base_slash = base_iri
-                            [base_positions.authority_end..base_positions.path_end]
-                            .iter()
-                            .cloned()
-                            .enumerate()
+                        let last_base_slash = base_path
+                            .char_indices()
                             .rev()
-                            .find(|(_, c)| *c == b'/')
+                            .find(|(_, c)| *c == '/')
                             .map_or(0, |(i, _)| i)
                             + base_positions.authority_end;
                         append_and_remove_dot_segments(
@@ -166,104 +253,114 @@ fn resolve_relative_iri(
                             target_buffer,
                             path_start_in_target,
                         );
-                        let to_add = &reference_iri
-                            [reference_positions.authority_end..reference_positions.path_end];
-                        if target_buffer.ends_with(b"/") {
+                        if target_buffer.ends_with('/') {
                             target_buffer.pop();
                             append_and_remove_dot_segments_with_extra_slash(
-                                to_add,
+                                r_path,
                                 target_buffer,
                                 path_start_in_target,
                             );
                         } else {
                             append_and_remove_dot_segments(
-                                to_add,
+                                r_path,
                                 target_buffer,
                                 path_start_in_target,
                             );
                         }
                     }
                 }
+                path_end = target_buffer.len();
+
                 // T.query = R.query;
-                target_buffer.extend_from_slice(
-                    &reference_iri[reference_positions.path_end..reference_positions.query_end],
-                );
+                target_buffer.push_str(r_query);
+                query_end = target_buffer.len();
             }
             // T.fragment = R.fragment;
-            target_buffer.extend_from_slice(
-                &reference_iri[reference_positions.query_end..reference_positions.fragment_end],
-            );
+            target_buffer.push_str(r_fragment);
+            fragment_end = target_buffer.len();
         }
     }
-    Ok(())
+    Ok(IriElementsPositions {
+        scheme_end,
+        authority_end,
+        path_end,
+        query_end,
+        fragment_end,
+    })
 }
 
 // RFC 3986 5.2.4 Remove Dot Segments
 fn append_and_remove_dot_segments(
-    mut input: &[u8],
-    output: &mut Vec<u8>,
+    mut input: &str,
+    output: &mut String,
     path_start_in_output: usize,
 ) {
     while !input.is_empty() {
-        if input.starts_with(b"../") {
+        if input.starts_with("../") {
             input = &input[3..];
-        } else if input.starts_with(b"./") || input.starts_with(b"/./") {
+        } else if input.starts_with("./") || input.starts_with("/./") {
             input = &input[2..];
-        } else if input == b"/." {
-            input = b"/";
-        } else if input.starts_with(b"/../") {
+        } else if input == "/." {
+            input = "/";
+        } else if input.starts_with("/../") {
             pop_last_segment(output, path_start_in_output);
             input = &input[3..];
-        } else if input == b"/.." {
+        } else if input == "/.." {
             pop_last_segment(output, path_start_in_output);
-            input = b"/";
-        } else if input == b"." || input == b".." {
-            input = b"";
+            input = "/";
+        } else if input == "." || input == ".." {
+            input = "";
         } else {
-            output.push(input[0]);
-            input = &input[1..];
-            while !input.is_empty() && input[0] != b'/' {
-                output.push(input[0]);
+            if input.starts_with('/') {
+                output.push('/');
                 input = &input[1..];
+            }
+            if let Some(i) = input.find('/') {
+                output.push_str(&input[..i]);
+                input = &input[i..];
+            } else {
+                output.push_str(input);
+                input = "";
             }
         }
     }
 }
 
-fn pop_last_segment(buffer: &mut Vec<u8>, path_start_in_buffer: usize) {
-    for i in (path_start_in_buffer..buffer.len()).rev() {
-        if buffer[i] == b'/' {
-            buffer.pop();
-            return;
-        }
-        buffer.pop();
+fn pop_last_segment(buffer: &mut String, path_start_in_buffer: usize) {
+    if let Some((last_slash_position, _)) = buffer[path_start_in_buffer..]
+        .char_indices()
+        .rev()
+        .find(|(_, c)| *c == '/')
+    {
+        buffer.truncate(last_slash_position + path_start_in_buffer)
     }
 }
 
 fn append_and_remove_dot_segments_with_extra_slash(
-    mut input: &[u8],
-    output: &mut Vec<u8>,
+    input: &str,
+    output: &mut String,
     path_start_in_output: usize,
 ) {
     if input.is_empty() {
-        output.push(b'/');
-    } else if input.starts_with(b"./") {
+        output.push('/');
+    } else if input.starts_with("./") {
         append_and_remove_dot_segments(&input[1..], output, path_start_in_output)
-    } else if input == b"." {
-        append_and_remove_dot_segments(b"/", output, path_start_in_output)
-    } else if input.starts_with(b"../") {
+    } else if input == "." {
+        append_and_remove_dot_segments("/", output, path_start_in_output)
+    } else if input.starts_with("../") {
         pop_last_segment(output, path_start_in_output);
         append_and_remove_dot_segments(&input[2..], output, path_start_in_output)
-    } else if input == b".." {
+    } else if input == ".." {
         pop_last_segment(output, path_start_in_output);
-        append_and_remove_dot_segments(b"/", output, path_start_in_output)
+        append_and_remove_dot_segments("/", output, path_start_in_output)
     } else {
-        output.push(b'/');
-        while !input.is_empty() && input[0] != b'/' {
-            output.push(input[0]);
-            input = &input[1..];
+        output.push('/');
+        if let Some(i) = input.find('/') {
+            output.push_str(&input[..i]);
+            append_and_remove_dot_segments(&input[i..], output, path_start_in_output)
+        } else {
+            output.push_str(input);
         }
-        append_and_remove_dot_segments(input, output, path_start_in_output)
     }
 }
 
@@ -271,7 +368,7 @@ fn parse_iri(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> 
     // IRI = scheme ":" ihier-part [ "?" iquery ] [ "#" ifragment ]
     let scheme_end = parse_scheme(value, start)?;
     if scheme_end >= value.len() || value[scheme_end] != b':' {
-        Err(scheme_end)?
+        return Err(scheme_end);
     }
 
     let (authority_end, path_end) = parse_ihier_part(value, scheme_end + 1)?;
@@ -373,7 +470,7 @@ fn parse_irelative_path(value: &[u8], start: usize) -> Result<(usize, usize), us
     }
 }
 
-fn parse_scheme(value: &[u8], start: usize) -> IriParserState {
+fn parse_scheme(value: &[u8], start: usize) -> IriState {
     //  scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
     if value.len() <= start || !is_alpha(value[start]) {
         return Err(start);
@@ -387,7 +484,7 @@ fn parse_scheme(value: &[u8], start: usize) -> IriParserState {
     Err(value.len())
 }
 
-fn parse_iauthority(value: &[u8], start: usize) -> IriParserState {
+fn parse_iauthority(value: &[u8], start: usize) -> IriState {
     // iauthority = [ iuserinfo "@" ] ihost [ ":" port ]
     //TODO: implement properly
     for (i, c) in value[start..].iter().enumerate() {
@@ -399,7 +496,7 @@ fn parse_iauthority(value: &[u8], start: usize) -> IriParserState {
     Ok(value.len())
 }
 
-fn parse_ipath_abempty(value: &[u8], start: usize) -> IriParserState {
+fn parse_ipath_abempty(value: &[u8], start: usize) -> IriState {
     // ipath-abempty  = *( "/" isegment )
     let mut i = start;
     while i < value.len() {
@@ -413,7 +510,7 @@ fn parse_ipath_abempty(value: &[u8], start: usize) -> IriParserState {
     Ok(value.len())
 }
 
-fn parse_ipath_absolute(value: &[u8], start: usize) -> IriParserState {
+fn parse_ipath_absolute(value: &[u8], start: usize) -> IriState {
     // ipath-absolute = "/" [ isegment-nz *( "/" isegment ) ] = "/" [ isegment-nz ipath-abempty ]
     if !value[start..].starts_with(b"/") {
         return Err(start);
@@ -431,19 +528,19 @@ fn parse_ipath_absolute(value: &[u8], start: usize) -> IriParserState {
     }
 }
 
-fn parse_ipath_noscheme(value: &[u8], start: usize) -> IriParserState {
+fn parse_ipath_noscheme(value: &[u8], start: usize) -> IriState {
     // ipath-noscheme = isegment-nz-nc *( "/" isegment ) =  isegment-nz-nc ipath-abempty
     let i = parse_isegment_nz_nc(value, start)?;
     parse_ipath_abempty(&value, i)
 }
 
-fn parse_ipath_rootless(value: &[u8], start: usize) -> IriParserState {
+fn parse_ipath_rootless(value: &[u8], start: usize) -> IriState {
     // ipath-rootless = isegment-nz *( "/" isegment ) = isegment-nz ipath-abempty
     let i = parse_isegment_nz(value, start)?;
     parse_ipath_abempty(value, i)
 }
 
-fn parse_isegment(value: &[u8], start: usize) -> IriParserState {
+fn parse_isegment(value: &[u8], start: usize) -> IriState {
     // isegment = *ipchar
     //TODO: implement properly
     for (i, c) in value[start..].iter().enumerate() {
@@ -455,7 +552,7 @@ fn parse_isegment(value: &[u8], start: usize) -> IriParserState {
     Ok(value.len())
 }
 
-fn parse_isegment_nz(value: &[u8], start: usize) -> IriParserState {
+fn parse_isegment_nz(value: &[u8], start: usize) -> IriState {
     // isegment-nz    = 1*ipchar
     let i = parse_isegment(value, start)?;
     if i == start {
@@ -465,7 +562,7 @@ fn parse_isegment_nz(value: &[u8], start: usize) -> IriParserState {
     }
 }
 
-fn parse_isegment_nz_nc(value: &[u8], start: usize) -> IriParserState {
+fn parse_isegment_nz_nc(value: &[u8], start: usize) -> IriState {
     // isegment-nz-nc = 1*( iunreserved / pct-encoded / sub-delims / "@" )
     //TODO: implement properly
     for (i, c) in value[start..].iter().enumerate() {
@@ -477,7 +574,7 @@ fn parse_isegment_nz_nc(value: &[u8], start: usize) -> IriParserState {
     Ok(value.len())
 }
 
-fn parse_iquery(value: &[u8], start: usize) -> IriParserState {
+fn parse_iquery(value: &[u8], start: usize) -> IriState {
     // iquery = *( ipchar / iprivate / "/" / "?" )
     //TODO: implement properly
     for (i, c) in value[start..].iter().enumerate() {
@@ -488,7 +585,7 @@ fn parse_iquery(value: &[u8], start: usize) -> IriParserState {
     Ok(value.len())
 }
 
-fn parse_ifragment(value: &[u8], _start: usize) -> IriParserState {
+fn parse_ifragment(value: &[u8], _start: usize) -> IriState {
     // ifragment = *( ipchar / "/" / "?" )
     //TODO: implement properly
     Ok(value.len())
@@ -537,18 +634,12 @@ fn test_parsing() {
     ];
 
     for e in &examples {
-        assert!(
-            validate_iri(e.as_bytes()).is_ok(),
-            "{} is not recognized as an IRI",
-            e
-        );
+        assert!(Iri::parse(*e).is_ok(), "{} is not recognized as an IRI", e);
     }
 }
 
 #[test]
 fn test_resolve_relative_iri() {
-    use std::str;
-
     let base = "http://a/b/c/d;p?q";
 
     let examples = [
@@ -594,24 +685,23 @@ fn test_resolve_relative_iri() {
         ("g#s/./x", "http://a/b/c/g#s/./x"),
         ("g#s/../x", "http://a/b/c/g#s/../x"),
         ("http:g", "http:g"),
+        ("./g:h", "http://a/b/c/g:h"),
     ];
 
-    let mut buffer = Vec::default();
-    let iri_parser = IriParser::new(base.as_bytes()).unwrap();
+    let base = Iri::parse(base).unwrap();
     for (input, output) in examples.iter() {
-        let result = iri_parser.resolve(input.as_bytes(), &mut buffer);
+        let result = base.resolve(input);
         assert!(
             result.is_ok(),
-            "Resolving of {} failed at byte {}",
+            "Resolving of {} failed with error: {}",
             input,
             result.unwrap_err()
         );
-        let result = str::from_utf8(&buffer).unwrap();
+        let result = result.unwrap().into_inner();
         assert_eq!(
             result, *output,
             "Resolving of {} is wrong. Found {} and expecting {}",
             input, result, output
         );
-        buffer.clear();
     }
 }
