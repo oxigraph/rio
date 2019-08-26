@@ -671,10 +671,11 @@ impl<R: BufRead> RdfXmlReader<R> {
         local_name: &[u8],
     ) -> Result<String, RdfXmlError> {
         Ok(match namespace {
-            Some(namespace) => self.reader.decode(namespace) + self.reader.decode(local_name),
-            None => self.reader.decode(local_name),
-        }
-        .to_string())
+            Some(namespace) => {
+                self.reader.decode(namespace)?.to_owned() + self.reader.decode(local_name)?
+            }
+            None => self.reader.decode(local_name)?.to_owned(),
+        })
     }
 
     fn build_node_elt<E: From<RdfXmlError>>(
@@ -976,7 +977,7 @@ fn convert_iri_attribute<B: BufRead>(
     reader: &Reader<B>,
 ) -> Result<OwnedNamedNode, RdfXmlError> {
     let value = attribute.unescaped_value()?;
-    let value = reader.decode(&value);
+    let value = reader.decode(&value)?;
     Ok(OwnedNamedNode {
         iri: if let Some(base_iri) = base_iri {
             base_iri.resolve(&value)
