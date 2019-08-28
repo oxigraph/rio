@@ -1,5 +1,5 @@
 use bencher::{benchmark_group, benchmark_main, Bencher};
-use rio_api::parser::{QuadParser, TripleParser};
+use rio_api::parser::{QuadsParser, TriplesParser};
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
     parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,

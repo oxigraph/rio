@@ -1,4 +1,4 @@
-use rio_api::parser::{QuadParser, TripleParser};
+use rio_api::parser::{QuadsParser, TriplesParser};
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::model::OwnedDataset;
 use rio_testsuite::parser_evaluator::*;

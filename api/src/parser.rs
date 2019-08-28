@@ -4,7 +4,7 @@ use crate::model::{Quad, Triple};
 use std::error::Error;
 
 /// A parser returning [`Triple`](../model/struct.Triple.html).
-pub trait TripleParser: Sized {
+pub trait TriplesParser: Sized {
     type Error: Error;
 
     /// Parses the complete file and calls `on_triple` each time a new triple is read.
@@ -49,19 +49,19 @@ pub trait TripleParser: Sized {
     }
 }
 
-/// Created with the method [`into_iter`](trait.TripleParser.html#method.into_iter).
+/// Created with the method [`into_iter`](trait.TriplesParser.html#method.into_iter).
 pub struct TriplesParserIterator<
     T,
     E: From<P::Error>,
     F: FnMut(Triple) -> Result<T, E>,
-    P: TripleParser,
+    P: TriplesParser,
 > {
     parser: P,
     buffer: Vec<T>,
     convert_triple: F,
 }
 
-impl<T, E: From<P::Error>, F: FnMut(Triple) -> Result<T, E>, P: TripleParser> Iterator
+impl<T, E: From<P::Error>, F: FnMut(Triple) -> Result<T, E>, P: TriplesParser> Iterator
     for TriplesParserIterator<T, E, F, P>
 {
     type Item = Result<T, E>;
@@ -88,7 +88,7 @@ impl<T, E: From<P::Error>, F: FnMut(Triple) -> Result<T, E>, P: TripleParser> It
 }
 
 /// A parser returning [`Quad`](../model/struct.Quad.html).
-pub trait QuadParser: Sized {
+pub trait QuadsParser: Sized {
     type Error: Error;
 
     /// Parses the complete file and calls `on_quad` each time a new quad is read.
@@ -133,15 +133,15 @@ pub trait QuadParser: Sized {
     }
 }
 
-/// Created with the method [`into_iter`](trait.QuadParser.html#method.into_iter).
-pub struct QuadsParserIterator<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser>
+/// Created with the method [`into_iter`](trait.QuadsParser.html#method.into_iter).
+pub struct QuadsParserIterator<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadsParser>
 {
     parser: P,
     buffer: Vec<T>,
     convert_quad: F,
 }
 
-impl<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadParser> Iterator
+impl<T, E: From<P::Error>, F: FnMut(Quad) -> Result<T, E>, P: QuadsParser> Iterator
     for QuadsParserIterator<T, E, F, P>
 {
     type Item = Result<T, E>;

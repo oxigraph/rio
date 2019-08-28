@@ -9,17 +9,17 @@ use std::io::BufRead;
 
 /// A [N-Triples](https://www.w3.org/TR/n-triples/) streaming parser.
 ///
-/// It implements the `TripleParser` trait.
+/// It implements the `TriplesParser` trait.
 ///
 /// Its memory consumption is linear in the size of the longest line of the file.
 /// It does not do any allocation during parsing except buffer resizing
 /// if a line significantly longer than the previous is encountered.
 ///
 ///
-/// Count the number of of people using the `TripleParser` API:
+/// Count the number of of people using the `TriplesParser` API:
 /// ```
 /// use rio_turtle::{NTriplesParser, TurtleError};
-/// use rio_api::parser::TripleParser;
+/// use rio_api::parser::TriplesParser;
 /// use rio_api::model::NamedNode;
 ///
 /// let file = b"<http://example.com/foo> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://schema.org/Person> .
@@ -58,7 +58,7 @@ impl<R: BufRead> NTriplesParser<R> {
     }
 }
 
-impl<R: BufRead> TripleParser for NTriplesParser<R> {
+impl<R: BufRead> TriplesParser for NTriplesParser<R> {
     type Error = TurtleError;
 
     fn parse_step<E: From<TurtleError>>(
@@ -90,17 +90,17 @@ impl<R: BufRead> TripleParser for NTriplesParser<R> {
 
 /// A [N-Quads](https://www.w3.org/TR/n-quads/) streaming parser.
 ///
-/// It implements the `QuadParser` trait.
+/// It implements the `QuadsParser` trait.
 ///
 /// Its memory consumption is linear in the size of the longest line of the file.
 /// It does not do any allocation during parsing except buffer resizing
 /// if a line significantly longer than the previous is encountered.
 ///
 ///
-/// Count the number of of people using the `QuadParser` API:
+/// Count the number of of people using the `QuadsParser` API:
 /// ```
 /// use rio_turtle::{NQuadsParser, TurtleError};
-/// use rio_api::parser::QuadParser;
+/// use rio_api::parser::QuadsParser;
 /// use rio_api::model::NamedNode;
 ///
 /// let file = b"<http://example.com/foo> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://schema.org/Person> <http://example.com/> .
@@ -141,7 +141,7 @@ impl<R: BufRead> NQuadsParser<R> {
     }
 }
 
-impl<R: BufRead> QuadParser for NQuadsParser<R> {
+impl<R: BufRead> QuadsParser for NQuadsParser<R> {
     type Error = TurtleError;
 
     fn parse_step<E: From<TurtleError>>(

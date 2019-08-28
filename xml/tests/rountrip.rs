@@ -1,6 +1,6 @@
 use rio_api::formatter::TriplesFormatter;
 use rio_api::model::*;
-use rio_api::parser::TripleParser;
+use rio_api::parser::TriplesParser;
 use rio_xml::{RdfXmlError, RdfXmlFormatter, RdfXmlParser};
 use std::io::Cursor;
 

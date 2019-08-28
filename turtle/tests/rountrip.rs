@@ -1,6 +1,6 @@
 use rio_api::formatter::{QuadsFormatter, TriplesFormatter};
 use rio_api::model::*;
-use rio_api::parser::{QuadParser, TripleParser};
+use rio_api::parser::{QuadsParser, TriplesParser};
 use rio_turtle::{
     NQuadsFormatter, NQuadsParser, NTriplesFormatter, NTriplesParser, TriGFormatter, TriGParser,
     TurtleError, TurtleFormatter, TurtleParser,

@@ -3,7 +3,7 @@
 //! How to read a file `foo.rdf` and count the number of `rdf:type` triples:
 //! ```no_run
 //! use rio_xml::{RdfXmlParser, RdfXmlError};
-//! use rio_api::parser::TripleParser;
+//! use rio_api::parser::TriplesParser;
 //! use rio_api::model::NamedNode;
 //! use std::io::BufReader;
 //! use std::fs::File;

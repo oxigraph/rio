@@ -1,7 +1,7 @@
 use quick_xml::events::*;
 use quick_xml::{Reader, Writer};
 use rio_api::model::*;
-use rio_api::parser::TripleParser;
+use rio_api::parser::TriplesParser;
 use std::io::BufRead;
 use std::str;
 
@@ -13,17 +13,17 @@ use std::collections::HashSet;
 
 /// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 ///
-/// It implements the `TripleParser` trait.
+/// It implements the `TriplesParser` trait.
 /// It reads the file in streaming. It does not keep data in memory except a stack for handling nested XML tags
 /// and a set of all seen `rdf:ID`s to detect duplicate ids and fail according to the specification.
 ///
 /// Its performances are not optimized yet and hopefully could be significantly enhanced by reducing the
 /// number of allocations and copies done by the parser.
 ///
-/// Count the number of of people using the `TripleParser` API without proper error management:
+/// Count the number of of people using the `TriplesParser` API without proper error management:
 /// ```
 /// use rio_xml::{RdfXmlParser, RdfXmlError};
-/// use rio_api::parser::TripleParser;
+/// use rio_api::parser::TriplesParser;
 /// use rio_api::model::NamedNode;
 ///
 /// let file = b"<?xml version=\"1.0\"?>
@@ -81,7 +81,7 @@ impl<R: BufRead> RdfXmlParser<R> {
     }
 }
 
-impl<R: BufRead> TripleParser for RdfXmlParser<R> {
+impl<R: BufRead> TriplesParser for RdfXmlParser<R> {
     type Error = RdfXmlError;
 
     fn parse_step<E: From<RdfXmlError>>(

@@ -5,20 +5,20 @@ use crate::shared::*;
 use crate::utils::*;
 use rio_api::iri::Iri;
 use rio_api::model::*;
-use rio_api::parser::{QuadParser, TripleParser};
+use rio_api::parser::{QuadsParser, TriplesParser};
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::str;
 
 /// A [Turtle](https://www.w3.org/TR/turtle/) streaming parser.
 ///
-/// It implements the `TripleParser` trait.
+/// It implements the `TriplesParser` trait.
 ///
 ///
-/// Count the number of of people using the `TripleParser` API:
+/// Count the number of of people using the `TriplesParser` API:
 /// ```
 /// use rio_turtle::{TurtleParser, TurtleError};
-/// use rio_api::parser::TripleParser;
+/// use rio_api::parser::TriplesParser;
 /// use rio_api::model::NamedNode;
 ///
 /// let file = b"@prefix schema: <http://schema.org/> .
@@ -78,7 +78,7 @@ impl<R: BufRead> TurtleParser<R> {
     }
 }
 
-impl<R: BufRead> TripleParser for TurtleParser<R> {
+impl<R: BufRead> TriplesParser for TurtleParser<R> {
     type Error = TurtleError;
 
     fn parse_step<E: From<TurtleError>>(
@@ -95,13 +95,13 @@ impl<R: BufRead> TripleParser for TurtleParser<R> {
 
 /// A [TriG](https://www.w3.org/TR/trig/) streaming parser.
 ///
-/// It implements the `QuadParser` trait.
+/// It implements the `QuadsParser` trait.
 ///
 ///
-/// Count the number of of people using the `QuadParser` API:
+/// Count the number of of people using the `QuadsParser` API:
 /// ```
 /// use rio_turtle::{TriGParser, TurtleError};
-/// use rio_api::parser::QuadParser;
+/// use rio_api::parser::QuadsParser;
 /// use rio_api::model::NamedNode;
 ///
 /// let file = b"@prefix schema: <http://schema.org/> .
@@ -140,7 +140,7 @@ impl<R: BufRead> TriGParser<R> {
     }
 }
 
-impl<R: BufRead> QuadParser for TriGParser<R> {
+impl<R: BufRead> QuadsParser for TriGParser<R> {
     type Error = TurtleError;
 
     fn parse_step<E: From<TurtleError>>(
