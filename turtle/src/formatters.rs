@@ -104,21 +104,32 @@ impl<W: Write> QuadsFormatter for NQuadsFormatter<W> {
 ///     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into()
 /// }).unwrap();
-/// let ntriples = formatter.finish();
+/// let turtle = formatter.finish().unwrap();
 /// ```
 pub struct TurtleFormatter<W: Write> {
     write: W,
+    current_subject: String,
+    current_subject_type: Option<NamedOrBlankNodeType>,
+    current_predicate: String,
 }
 
 impl<W: Write> TurtleFormatter<W> {
     /// Builds a new formatter from a `Write` implementation
     pub fn new(write: W) -> Self {
-        Self { write }
+        Self {
+            write,
+            current_subject: String::default(),
+            current_subject_type: None,
+            current_predicate: String::default(),
+        }
     }
 
     /// Finishes to write and returns the underlying `Write`
-    pub fn finish(self) -> W {
-        self.write
+    pub fn finish(mut self) -> Result<W, io::Error> {
+        if self.current_subject_type.is_some() {
+            writeln!(self.write, " .")?;
+        }
+        Ok(self.write)
     }
 }
 
@@ -126,7 +137,44 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
     type Error = io::Error;
 
     fn format(&mut self, triple: &Triple) -> Result<(), io::Error> {
-        writeln!(self.write, "{}", triple)
+        if let Some(current_subject_type) = self.current_subject_type {
+            let current_subject = current_subject_type.with_value(&self.current_subject);
+            if current_subject == triple.subject {
+                if self.current_predicate == *triple.predicate.iri {
+                    write!(self.write, " , {}", triple.object)?;
+                } else {
+                    write!(self.write, " ;\n\t{} {}", triple.predicate, triple.object)?;
+                }
+            } else {
+                write!(
+                    self.write,
+                    " .\n{} {} {}",
+                    triple.subject, triple.predicate, triple.object
+                )?;
+            }
+        } else {
+            write!(
+                self.write,
+                "{} {} {}",
+                triple.subject, triple.predicate, triple.object
+            )?;
+        }
+
+        self.current_subject.clear();
+        match triple.subject {
+            NamedOrBlankNode::NamedNode(n) => {
+                self.current_subject.push_str(n.iri);
+                self.current_subject_type = Some(NamedOrBlankNodeType::NamedNode);
+            }
+            NamedOrBlankNode::BlankNode(n) => {
+                self.current_subject.push_str(n.id);
+                self.current_subject_type = Some(NamedOrBlankNodeType::BlankNode);
+            }
+        }
+        self.current_predicate.clear();
+        self.current_predicate.push_str(triple.predicate.iri);
+
+        Ok(())
     }
 }
 
@@ -147,21 +195,39 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into(),
 ///     graph_name: Some(NamedNode { iri: "http://example.com/" }.into())
 /// }).unwrap();
-/// let nquads = formatter.finish();
+/// let trig = formatter.finish().unwrap();
 /// ```
 pub struct TriGFormatter<W: Write> {
     write: W,
+    current_graph_name: String,
+    current_graph_name_type: Option<Option<NamedOrBlankNodeType>>,
+    current_subject: String,
+    current_subject_type: Option<NamedOrBlankNodeType>,
+    current_predicate: String,
 }
 
 impl<W: Write> TriGFormatter<W> {
     /// Builds a new formatter from a `Write` implementation
     pub fn new(write: W) -> Self {
-        Self { write }
+        Self {
+            write,
+            current_graph_name: String::default(),
+            current_graph_name_type: None,
+            current_subject: String::default(),
+            current_subject_type: None,
+            current_predicate: String::default(),
+        }
     }
 
     /// Finishes to write and returns the underlying `Write`
-    pub fn finish(self) -> W {
-        self.write
+    pub fn finish(mut self) -> Result<W, io::Error> {
+        if self.current_subject_type.is_some() {
+            writeln!(self.write, " .")?;
+        }
+        if self.current_graph_name_type.and_then(|t| t).is_some() {
+            writeln!(self.write, "}}")?;
+        }
+        Ok(self.write)
     }
 }
 
@@ -169,15 +235,107 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
     type Error = io::Error;
 
     fn format(&mut self, quad: &Quad) -> Result<(), io::Error> {
-        let triple = Triple {
-            subject: quad.subject,
-            predicate: quad.predicate,
-            object: quad.object,
-        };
-        if let Some(graph_name) = quad.graph_name {
-            writeln!(self.write, "{} {{ {} }}", graph_name, triple)
+        if let Some(current_graph_name_type) = self.current_graph_name_type {
+            let current_graph_name =
+                current_graph_name_type.map(|t| t.with_value(&self.current_graph_name));
+            if current_graph_name == quad.graph_name {
+                if let Some(current_subject_type) = self.current_subject_type {
+                    let current_subject = current_subject_type.with_value(&self.current_subject);
+                    if current_subject == quad.subject {
+                        if self.current_predicate == *quad.predicate.iri {
+                            write!(self.write, " , {}", quad.object)?;
+                        } else {
+                            write!(self.write, " ;\n\t\t{} {}", quad.predicate, quad.object)?;
+                        }
+                    } else {
+                        write!(
+                            self.write,
+                            " .\n\t{} {} {}",
+                            quad.subject, quad.predicate, quad.object
+                        )?;
+                    }
+                } else {
+                    write!(
+                        self.write,
+                        "{} {} {}",
+                        quad.subject, quad.predicate, quad.object
+                    )?;
+                }
+            } else {
+                if self.current_graph_name_type.and_then(|t| t).is_some() {
+                    writeln!(self.write, " .\n}}")?;
+                } else {
+                    writeln!(self.write, " .")?;
+                }
+                if let Some(graph_name) = quad.graph_name {
+                    write!(
+                        self.write,
+                        "{} {{\n\t{} {} {}",
+                        graph_name, quad.subject, quad.predicate, quad.object
+                    )?;
+                } else {
+                    write!(
+                        self.write,
+                        "{} {} {}",
+                        quad.subject, quad.predicate, quad.object
+                    )?;
+                }
+            }
+        } else if let Some(graph_name) = quad.graph_name {
+            write!(
+                self.write,
+                "{} {{\n\t{} {} {}",
+                graph_name, quad.subject, quad.predicate, quad.object
+            )?;
         } else {
-            writeln!(self.write, "{}", triple)
+            write!(
+                self.write,
+                "{} {} {}",
+                quad.subject, quad.predicate, quad.object
+            )?;
+        }
+
+        self.current_graph_name.clear();
+        match quad.graph_name {
+            Some(NamedOrBlankNode::NamedNode(n)) => {
+                self.current_graph_name.push_str(n.iri);
+                self.current_graph_name_type = Some(Some(NamedOrBlankNodeType::NamedNode));
+            }
+            Some(NamedOrBlankNode::BlankNode(n)) => {
+                self.current_graph_name.push_str(n.id);
+                self.current_graph_name_type = Some(Some(NamedOrBlankNodeType::BlankNode));
+            }
+            None => self.current_graph_name_type = Some(None),
+        }
+        self.current_subject.clear();
+        match quad.subject {
+            NamedOrBlankNode::NamedNode(n) => {
+                self.current_subject.push_str(n.iri);
+                self.current_subject_type = Some(NamedOrBlankNodeType::NamedNode);
+            }
+            NamedOrBlankNode::BlankNode(n) => {
+                self.current_subject.push_str(n.id);
+                self.current_subject_type = Some(NamedOrBlankNodeType::BlankNode);
+            }
+        }
+        self.current_predicate.clear();
+        self.current_predicate.push_str(quad.predicate.iri);
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone)]
+enum NamedOrBlankNodeType {
+    NamedNode,
+    BlankNode,
+}
+
+impl NamedOrBlankNodeType {
+    fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
+        match self {
+            NamedOrBlankNodeType::NamedNode => NamedNode { iri: value }.into(),
+            NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
         }
     }
 }

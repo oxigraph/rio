@@ -57,7 +57,7 @@ fn turtle_roundtrip() -> Result<(), TurtleError> {
     for t in &graph {
         formatter.format(t)?;
     }
-    let turtle = formatter.finish();
+    let turtle = formatter.finish()?;
 
     let mut count = 0;
     TurtleParser::new(Cursor::new(&turtle), "")?.parse_all(&mut |_| {
@@ -78,7 +78,7 @@ fn trig_roundtrip() -> Result<(), TurtleError> {
     for q in &dataset {
         formatter.format(q)?;
     }
-    let trig = formatter.finish();
+    let trig = formatter.finish()?;
 
     let mut count = 0;
     TriGParser::new(Cursor::new(&trig), "")?.parse_all(&mut |_| {
@@ -133,7 +133,7 @@ fn example_graph() -> Vec<Triple<'static>> {
         },
         Triple {
             subject: foo.into(),
-            predicate: bar,
+            predicate: foo,
             object: datatype.into(),
         },
         Triple {
