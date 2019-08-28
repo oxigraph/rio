@@ -26,12 +26,17 @@
 //! `NTriplesParser` and `NQuadsParser` do not use the second argument of the `new` function that is the IRI of the file.
 
 mod error;
+mod formatters;
 mod ntriples;
 mod shared;
 mod turtle;
 mod utils;
 
 pub use error::TurtleError;
+pub use formatters::NQuadsFormatter;
+pub use formatters::NTriplesFormatter;
+pub use formatters::TriGFormatter;
+pub use formatters::TurtleFormatter;
 pub use ntriples::NQuadsParser;
 pub use ntriples::NTriplesParser;
 pub use turtle::TriGParser;
