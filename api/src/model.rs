@@ -61,8 +61,8 @@ impl<'a> fmt::Display for BlankNode<'a> {
 /// use rio_api::model::Literal;
 ///
 /// assert_eq!(
-///     "\"foo\\tbar\"",
-///     Literal::Simple { value: "foo\tbar" }.to_string()
+///     "\"foo\\nbar\"",
+///     Literal::Simple { value: "foo\nbar" }.to_string()
 /// );
 ///
 /// assert_eq!(
@@ -289,12 +289,10 @@ impl EscapeRDF {
     fn new(c: char) -> Self {
         Self {
             state: match c {
-                '\t' => EscapeRdfState::Backslash('t'),
-                '\u{08}' => EscapeRdfState::Backslash('b'),
                 '\n' => EscapeRdfState::Backslash('n'),
                 '\r' => EscapeRdfState::Backslash('r'),
-                '\u{0C}' => EscapeRdfState::Backslash('f'),
-                '\\' | '\'' | '"' => EscapeRdfState::Backslash(c),
+                '"' => EscapeRdfState::Backslash('"'),
+                '\\' => EscapeRdfState::Backslash('\\'),
                 c => EscapeRdfState::Char(c),
             },
         }
