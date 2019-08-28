@@ -1,13 +1,13 @@
 [package]
 name = "rio_turtle"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
 keywords = ["RDF", "Turtle", "TriG", "N-Triples", "N-Quads"]
 repository = "https://github.com/Tpt/rio"
 description = """
-RDF Turtle, Trig, N-Triples and N-Quads parsers
+RDF Turtle, Trig, N-Triples and N-Quads parsers and serializers
 """
 edition = "2018"
 
@@ -17,4 +17,4 @@ is-it-maintained-issue-resolution = { repository = "Tpt/rio" }
 is-it-maintained-open-issues = { repository = "Tpt/rio" }
 
 [dependencies]
-rio_api = "0.2"
+rio_api = "0.3"

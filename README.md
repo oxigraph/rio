@@ -4,18 +4,18 @@ Rio
 [![Build Status](https://travis-ci.org/Tpt/rio.svg?branch=master)](https://travis-ci.org/Tpt/rio)
 [![dependency status](https://deps.rs/repo/github/Tpt/rudf/status.svg)](https://deps.rs/repo/github/Tpt/rio)
 
-Rio is a low level library which provides conformant and fast parsers for RDF related file formats.
+Rio is a low level library which provides conformant and fast parsers and formatters for RDF related file formats.
 
-It currently provides [N-Triples](https://docs.rs/rio_turtle/latest/rio_turtle/struct.NTriplesParser.html), [N-Quads](https://docs.rs/rio_turtle/latest/rio_turtle/struct.NQuadsParser.html), [Turtle](https://docs.rs/rio_turtle/latest/rio_turtle/struct.TurtleParser.html), [TriG](https://docs.rs/rio_turtle/latest/rio_turtle/struct.TrigParser.html) and [RDF XML](https://docs.rs/rio_xml/latest/rio_xml/struct.RdfXmlParser.html) parsers.
+It currently provides [N-Triples](https://docs.rs/rio_turtle/latest/rio_turtle/struct.NTriplesParser.html), [N-Quads](https://docs.rs/rio_turtle/latest/rio_turtle/struct.NQuadsParser.html), [Turtle](https://docs.rs/rio_turtle/latest/rio_turtle/struct.TurtleParser.html), [TriG](https://docs.rs/rio_turtle/latest/rio_turtle/struct.TrigParser.html) and [RDF XML](https://docs.rs/rio_xml/latest/rio_xml/struct.RdfXmlParser.html) parsers and formatters.
 
 It is split into multiple crates:
 * `rio_api` provides common traits and data structures to be used in Rio parsers (`Triple`, `TriplesParser`, `Iri`...).
   [![Latest Version](https://img.shields.io/crates/v/rio_api.svg)](https://crates.io/crates/rio_api) 
   [![Latest Documentation](https://img.shields.io/static/v1?label=documentation&message=latest&color=informational)](https://docs.rs/rio_api/)
-* `rio_turtle` provides conformant streaming parsers for [Turtle](https://www.w3.org/TR/turtle/), [TriG](https://www.w3.org/TR/trig/), [N-Triples](https://www.w3.org/TR/n-triples/) and [N-Quads](https://www.w3.org/TR/n-quads/).
+* `rio_turtle` provides conformant streaming parsers and formatters for [Turtle](https://www.w3.org/TR/turtle/), [TriG](https://www.w3.org/TR/trig/), [N-Triples](https://www.w3.org/TR/n-triples/) and [N-Quads](https://www.w3.org/TR/n-quads/).
   [![Latest Version](https://img.shields.io/crates/v/rio_turtle.svg)](https://crates.io/crates/rio_turtle)
   [![Latest Documentation](https://img.shields.io/static/v1?label=documentation&message=latest&color=informational)](https://docs.rs/rio_turtle/)
-* `rio_xml` provides a conformant streaming parser for [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/).
+* `rio_xml` provides a conformant streaming parser and a formatter for [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/).
   [![Latest Version](https://img.shields.io/crates/v/rio_xml.svg)](https://crates.io/crates/rio_xml)
   [![Latest Documentation](https://img.shields.io/static/v1?label=documentation&message=latest&color=informational)](https://docs.rs/rio_xml/)
 

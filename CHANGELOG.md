@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0] - 2019-08-28
+
+### Added
+- `TriplesFormatter` and `QuadsFormatter` with implementations for NTriples, NQuads, Turtle, TriG and RDF XML.
+- `Iri` to `rio_api` that allows to do partial IRI validation and resolution.
+- `ParseError::textual_position` that allows to get the error position from a `TurtleError` or a `RdfXmlError`.
+
+### Changed
+- `TripleParser` have been renamed to `TriplesParser` for consistency.
+- `QuadParser` have been renamed to `QuadsParser` for consistency.
+- `TriplesParser::parse_step` and `TriplesParser::parse_all` `on_triple` callbacks should now return a `Result`.
+  It allows library user to return more easily errors from their callback code.
+  The same change have been applied to `QuadsParser`.
+- Literals formatting only escape the characters required by the canonical NTriples syntax.
+
 ## [0.2.0] - 2019-08-11
 
 ### Added
