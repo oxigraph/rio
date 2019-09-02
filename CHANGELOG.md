@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.1] - 2019-09-02
+
+### Added
+- `Iri::as_str` and `Display` implementation to `rio_api`.
+
 ## [0.3.0] - 2019-08-28
 
 ### Added

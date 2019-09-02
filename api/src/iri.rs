@@ -104,8 +104,19 @@ impl<T: Deref<Target = str>> Iri<T> {
     }
 
     /// Returns the underlying IRI representation.
+    pub fn as_str(&self) -> &str {
+        &self.iri
+    }
+
+    /// Returns the underlying IRI representation.
     pub fn into_inner(self) -> T {
         self.iri
+    }
+}
+
+impl<T: Deref<Target=str> + fmt::Display> fmt::Display for Iri<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.iri.fmt(f)
     }
 }
 
