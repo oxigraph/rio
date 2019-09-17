@@ -10,8 +10,3 @@ description = """
 Common data structures for RDF formats parsers and serializers
 """
 edition = "2018"
-
-[badges]
-travis-ci = { repository = "Tpt/rio" }
-is-it-maintained-issue-resolution = { repository = "Tpt/rio" }
-is-it-maintained-open-issues = { repository = "Tpt/rio" }

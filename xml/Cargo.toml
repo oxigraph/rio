@@ -11,11 +11,6 @@ RDF/XML parser and serializer
 """
 edition = "2018"
 
-[badges]
-travis-ci = { repository = "Tpt/rio" }
-is-it-maintained-issue-resolution = { repository = "Tpt/rio" }
-is-it-maintained-open-issues = { repository = "Tpt/rio" }
-
 [dependencies]
 rio_api = "0.3"
 quick-xml = "0.16"

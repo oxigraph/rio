@@ -1,7 +1,7 @@
 Rio
 ===
 
-[![Build Status](https://travis-ci.org/Tpt/rio.svg?branch=master)](https://travis-ci.org/Tpt/rio)
+[![actions status](https://github.com/Tpt/rio/workflows/build/badge.svg)](https://github.com/Tpt/rio/actions)
 [![dependency status](https://deps.rs/repo/github/Tpt/rudf/status.svg)](https://deps.rs/repo/github/Tpt/rio)
 
 Rio is a low level library which provides conformant and fast parsers and formatters for RDF related file formats.
