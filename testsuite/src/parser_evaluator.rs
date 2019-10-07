@@ -63,7 +63,7 @@ pub fn evaluate_parser_tests(
                                 },
                             }
                         } else {
-                            Err(TestManifestError::InvalidTestResult(test.id.clone()))?
+                            return Err(TestManifestError::InvalidTestResult(test.id.clone()).into())
                         }
                     }
                     Err(e) => TestOutcome::Failed {
@@ -71,7 +71,7 @@ pub fn evaluate_parser_tests(
                     },
                 }
             } else {
-                Err(TestManifestError::InvalidTestType(test.kind.clone()))?
+                return Err(TestManifestError::InvalidTestType(test.kind.clone()).into())
             };
             Ok(TestResult {
                 test: test.id,

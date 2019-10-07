@@ -114,7 +114,7 @@ impl<T: Deref<Target = str>> Iri<T> {
     }
 }
 
-impl<T: Deref<Target=str> + fmt::Display> fmt::Display for Iri<T> {
+impl<T: Deref<Target = str> + fmt::Display> fmt::Display for Iri<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.iri.fmt(f)
     }

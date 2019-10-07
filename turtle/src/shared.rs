@@ -56,7 +56,7 @@ fn parse_iriref(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Resul
                 };
                 match c {
                     '\0'..=' ' | '<' | '>' | '"' | '{' | '}' | '|' | '^' | '`' => {
-                        Err(read.parse_error(TurtleErrorKind::UnexpectedByte(c as u8)))?
+                        return Err(read.parse_error(TurtleErrorKind::UnexpectedByte(c as u8)))
                     }
                     c => buffer.push(c),
                 }
