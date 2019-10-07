@@ -1,4 +1,4 @@
-use bencher::{benchmark_group, benchmark_main, Bencher};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use rio_api::parser::{QuadsParser, TriplesParser};
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
@@ -68,61 +68,68 @@ fn trig_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     )
 }
 
-fn parse_ntriples(bench: &mut Bencher, data: Vec<u8>) {
-    bench.bytes = data.len() as u64;
-    bench.iter(|| {
+fn parse_bench(c: &mut Criterion, name: &str, data: Vec<u8>, bench: impl Fn(&[u8])) {
+    let mut group = c.benchmark_group(name);
+    group.throughput(Throughput::Bytes(data.len() as u64));
+    group.bench_function("parse", |b| b.iter(|| bench(&data)));
+    group.finish();
+}
+
+fn parse_ntriples(c: &mut Criterion, data: Vec<u8>) {
+    parse_bench(c, "ntriples", data, |data| {
         let mut count: usize = 0;
-        NTriplesParser::new(data.as_slice())
+        NTriplesParser::new(data)
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
             })
+            .unwrap();
     });
 }
 
-fn parse_nquads(bench: &mut Bencher, data: Vec<u8>) {
-    bench.bytes = data.len() as u64;
-    bench.iter(|| {
+fn parse_nquads(c: &mut Criterion, data: Vec<u8>) {
+    parse_bench(c, "nquads", data, |data| {
         let mut count: usize = 0;
-        NQuadsParser::new(data.as_slice())
+        NQuadsParser::new(data)
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
             })
+            .unwrap();
     });
 }
 
-fn parse_turtle(bench: &mut Bencher, data: Vec<u8>) {
-    bench.bytes = data.len() as u64;
-    bench.iter(|| {
+fn parse_turtle(c: &mut Criterion, data: Vec<u8>) {
+    parse_bench(c, "turtle", data, |data| {
         let mut count: usize = 0;
-        TurtleParser::new(data.as_slice(), "http://example.com/ex")
+        TurtleParser::new(data, "http://example.com/ex")
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
             })
+            .unwrap();
     });
 }
 
-fn parse_trig(bench: &mut Bencher, data: Vec<u8>) {
-    bench.bytes = data.len() as u64;
-    bench.iter(|| {
+fn parse_trig(c: &mut Criterion, data: Vec<u8>) {
+    parse_bench(c, "trig", data, |data| {
         let mut count: usize = 0;
-        TriGParser::new(data.as_slice(), "http://example.com/ex")
+        TriGParser::new(data, "http://example.com/ex")
             .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
             })
+            .unwrap();
     });
 }
 
-fn bench_parse_ntriples_with_ntriples(bench: &mut Bencher) {
+fn bench_parse_ntriples_with_ntriples(c: &mut Criterion) {
     parse_ntriples(
-        bench,
+        c,
         match ntriples_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -133,9 +140,9 @@ fn bench_parse_ntriples_with_ntriples(bench: &mut Bencher) {
     )
 }
 
-fn bench_parse_ntriples_with_turtle(bench: &mut Bencher) {
+fn bench_parse_ntriples_with_turtle(c: &mut Criterion) {
     parse_turtle(
-        bench,
+        c,
         match ntriples_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -146,9 +153,9 @@ fn bench_parse_ntriples_with_turtle(bench: &mut Bencher) {
     )
 }
 
-fn bench_parse_nquads_with_nquads(bench: &mut Bencher) {
+fn bench_parse_nquads_with_nquads(c: &mut Criterion) {
     parse_nquads(
-        bench,
+        c,
         match nquads_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -159,9 +166,9 @@ fn bench_parse_nquads_with_nquads(bench: &mut Bencher) {
     )
 }
 
-fn bench_parse_turtle_with_turtle(bench: &mut Bencher) {
+fn bench_parse_turtle_with_turtle(c: &mut Criterion) {
     parse_turtle(
-        bench,
+        c,
         match turtle_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -172,9 +179,9 @@ fn bench_parse_turtle_with_turtle(bench: &mut Bencher) {
     )
 }
 
-fn bench_parse_trig_with_trig(bench: &mut Bencher) {
+fn bench_parse_trig_with_trig(c: &mut Criterion) {
     parse_trig(
-        bench,
+        c,
         match trig_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -185,7 +192,7 @@ fn bench_parse_trig_with_trig(bench: &mut Bencher) {
     )
 }
 
-benchmark_group!(
+criterion_group!(
     w3c_testsuite,
     bench_parse_ntriples_with_ntriples,
     bench_parse_ntriples_with_turtle,
@@ -193,4 +200,4 @@ benchmark_group!(
     bench_parse_turtle_with_turtle,
     bench_parse_trig_with_trig
 );
-benchmark_main!(w3c_testsuite);
+criterion_main!(w3c_testsuite);
