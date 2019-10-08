@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use rio_api::parser::{QuadsParser, TriplesParser};
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::{
@@ -68,15 +68,23 @@ fn trig_test_data() -> Result<Vec<u8>, Box<dyn Error>> {
     )
 }
 
-fn parse_bench(c: &mut Criterion, name: &str, data: Vec<u8>, bench: impl Fn(&[u8])) {
-    let mut group = c.benchmark_group(name);
+fn parse_bench(
+    c: &mut Criterion,
+    parser_name: &str,
+    data_name: &str,
+    data: Vec<u8>,
+    bench: impl Fn(&[u8]),
+) {
+    let mut group = c.benchmark_group(parser_name);
     group.throughput(Throughput::Bytes(data.len() as u64));
-    group.bench_function("parse", |b| b.iter(|| bench(&data)));
+    group.bench_with_input(BenchmarkId::from_parameter(data_name), &data, |b, data| {
+        b.iter(|| bench(&data))
+    });
     group.finish();
 }
 
-fn parse_ntriples(c: &mut Criterion, data: Vec<u8>) {
-    parse_bench(c, "ntriples", data, |data| {
+fn parse_ntriples(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    parse_bench(c, "ntriples", name, data, |data| {
         let mut count: usize = 0;
         NTriplesParser::new(data)
             .unwrap()
@@ -88,8 +96,8 @@ fn parse_ntriples(c: &mut Criterion, data: Vec<u8>) {
     });
 }
 
-fn parse_nquads(c: &mut Criterion, data: Vec<u8>) {
-    parse_bench(c, "nquads", data, |data| {
+fn parse_nquads(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    parse_bench(c, "nquads", name, data, |data| {
         let mut count: usize = 0;
         NQuadsParser::new(data)
             .unwrap()
@@ -101,8 +109,8 @@ fn parse_nquads(c: &mut Criterion, data: Vec<u8>) {
     });
 }
 
-fn parse_turtle(c: &mut Criterion, data: Vec<u8>) {
-    parse_bench(c, "turtle", data, |data| {
+fn parse_turtle(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    parse_bench(c, "turtle", name, data, |data| {
         let mut count: usize = 0;
         TurtleParser::new(data, "http://example.com/ex")
             .unwrap()
@@ -114,8 +122,8 @@ fn parse_turtle(c: &mut Criterion, data: Vec<u8>) {
     });
 }
 
-fn parse_trig(c: &mut Criterion, data: Vec<u8>) {
-    parse_bench(c, "trig", data, |data| {
+fn parse_trig(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    parse_bench(c, "trig", name, data, |data| {
         let mut count: usize = 0;
         TriGParser::new(data, "http://example.com/ex")
             .unwrap()
@@ -130,6 +138,7 @@ fn parse_trig(c: &mut Criterion, data: Vec<u8>) {
 fn bench_parse_ntriples_with_ntriples(c: &mut Criterion) {
     parse_ntriples(
         c,
+        "ntriples",
         match ntriples_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -143,6 +152,7 @@ fn bench_parse_ntriples_with_ntriples(c: &mut Criterion) {
 fn bench_parse_ntriples_with_turtle(c: &mut Criterion) {
     parse_turtle(
         c,
+        "ntriples",
         match ntriples_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -156,6 +166,7 @@ fn bench_parse_ntriples_with_turtle(c: &mut Criterion) {
 fn bench_parse_nquads_with_nquads(c: &mut Criterion) {
     parse_nquads(
         c,
+        "nquads",
         match nquads_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -169,6 +180,7 @@ fn bench_parse_nquads_with_nquads(c: &mut Criterion) {
 fn bench_parse_turtle_with_turtle(c: &mut Criterion) {
     parse_turtle(
         c,
+        "turtle",
         match turtle_test_data() {
             Ok(d) => d,
             Err(e) => {
@@ -182,6 +194,7 @@ fn bench_parse_turtle_with_turtle(c: &mut Criterion) {
 fn bench_parse_trig_with_trig(c: &mut Criterion) {
     parse_trig(
         c,
+        "trig",
         match trig_test_data() {
             Ok(d) => d,
             Err(e) => {
