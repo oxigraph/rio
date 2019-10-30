@@ -78,7 +78,8 @@ impl<R: BufRead> LookAheadLineBasedByteReader<R> {
     pub fn new(inner: R) -> Result<Self, TurtleError> {
         let mut this = Self {
             inner,
-            line: Vec::default(),
+            line: vec![10], // emulates an empty line,
+            // so that the first call to consume() does not stop as if EOF
             current: EOF,
             line_offset: 0,
             byte_offset: 0,
@@ -99,17 +100,9 @@ impl<R: BufRead> LookAheadByteRead for LookAheadLineBasedByteReader<R> {
         self.line.get(self.byte_offset + count).cloned()
     }
 
+    #[inline]
     fn consume(&mut self) -> Result<(), TurtleError> {
-        //TODO: define from consume many?
-        self.byte_offset += 1;
-        if self.byte_offset >= self.line.len() {
-            self.line.clear();
-            self.inner.read_until(b'\n', &mut self.line)?;
-            self.line_offset += 1;
-            self.byte_offset = 0;
-        }
-        self.current = self.line.get(self.byte_offset).cloned().unwrap_or(EOF);
-        Ok(())
+        self.consume_many(1)
     }
 
     fn consume_many(&mut self, count: usize) -> Result<(), TurtleError> {
