@@ -43,8 +43,8 @@ impl fmt::Display for TurtleError {
             write!(
                 f,
                 " on line {} at position {}",
-                position.line_number() + 1,
-                position.byte_number() + 1
+                position.line_number(),
+                position.byte_number(),
             )?;
         }
         Ok(())
