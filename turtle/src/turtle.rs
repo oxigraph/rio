@@ -55,7 +55,7 @@ impl<R: BufRead> TurtleParser<R> {
     ///
     /// The base IRI might be empty to state there is no base IRI.
     pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
-        let read = LookAheadLineBasedByteReader::new(reader)?;
+        let read = LookAheadLineBasedByteReader::new(reader);
         let base_iri = if base_iri.is_empty() {
             None
         } else {

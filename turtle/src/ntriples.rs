@@ -49,7 +49,7 @@ pub struct NTriplesParser<R: BufRead> {
 impl<R: BufRead> NTriplesParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
-            read: LookAheadLineBasedByteReader::new(reader)?,
+            read: LookAheadLineBasedByteReader::new(reader),
             subject_buf: String::default(),
             predicate_buf: String::default(),
             object_buf: String::default(),
@@ -131,7 +131,7 @@ pub struct NQuadsParser<R: BufRead> {
 impl<R: BufRead> NQuadsParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
-            read: LookAheadLineBasedByteReader::new(reader)?,
+            read: LookAheadLineBasedByteReader::new(reader),
             subject_buf: String::default(),
             predicate_buf: String::default(),
             object_buf: String::default(),

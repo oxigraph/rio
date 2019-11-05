@@ -70,24 +70,21 @@ pub struct LookAheadLineBasedByteReader<R: BufRead> {
     inner: R,
     line: Vec<u8>,
     current: u8,
-    line_offset: usize, // starting at 0
+    line_number: usize,
     byte_offset: usize,
 }
 
 impl<R: BufRead> LookAheadLineBasedByteReader<R> {
-    pub fn new(inner: R) -> Result<Self, TurtleError> {
-        let mut this = Self {
+    pub fn new(inner: R) -> Self {
+        // We initialize the state with an empty new line (line 0)
+        // It allows to easily and efficiently initialize the reader state
+        Self {
             inner,
-            line: vec![10], // emulates an empty line,
-            // so that the first call to consume() does not stop as if EOF
-            current: EOF,
-            line_offset: 0,
+            line: vec![b'\n'],
+            current: b'\n',
+            line_number: 0,
             byte_offset: 0,
-        };
-        // We fill current and next with the appropriate values and we reset properly the line and byte numbers
-        this.consume()?;
-        this.line_offset = 0;
-        Ok(this)
+        }
     }
 }
 
@@ -111,14 +108,14 @@ impl<R: BufRead> LookAheadByteRead for LookAheadLineBasedByteReader<R> {
             self.byte_offset -= self.line.len();
             self.line.clear();
             self.inner.read_until(b'\n', &mut self.line)?;
-            self.line_offset += 1;
+            self.line_number += 1;
         }
         self.current = self.line.get(self.byte_offset).cloned().unwrap_or(EOF);
         Ok(())
     }
 
     fn line_number(&self) -> usize {
-        self.line_offset + 1
+        self.line_number
     }
 
     fn byte_number(&self) -> usize {
