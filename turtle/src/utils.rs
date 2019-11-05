@@ -25,10 +25,10 @@ pub trait LookAheadByteRead {
     /// Consumes the many chars and moves to the next one
     fn consume_many(&mut self, count: usize) -> Result<(), TurtleError>;
 
-    /// Returns the line number of the current byte starting at 0
+    /// Returns the line number of the current byte starting at 1
     fn line_number(&self) -> usize;
 
-    /// Returns the byte number of the current byte in the line starting at 0
+    /// Returns the byte number of the current byte in the line starting at 1
     fn byte_number(&self) -> usize;
 
     /// Returns if the current buffer starts with a given byte string. Does not work cross line boundaries
@@ -70,22 +70,23 @@ pub struct LookAheadLineBasedByteReader<R: BufRead> {
     inner: R,
     line: Vec<u8>,
     current: u8,
-    line_number: usize,
-    byte_number: usize,
+    line_offset: usize, // starting at 0
+    byte_offset: usize,
 }
 
 impl<R: BufRead> LookAheadLineBasedByteReader<R> {
     pub fn new(inner: R) -> Result<Self, TurtleError> {
         let mut this = Self {
             inner,
-            line: Vec::default(),
+            line: vec![10], // emulates an empty line,
+            // so that the first call to consume() does not stop as if EOF
             current: EOF,
-            line_number: 0,
-            byte_number: 0,
+            line_offset: 0,
+            byte_offset: 0,
         };
         // We fill current and next with the appropriate values and we reset properly the line and byte numbers
         this.consume()?;
-        this.line_number = 0;
+        this.line_offset = 0;
         Ok(this)
     }
 }
@@ -96,55 +97,47 @@ impl<R: BufRead> LookAheadByteRead for LookAheadLineBasedByteReader<R> {
     }
 
     fn ahead(&self, count: usize) -> Option<u8> {
-        self.line.get(self.byte_number + count).cloned()
+        self.line.get(self.byte_offset + count).cloned()
     }
 
+    #[inline]
     fn consume(&mut self) -> Result<(), TurtleError> {
-        //TODO: define from consume many?
-        self.byte_number += 1;
-        if self.byte_number >= self.line.len() {
-            self.line.clear();
-            self.inner.read_until(b'\n', &mut self.line)?;
-            self.line_number += 1;
-            self.byte_number = 0;
-        }
-        self.current = self.line.get(self.byte_number).cloned().unwrap_or(EOF);
-        Ok(())
+        self.consume_many(1)
     }
 
     fn consume_many(&mut self, count: usize) -> Result<(), TurtleError> {
-        self.byte_number += count;
-        while self.byte_number >= self.line.len() && !self.line.is_empty() {
-            self.byte_number -= self.line.len();
+        self.byte_offset += count;
+        while self.byte_offset >= self.line.len() && !self.line.is_empty() {
+            self.byte_offset -= self.line.len();
             self.line.clear();
             self.inner.read_until(b'\n', &mut self.line)?;
-            self.line_number += 1;
+            self.line_offset += 1;
         }
-        self.current = self.line.get(self.byte_number).cloned().unwrap_or(EOF);
+        self.current = self.line.get(self.byte_offset).cloned().unwrap_or(EOF);
         Ok(())
     }
 
     fn line_number(&self) -> usize {
-        self.line_number
+        self.line_offset + 1
     }
 
     fn byte_number(&self) -> usize {
-        self.byte_number + 1
+        self.byte_offset + 1
     }
 
     fn starts_with(&self, prefix: &[u8]) -> bool {
-        let end = self.byte_number + prefix.len();
+        let end = self.byte_offset + prefix.len();
         if end < self.line.len() {
-            self.line[self.byte_number..end].eq(prefix)
+            self.line[self.byte_offset..end].eq(prefix)
         } else {
             false
         }
     }
 
     fn starts_with_ignore_ascii_case(&self, prefix: &[u8]) -> bool {
-        let end = self.byte_number + prefix.len();
+        let end = self.byte_offset + prefix.len();
         if end < self.line.len() {
-            self.line[self.byte_number..end].eq_ignore_ascii_case(prefix)
+            self.line[self.byte_offset..end].eq_ignore_ascii_case(prefix)
         } else {
             false
         }

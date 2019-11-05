@@ -180,7 +180,7 @@ pub struct LineBytePosition {
 }
 
 impl LineBytePosition {
-    /// Creates a new position where `line_number` and `byte_number` are both starting from zero
+    /// Creates a new position where `line_number` and `byte_number` are both starting from 1
     pub fn new(line_number: usize, byte_number: usize) -> Self {
         Self {
             line_number,
