@@ -9,3 +9,5 @@ pub mod parser;
 
 #[cfg(feature = "generalized")]
 pub mod gmodel;
+#[cfg(feature = "generalized")]
+pub mod gparser;
