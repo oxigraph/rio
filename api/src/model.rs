@@ -2,6 +2,8 @@
 
 use std::fmt;
 use std::fmt::Write;
+#[cfg(feature = "generalized")]
+pub use crate::generalized::model::*;
 
 /// A RDF [IRI](https://www.w3.org/TR/rdf11-concepts/#dfn-iri).
 ///

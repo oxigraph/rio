@@ -8,6 +8,4 @@ pub mod model;
 pub mod parser;
 
 #[cfg(feature = "generalized")]
-pub mod gmodel;
-#[cfg(feature = "generalized")]
-pub mod gparser;
+mod generalized;
