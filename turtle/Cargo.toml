@@ -13,3 +13,7 @@ edition = "2018"
 
 [dependencies]
 rio_api = "0.3"
+
+[features]
+default = ["generalized"]
+generalized = ["rio_api/generalized"]

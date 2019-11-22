@@ -155,14 +155,14 @@ impl<R: BufRead> QuadsParser for TriGParser<R> {
     }
 }
 
-const RDF_TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
-const RDF_NIL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
-const RDF_FIRST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
-const RDF_REST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
-const XSD_BOOLEAN: &str = "http://www.w3.org/2001/XMLSchema#boolean";
-const XSD_DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
-const XSD_DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
-const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
+pub(crate) const RDF_TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+pub(crate) const RDF_NIL: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+pub(crate) const RDF_FIRST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+pub(crate) const RDF_REST: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+pub(crate) const XSD_BOOLEAN: &str = "http://www.w3.org/2001/XMLSchema#boolean";
+pub(crate) const XSD_DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
+pub(crate) const XSD_DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
+pub(crate) const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
 fn parse_statement<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
@@ -404,7 +404,7 @@ fn parse_label_or_subject(
     })
 }
 
-fn parse_prefix_id(
+pub(crate) fn parse_prefix_id(
     read: &mut impl LookAheadByteRead,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
@@ -429,7 +429,7 @@ fn parse_prefix_id(
     Ok(())
 }
 
-fn parse_base(
+pub(crate) fn parse_base(
     read: &mut impl LookAheadByteRead,
     buffer: &mut String,
     base_iri: &Option<Iri<String>>,
@@ -447,7 +447,7 @@ fn parse_base(
     Ok(result)
 }
 
-fn parse_sparql_base(
+pub(crate) fn parse_sparql_base(
     read: &mut impl LookAheadByteRead,
     buffer: &mut String,
     base_iri: &Option<Iri<String>>,
@@ -473,7 +473,7 @@ fn parse_base_iriref(
     Ok(result)
 }
 
-fn parse_sparql_prefix(
+pub(crate) fn parse_sparql_prefix(
     read: &mut impl LookAheadByteRead,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
@@ -737,7 +737,7 @@ fn emit_triple<'a, R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_literal<'a>(
+pub(crate) fn parse_literal<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
     annotation_buffer: &'a mut String,
@@ -1031,7 +1031,7 @@ fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Resul
     }
 }
 
-fn parse_iri(
+pub(crate) fn parse_iri(
     read: &mut impl LookAheadByteRead,
     buffer: &mut String,
     temp_buffer: &mut String,
@@ -1120,7 +1120,7 @@ fn has_future_char_valid_pname_local(read: &impl LookAheadByteRead) -> bool {
     }
 }
 
-fn parse_blank_node<'a>(
+pub(crate) fn parse_blank_node<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
@@ -1338,7 +1338,7 @@ fn parse_pn_local_esc(
     }
 }
 
-fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
+pub(crate) fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             b' ' | b'\t' | b'\n' | b'\r' => read.consume()?,
@@ -1352,7 +1352,7 @@ fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError>
     }
 }
 
-fn is_followed_by_space_and_closing_bracket(read: &impl LookAheadByteRead) -> bool {
+pub(crate) fn is_followed_by_space_and_closing_bracket(read: &impl LookAheadByteRead) -> bool {
     for i in 1.. {
         match read.ahead(i) {
             Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') => (),
@@ -1379,7 +1379,7 @@ impl NamedOrBlankNodeType {
 }
 
 #[derive(Clone, Copy)]
-enum TermType {
+pub(crate) enum TermType {
     NamedNode,
     BlankNode,
     SimpleLiteral,
