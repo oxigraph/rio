@@ -124,8 +124,8 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
     } else if parser.read.current() == b'{' {
         parse_generalized_wrapped_graph(parser, on_quad)
     } else if parser.read.current() == b'['
-    && !is_followed_by_space_and_closing_bracket(&parser.read)
-    || parser.read.current() == b'('
+        && !is_followed_by_space_and_closing_bracket(&parser.read)
+        || parser.read.current() == b'('
     {
         parse_generalized_triples2(parser, on_quad)
     } else {
@@ -244,7 +244,9 @@ fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     skip_whitespace(&mut parser.read)?;
 
     let blank_node = parser.term_stack.push(OwnedTermKind::BlankNode);
-    blank_node.value.push_str(parser.bnode_id_generator.generate().as_ref());
+    blank_node
+        .value
+        .push_str(parser.bnode_id_generator.generate().as_ref());
 
     loop {
         parse_generalized_predicate_object_list(parser, on_quad)?;
@@ -281,7 +283,10 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
                     on_quad(parser.make_quad())?;
                     parser.term_stack.pop();
                     parser.term_stack.pop();
-                    assert_eq!(parser.term_stack.last().unwrap().kind, OwnedTermKind::BlankNode);
+                    assert_eq!(
+                        parser.term_stack.last().unwrap().kind,
+                        OwnedTermKind::BlankNode
+                    );
                     let buffer = &mut parser.term_stack.last_mut().value;
                     buffer.clear();
                     buffer.push_str(id.as_ref());
@@ -303,8 +308,11 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
                 on_quad(parser.make_quad())?;
                 parser.term_stack.pop();
                 parser.term_stack.pop();
-                }
-            assert_eq!(parser.term_stack.last().unwrap().kind, OwnedTermKind::BlankNode);
+            }
+            assert_eq!(
+                parser.term_stack.last().unwrap().kind,
+                OwnedTermKind::BlankNode
+            );
             let buffer = &mut parser.term_stack.last_mut().value;
             buffer.clear();
             buffer.push_str(new.as_ref());
@@ -350,8 +358,9 @@ fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
     if parser.read.current() == b'a' {
         match parser.read.next() {
             // We check that it is not a prefixed URI
-            Some(c)
-                if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII => (),
+            Some(c) if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII => {
+                ()
+            }
             _ => {
                 parser.term_stack.push(OwnedTermKind::StaticIri(RDF_TYPE));
                 parser.read.consume()?;
@@ -398,7 +407,7 @@ fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
         }
         b'[' => parse_generalized_blank_node_property_list(parser, on_quad),
         b'(' => parse_generalized_collection(parser, on_quad),
-        _ =>  {
+        _ => {
             parse_generalized_term(parser, false)?;
             Ok(())
         }
@@ -409,7 +418,11 @@ fn parse_generalized_term<R: BufRead>(
     parser: &mut GTriGParser<R>,
     graph_name: bool,
 ) -> Result<(), TurtleError> {
-    let stack = if graph_name { &mut parser.graph_stack } else { &mut parser.term_stack };
+    let stack = if graph_name {
+        &mut parser.graph_stack
+    } else {
+        &mut parser.term_stack
+    };
     match parser.read.current() {
         EOF => parser.read.unexpected_char_error()?,
         b'<' => {
@@ -446,10 +459,7 @@ fn parse_generalized_term<R: BufRead>(
         b'?' | b'$' => {
             parser.read.consume()?;
             let variable = stack.push(OwnedTermKind::Variable);
-            parse_variable_name(
-                &mut parser.read,
-                &mut variable.value,
-            )
+            parse_variable_name(&mut parser.read, &mut variable.value)
         }
         _ => {
             if parser.read.starts_with(b"true") || parser.read.starts_with(b"false") {
@@ -461,7 +471,8 @@ fn parse_generalized_term<R: BufRead>(
                     &mut parser.temp_buf,
                     &parser.base_iri,
                     &parser.namespaces,
-                ).map(|_| ())
+                )
+                .map(|_| ())
             } else {
                 let named_node = stack.push(OwnedTermKind::NamedNode);
                 parse_iri(
@@ -495,7 +506,9 @@ pub(crate) fn parse_variable_name<'a>(
     loop {
         read.consume()?;
         let c = read.current();
-        if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9' || c == 0xb7) {
+        if c <= MAX_ASCII
+            && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9' || c == 0xb7)
+        {
             buffer.push(char::from(c))
         } else {
             let c = read_utf8_char(read)?;
@@ -507,8 +520,6 @@ pub(crate) fn parse_variable_name<'a>(
         }
     }
 }
-
-
 
 //
 
@@ -596,13 +607,23 @@ enum OwnedTermKind {
 impl<'a> From<&'a OwnedTerm> for GeneralizedTerm<'a> {
     fn from(other: &'a OwnedTerm) -> GeneralizedTerm<'a> {
         match other.kind {
-            OwnedTermKind::NamedNode => GeneralizedTerm::NamedNode(NamedNode{ iri: &other.value }),
-            OwnedTermKind::StaticIri(val) => GeneralizedTerm::NamedNode(NamedNode{ iri: val }),
-            OwnedTermKind::BlankNode => GeneralizedTerm::BlankNode(BlankNode{ id: &other.value }),
-            OwnedTermKind::LiteralSimple => GeneralizedTerm::Literal(Literal::Simple { value: &other.value }),
-            OwnedTermKind::LiteralLanguage => GeneralizedTerm::Literal(Literal::LanguageTaggedString{ value: &other.value, language: &other.extra }),
-            OwnedTermKind::LiteralDatatype => GeneralizedTerm::Literal(Literal::Typed{ value: &other.value, datatype: NamedNode{ iri: &other.extra } }),
-            OwnedTermKind::Variable => GeneralizedTerm::Variable(Variable{ name: &other.value }),
+            OwnedTermKind::NamedNode => GeneralizedTerm::NamedNode(NamedNode { iri: &other.value }),
+            OwnedTermKind::StaticIri(val) => GeneralizedTerm::NamedNode(NamedNode { iri: val }),
+            OwnedTermKind::BlankNode => GeneralizedTerm::BlankNode(BlankNode { id: &other.value }),
+            OwnedTermKind::LiteralSimple => GeneralizedTerm::Literal(Literal::Simple {
+                value: &other.value,
+            }),
+            OwnedTermKind::LiteralLanguage => {
+                GeneralizedTerm::Literal(Literal::LanguageTaggedString {
+                    value: &other.value,
+                    language: &other.extra,
+                })
+            }
+            OwnedTermKind::LiteralDatatype => GeneralizedTerm::Literal(Literal::Typed {
+                value: &other.value,
+                datatype: NamedNode { iri: &other.extra },
+            }),
+            OwnedTermKind::Variable => GeneralizedTerm::Variable(Variable { name: &other.value }),
         }
     }
 }
@@ -642,10 +663,11 @@ mod test {
             (v("s4"), v("p4"), v("o4"), Some(v("g4"))),
         ];
 
-        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> = Vec::with_capacity(expected.len());
+        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> =
+            Vec::with_capacity(expected.len());
 
-        GTriGParser::new(Cursor::new(gtrig), "http://example.org/base/")?
-            .parse_all(&mut |quad| {
+        GTriGParser::new(Cursor::new(gtrig), "http://example.org/base/")?.parse_all(
+            &mut |quad| {
                 got.push((
                     quad.subject.into(),
                     quad.predicate.into(),
@@ -653,7 +675,8 @@ mod test {
                     quad.graph_name.map(OwnedTerm::from),
                 ));
                 Ok(()) as Result<(), TurtleError>
-            })?;
+            },
+        )?;
 
         assert_eq!(expected, got);
         Ok(())
@@ -675,10 +698,11 @@ mod test {
             (l("s4"), l("p4"), l("o4"), Some(l("g4"))),
         ];
 
-        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> = Vec::with_capacity(expected.len());
+        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> =
+            Vec::with_capacity(expected.len());
 
-        GTriGParser::new(Cursor::new(gtrig), "http://example.org/base/")?
-            .parse_all(&mut |quad| {
+        GTriGParser::new(Cursor::new(gtrig), "http://example.org/base/")?.parse_all(
+            &mut |quad| {
                 got.push((
                     quad.subject.into(),
                     quad.predicate.into(),
@@ -686,7 +710,8 @@ mod test {
                     quad.graph_name.map(OwnedTerm::from),
                 ));
                 Ok(()) as Result<(), TurtleError>
-            })?;
+            },
+        )?;
 
         assert_eq!(expected, got);
         Ok(())
@@ -698,10 +723,11 @@ mod test {
           ?s [ ?p ?o1 ] ?o2 .
         "#;
 
-        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> = Vec::with_capacity(2);
+        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> =
+            Vec::with_capacity(2);
 
-        GTriGParser::new(Cursor::new(gtrig), "http://example.org/base/")?
-            .parse_all(&mut |quad| {
+        GTriGParser::new(Cursor::new(gtrig), "http://example.org/base/")?.parse_all(
+            &mut |quad| {
                 got.push((
                     quad.subject.into(),
                     quad.predicate.into(),
@@ -709,7 +735,8 @@ mod test {
                     quad.graph_name.map(OwnedTerm::from),
                 ));
                 Ok(()) as Result<(), TurtleError>
-            })?;
+            },
+        )?;
 
         assert_eq!(v("p"), got[0].1);
         assert_eq!(v("o1"), got[0].2);
@@ -738,12 +765,38 @@ mod test {
     impl<'a> From<GeneralizedTerm<'a>> for OwnedTerm {
         fn from(other: GeneralizedTerm<'a>) -> OwnedTerm {
             match other {
-                GeneralizedTerm::NamedNode(n) => OwnedTerm { kind: OwnedTermKind::NamedNode, value: n.iri.to_string(), extra: String::new() },
-                GeneralizedTerm::BlankNode(n) => OwnedTerm { kind: OwnedTermKind::BlankNode, value: n.id.to_string(), extra: String::new() },
-                GeneralizedTerm::Literal(Literal::Simple {value}) => OwnedTerm { kind: OwnedTermKind::LiteralSimple, value: value.to_string(), extra: String::new() },
-                GeneralizedTerm::Literal(Literal::LanguageTaggedString {value, language}) => OwnedTerm { kind: OwnedTermKind::LiteralLanguage, value: value.to_string(), extra: language.to_string() },
-                GeneralizedTerm::Literal(Literal::Typed {value, datatype}) => OwnedTerm { kind: OwnedTermKind::LiteralDatatype, value: value.to_string(), extra: datatype.to_string() },
-                GeneralizedTerm::Variable(n) => OwnedTerm { kind: OwnedTermKind::Variable, value: n.name.to_string(), extra: String::new() },
+                GeneralizedTerm::NamedNode(n) => OwnedTerm {
+                    kind: OwnedTermKind::NamedNode,
+                    value: n.iri.to_string(),
+                    extra: String::new(),
+                },
+                GeneralizedTerm::BlankNode(n) => OwnedTerm {
+                    kind: OwnedTermKind::BlankNode,
+                    value: n.id.to_string(),
+                    extra: String::new(),
+                },
+                GeneralizedTerm::Literal(Literal::Simple { value }) => OwnedTerm {
+                    kind: OwnedTermKind::LiteralSimple,
+                    value: value.to_string(),
+                    extra: String::new(),
+                },
+                GeneralizedTerm::Literal(Literal::LanguageTaggedString { value, language }) => {
+                    OwnedTerm {
+                        kind: OwnedTermKind::LiteralLanguage,
+                        value: value.to_string(),
+                        extra: language.to_string(),
+                    }
+                }
+                GeneralizedTerm::Literal(Literal::Typed { value, datatype }) => OwnedTerm {
+                    kind: OwnedTermKind::LiteralDatatype,
+                    value: value.to_string(),
+                    extra: datatype.to_string(),
+                },
+                GeneralizedTerm::Variable(n) => OwnedTerm {
+                    kind: OwnedTermKind::Variable,
+                    value: n.name.to_string(),
+                    extra: String::new(),
+                },
             }
         }
     }

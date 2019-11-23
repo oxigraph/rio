@@ -15,7 +15,6 @@ use std::io;
 use std::io::BufReader;
 use std::path::Path;
 
-
 pub fn evaluate_parser_tests(
     manifest: impl Iterator<Item = Result<Test, Box<dyn Error>>>,
     file_reader: impl Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>,

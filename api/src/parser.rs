@@ -1,9 +1,9 @@
 //! Interfaces for RDF parsers.
 
-use crate::model::{Quad, Triple};
-use std::error::Error;
 #[cfg(feature = "generalized")]
 pub use crate::generalized::parser::*;
+use crate::model::{Quad, Triple};
+use std::error::Error;
 
 /// A parser returning [`Triple`](../model/struct.Triple.html).
 pub trait TriplesParser: Sized {

@@ -102,7 +102,9 @@ pub mod model {
         fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedNode<'a>, StrictRdfError> {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(inner),
-                GeneralizedTerm::BlankNode(_) => Err("Blankd node can not be used as predicate".into()),
+                GeneralizedTerm::BlankNode(_) => {
+                    Err("Blankd node can not be used as predicate".into())
+                }
                 GeneralizedTerm::Literal(_) => Err("Literal can not be used as predicate".into()),
                 GeneralizedTerm::Variable(_) => Err("Variable can not be converted to Term".into()),
             }
@@ -263,8 +265,8 @@ pub mod model {
 
 /// Interface for generalized RDF parsers.
 pub mod parser {
-    use std::error::Error;
     use super::model::GeneralizedQuad;
+    use std::error::Error;
 
     /// A parser returning generalized [`Quad`](../model/struct.Quad.html).
     pub trait GeneralizedQuadsParser {
@@ -300,7 +302,10 @@ pub mod parser {
         /// Converts the parser into a `Result<T, E>` iterator.
         ///
         /// `convert_quad` is a function converting Rio [`GeneralizedQuad`](../gmodel/struct.GeneralizedQuad.html)s to `T`.
-        fn into_iter<T, E, F>(self, convert_quad: F) -> GeneralizedQuadsParserIterator<T, E, F, Self>
+        fn into_iter<T, E, F>(
+            self,
+            convert_quad: F,
+        ) -> GeneralizedQuadsParserIterator<T, E, F, Self>
         where
             E: From<Self::Error>,
             F: FnMut(GeneralizedQuad) -> Result<T, E>,
@@ -314,17 +319,19 @@ pub mod parser {
         }
     }
 
-
     /// Created with the method [`into_iter`](trait.GeneralizedQuadsParser.html#method.into_iter).
-    pub struct GeneralizedQuadsParserIterator<T, E: From<P::Error>, F: FnMut(GeneralizedQuad) -> Result<T, E>, P: GeneralizedQuadsParser>
-    {
+    pub struct GeneralizedQuadsParserIterator<
+        T,
+        E: From<P::Error>,
+        F: FnMut(GeneralizedQuad) -> Result<T, E>,
+        P: GeneralizedQuadsParser,
+    > {
         parser: P,
         buffer: Vec<T>,
         convert_quad: F,
     }
 
-    impl<T, E, F, P> Iterator
-        for GeneralizedQuadsParserIterator<T, E, F, P>
+    impl<T, E, F, P> Iterator for GeneralizedQuadsParserIterator<T, E, F, P>
     where
         E: From<P::Error>,
         F: FnMut(GeneralizedQuad) -> Result<T, E>,
