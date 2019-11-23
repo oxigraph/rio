@@ -12,5 +12,5 @@ Common data structures for RDF formats parsers and serializers
 edition = "2018"
 
 [features]
-default = ["generalized"]
+default = []
 generalized = []

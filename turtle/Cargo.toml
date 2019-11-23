@@ -15,5 +15,5 @@ edition = "2018"
 rio_api = "0.3"
 
 [features]
-default = ["generalized"]
+default = []
 generalized = ["rio_api/generalized"]
