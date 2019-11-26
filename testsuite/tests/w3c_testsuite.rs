@@ -57,11 +57,11 @@ fn gtrig_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     let manifest_uri = "http://w3c.github.io/rdf-tests/trig/manifest.ttl".to_owned();
     let test_path = get_test_path();
     let manifest = TestManifest::new(manifest_uri, |url| {
-        parse_w3c_rdf_test_file_with_gtrig(url, &test_path)
+        parse_w3c_rdf_test_file_for_gtrig(url, &test_path)
     });
 
     let results = evaluate_parser_tests(manifest, |url| {
-        parse_w3c_rdf_test_file_with_gtrig(url, &test_path)
+        parse_w3c_rdf_test_file_for_gtrig(url, &test_path)
     })?;
 
     let mut errors = Vec::default();

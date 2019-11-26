@@ -14,28 +14,20 @@ fn main() {
     }
     let mut parse_func: fn(&str, &Path) -> Result<OwnedDataset, Box<dyn Error>> =
         parse_w3c_rdf_test_file;
-    let mut manifest_url: &str = &args[2];
+    let mut manifest_url = match args[2].as_ref() {
+        "ntriples" | "nt" => "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl",
+        "nquads" | "nq" => "http://w3c.github.io/rdf-tests/nquads/manifest.ttl",
+        "turtle" | "ttl" => "http://w3c.github.io/rdf-tests/turtle/manifest.ttl",
+        "rdf-xml" | "rdf" => "http://w3c.github.io/rdf-tests/rdf-xml/manifest.ttl",
+        "trig" => "http://w3c.github.io/rdf-tests/trig/manifest.ttl",
+        _ => &args[2],
+    };
 
-    if args[2] == "ntriples" || args[2] == "nt" {
-        manifest_url = "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl";
-    }
-    if args[2] == "nquads" || args[2] == "nq" {
-        manifest_url = "http://w3c.github.io/rdf-tests/nquads/manifest.ttl";
-    }
-    if args[2] == "turtle" || args[2] == "ttl" {
-        manifest_url = "http://w3c.github.io/rdf-tests/turtle/manifest.ttl";
-    }
-    if args[2] == "rdf-xml" || args[2] == "rdf" {
-        manifest_url = "http://w3c.github.io/rdf-tests/rdf-xml/manifest.ttl";
-    }
-    if args[2] == "trig" {
-        manifest_url = "http://w3c.github.io/rdf-tests/trig/manifest.ttl";
-    }
     #[cfg(feature = "generalized")]
     {
-        if args[2] == "gtrig" {
-            parse_func = parse_w3c_rdf_test_file_with_gtrig;
+        if manifest_url == "gtrig" {
             manifest_url = "http://w3c.github.io/rdf-tests/trig/manifest.ttl";
+            parse_func = parse_w3c_rdf_test_file_for_gtrig;
         }
     }
 

@@ -4,8 +4,7 @@
 /// Data structures for generalized [RDF 1.1 Concepts](https://www.w3.org/TR/rdf11-concepts/),
 /// allowing variables, and any kind of node in any Triple/Quad position.
 pub mod model {
-    use std::convert;
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
     use std::error::Error;
     use std::fmt;
 
@@ -97,7 +96,7 @@ pub mod model {
         }
     }
 
-    impl<'a> convert::TryFrom<GeneralizedTerm<'a>> for NamedNode<'a> {
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for NamedNode<'a> {
         type Error = StrictRdfError;
         fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedNode<'a>, StrictRdfError> {
             match other {
@@ -111,7 +110,7 @@ pub mod model {
         }
     }
 
-    impl<'a> convert::TryFrom<GeneralizedTerm<'a>> for NamedOrBlankNode<'a> {
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for NamedOrBlankNode<'a> {
         type Error = StrictRdfError;
         fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedOrBlankNode<'a>, StrictRdfError> {
             match other {
@@ -123,7 +122,7 @@ pub mod model {
         }
     }
 
-    impl<'a> convert::TryFrom<GeneralizedTerm<'a>> for Term<'a> {
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for Term<'a> {
         type Error = StrictRdfError;
         fn try_from(other: GeneralizedTerm<'a>) -> Result<Term<'a>, StrictRdfError> {
             match other {
@@ -194,7 +193,7 @@ pub mod model {
         }
     }
 
-    impl<'a> convert::TryFrom<GeneralizedQuad<'a>> for Quad<'a> {
+    impl<'a> TryFrom<GeneralizedQuad<'a>> for Quad<'a> {
         type Error = StrictRdfError;
 
         fn try_from(other: GeneralizedQuad<'a>) -> Result<Quad<'a>, StrictRdfError> {
@@ -210,7 +209,7 @@ pub mod model {
         }
     }
 
-    impl<'a> convert::TryFrom<GeneralizedQuad<'a>> for Triple<'a> {
+    impl<'a> TryFrom<GeneralizedQuad<'a>> for Triple<'a> {
         type Error = StrictRdfError;
 
         fn try_from(other: GeneralizedQuad<'a>) -> Result<Triple<'a>, StrictRdfError> {
@@ -248,7 +247,7 @@ pub mod model {
 
     impl<'a> fmt::Display for StrictRdfError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "StrictRdfError: ?{}", self.message)
+            write!(f, "StrictRdfError: {}", self.message)
         }
     }
 

@@ -138,7 +138,7 @@ pub fn parse_w3c_rdf_test_file(
 }
 
 #[cfg(feature = "generalized")]
-pub fn parse_w3c_rdf_test_file_with_gtrig(
+pub fn parse_w3c_rdf_test_file_for_gtrig(
     url: &str,
     tests_path: &Path,
 ) -> Result<OwnedDataset, Box<dyn Error>> {

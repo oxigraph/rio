@@ -1,4 +1,4 @@
-//! Implementation of a generaliazed RDF version of the Trig syntax
+//! Implementation of a generalized RDF version of the Trig syntax
 
 use crate::error::*;
 use crate::shared::*;
