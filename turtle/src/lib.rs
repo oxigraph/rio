@@ -32,6 +32,9 @@ mod shared;
 mod turtle;
 mod utils;
 
+#[cfg(feature = "generalized")]
+mod gtrig;
+
 pub use error::TurtleError;
 pub use formatters::NQuadsFormatter;
 pub use formatters::NTriplesFormatter;
@@ -41,3 +44,6 @@ pub use ntriples::NQuadsParser;
 pub use ntriples::NTriplesParser;
 pub use turtle::TriGParser;
 pub use turtle::TurtleParser;
+
+#[cfg(feature = "generalized")]
+pub use gtrig::GTriGParser;

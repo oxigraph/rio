@@ -51,3 +51,26 @@ fn trig_w3c_testsuite() -> Result<(), Box<dyn Error>> {
 fn rdf_xml_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("http://www.w3.org/2013/RDFXMLTests/manifest.ttl".to_owned())
 }
+
+#[test]
+fn gtrig_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    let manifest_uri = "http://w3c.github.io/rdf-tests/trig/manifest.ttl".to_owned();
+    let test_path = get_test_path();
+    let manifest = TestManifest::new(manifest_uri, |url| {
+        parse_w3c_rdf_test_file_for_gtrig(url, &test_path)
+    });
+
+    let results = evaluate_parser_tests(manifest, |url| {
+        parse_w3c_rdf_test_file_for_gtrig(url, &test_path)
+    })?;
+
+    let mut errors = Vec::default();
+    for result in results {
+        if let TestOutcome::Failed { error } = result.outcome {
+            errors.push(format!("{}: failed with error {}", result.test, error))
+        }
+    }
+
+    assert!(errors.is_empty(), "\n{}\n", errors.join("\n"));
+    Ok(())
+}

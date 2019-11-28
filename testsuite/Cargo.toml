@@ -21,6 +21,10 @@ permutohedron = "0.2"
 [dev-dependencies]
 criterion = "0.3"
 
+[features]
+default = ["generalized"]
+generalized = ["rio_api/generalized", "rio_turtle/generalized"]
+
 [[bench]]
 name = "w3c_testsuite"
 harness = false

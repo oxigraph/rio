@@ -6,3 +6,6 @@ pub mod formatter;
 pub mod iri;
 pub mod model;
 pub mod parser;
+
+#[cfg(feature = "generalized")]
+mod generalized;

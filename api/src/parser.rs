@@ -1,5 +1,7 @@
 //! Interfaces for RDF parsers.
 
+#[cfg(feature = "generalized")]
+pub use crate::generalized::parser::*;
 use crate::model::{Quad, Triple};
 use std::error::Error;
 

@@ -1,10 +1,7 @@
 use rio_api::formatter::{QuadsFormatter, TriplesFormatter};
 use rio_api::model::*;
-use rio_api::parser::{QuadsParser, TriplesParser};
-use rio_turtle::{
-    NQuadsFormatter, NQuadsParser, NTriplesFormatter, NTriplesParser, TriGFormatter, TriGParser,
-    TurtleError, TurtleFormatter, TurtleParser,
-};
+use rio_api::parser::*;
+use rio_turtle::*;
 use std::io::Cursor;
 
 #[test]
@@ -82,6 +79,28 @@ fn trig_roundtrip() -> Result<(), TurtleError> {
 
     let mut count = 0;
     TriGParser::new(Cursor::new(&trig), "")?.parse_all(&mut |_| {
+        count += 1;
+        Ok(()) as Result<(), TurtleError>
+    })?;
+
+    assert_eq!(count, dataset.len());
+
+    Ok(())
+}
+
+#[cfg(feature = "generalized")]
+#[test]
+fn gtrig_roundtrip() -> Result<(), TurtleError> {
+    let dataset = example_dataset();
+
+    let mut formatter = TriGFormatter::new(Vec::default());
+    for q in &dataset {
+        formatter.format(q)?;
+    }
+    let trig = formatter.finish()?;
+
+    let mut count = 0;
+    GTriGParser::new(Cursor::new(&trig), "")?.parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), TurtleError>
     })?;

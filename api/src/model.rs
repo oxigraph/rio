@@ -1,5 +1,7 @@
 //! Data structures for [RDF 1.1 Concepts](https://www.w3.org/TR/rdf11-concepts/) like IRI, literal or triples.
 
+#[cfg(feature = "generalized")]
+pub use crate::generalized::model::*;
 use std::fmt;
 use std::fmt::Write;
 
