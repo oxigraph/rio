@@ -1,10 +1,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use rio_api::parser::{QuadsParser, TriplesParser};
+use rio_api::parser::*;
 use rio_testsuite::manifest::TestManifest;
-use rio_testsuite::parser_evaluator::{
-    parse_w3c_rdf_test_file, read_w3c_rdf_test_file, TestEvaluationError,
-};
-use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleError, TurtleParser};
+use rio_testsuite::parser_evaluator::*;
+use rio_turtle::*;
 use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
@@ -135,6 +133,20 @@ fn parse_trig(c: &mut Criterion, name: &str, data: Vec<u8>) {
     });
 }
 
+#[cfg(feature = "generalized")]
+fn parse_gtrig(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    parse_bench(c, "gtrig", name, data, |data| {
+        let mut count: usize = 0;
+        GTriGParser::new(data, "http://example.com/ex")
+            .unwrap()
+            .parse_all(&mut |_| {
+                count += 1;
+                Ok(()) as Result<(), TurtleError>
+            })
+            .unwrap();
+    });
+}
+
 fn bench_parse_ntriples_with_ntriples(c: &mut Criterion) {
     parse_ntriples(
         c,
@@ -151,6 +163,22 @@ fn bench_parse_ntriples_with_ntriples(c: &mut Criterion) {
 
 fn bench_parse_ntriples_with_turtle(c: &mut Criterion) {
     parse_turtle(
+        c,
+        "ntriples",
+        match ntriples_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+    )
+}
+
+#[allow(unused_variables)]
+fn bench_parse_ntriples_with_gtrig(c: &mut Criterion) {
+    #[cfg(feature = "generalized")]
+    parse_gtrig(
         c,
         "ntriples",
         match ntriples_test_data() {
@@ -191,8 +219,40 @@ fn bench_parse_turtle_with_turtle(c: &mut Criterion) {
     )
 }
 
+#[allow(unused_variables)]
+fn bench_parse_turtle_with_gtrig(c: &mut Criterion) {
+    #[cfg(feature = "generalized")]
+    parse_gtrig(
+        c,
+        "turtle",
+        match turtle_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+    )
+}
+
 fn bench_parse_trig_with_trig(c: &mut Criterion) {
     parse_trig(
+        c,
+        "trig",
+        match trig_test_data() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{}", e);
+                return;
+            }
+        },
+    )
+}
+
+#[allow(unused_variables)]
+fn bench_parse_trig_with_gtrig(c: &mut Criterion) {
+    #[cfg(feature = "generalized")]
+    parse_gtrig(
         c,
         "trig",
         match trig_test_data() {
@@ -209,8 +269,12 @@ criterion_group!(
     w3c_testsuite,
     bench_parse_ntriples_with_ntriples,
     bench_parse_ntriples_with_turtle,
+    bench_parse_ntriples_with_gtrig,
     bench_parse_nquads_with_nquads,
     bench_parse_turtle_with_turtle,
-    bench_parse_trig_with_trig
+    bench_parse_turtle_with_gtrig,
+    bench_parse_trig_with_trig,
+    bench_parse_trig_with_gtrig,
 );
+
 criterion_main!(w3c_testsuite);
