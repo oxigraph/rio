@@ -65,22 +65,28 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
         &mut self,
         on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
     ) -> Result<(), E> {
-        if let Some(result) = parse_triple_line(
+        let result = match parse_triple_line(
             &mut self.read,
             &mut self.subject_buf,
             &mut self.predicate_buf,
             &mut self.object_buf,
             &mut self.object_annotation_buf,
-        )? {
-            on_triple(result)?;
+        ) {
+            Ok(Some(triple)) => on_triple(triple),
+            Ok(None) => Ok(()),
+            Err(error) => {
+                self.read.consume_line_end()?;
+                Err(E::from(error))
+            }
+        };
 
-            //We clear the buffers
-            self.subject_buf.clear();
-            self.predicate_buf.clear();
-            self.object_buf.clear();
-            self.object_annotation_buf.clear();
-        }
-        Ok(())
+        //We clear the buffers
+        self.subject_buf.clear();
+        self.predicate_buf.clear();
+        self.object_buf.clear();
+        self.object_annotation_buf.clear();
+
+        result
     }
 
     fn is_end(&self) -> bool {
@@ -148,24 +154,30 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
         &mut self,
         on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
     ) -> Result<(), E> {
-        if let Some(result) = parse_quad_line(
+        let result = match parse_quad_line(
             &mut self.read,
             &mut self.subject_buf,
             &mut self.predicate_buf,
             &mut self.object_buf,
             &mut self.object_annotation_buf,
             &mut self.graph_name_buf,
-        )? {
-            on_quad(result)?;
+        ) {
+            Ok(Some(quad)) => on_quad(quad),
+            Ok(None) => Ok(()),
+            Err(error) => {
+                self.read.consume_line_end()?;
+                Err(E::from(error))
+            }
+        };
 
-            //We clear the buffers
-            self.subject_buf.clear();
-            self.predicate_buf.clear();
-            self.object_buf.clear();
-            self.object_annotation_buf.clear();
-            self.graph_name_buf.clear();
-        }
-        Ok(())
+        //We clear the buffers
+        self.subject_buf.clear();
+        self.predicate_buf.clear();
+        self.object_buf.clear();
+        self.object_annotation_buf.clear();
+        self.graph_name_buf.clear();
+
+        result
     }
 
     fn is_end(&self) -> bool {
