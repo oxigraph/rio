@@ -63,6 +63,13 @@ pub trait LookAheadByteRead {
             )),
         }
     }
+
+    fn consume_line_end(&mut self) -> Result<(), TurtleError> {
+        while self.byte_number() != 1 {
+            self.consume()?;
+        }
+        Ok(())
+    }
 }
 
 /// Reads the file line by line in a streaming way
