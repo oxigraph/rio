@@ -404,7 +404,7 @@ fn parse_label_or_subject(
     })
 }
 
-pub(crate) fn parse_prefix_id(
+fn parse_prefix_id(
     read: &mut impl LookAheadByteRead,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
@@ -473,7 +473,7 @@ fn parse_base_iriref(
     Ok(result)
 }
 
-pub(crate) fn parse_sparql_prefix(
+fn parse_sparql_prefix(
     read: &mut impl LookAheadByteRead,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
@@ -1048,7 +1048,7 @@ pub(crate) fn parse_iri(
     Ok(())
 }
 
-fn parse_prefixed_name<'a>(
+pub(crate) fn parse_prefixed_name<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
     namespaces: &HashMap<String, String>,
@@ -1138,7 +1138,7 @@ pub(crate) fn parse_blank_node<'a>(
     Ok(())
 }
 
-fn parse_pname_ns(
+pub(crate) fn parse_pname_ns(
     read: &mut impl LookAheadByteRead,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
