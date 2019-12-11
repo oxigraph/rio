@@ -34,7 +34,10 @@ pub fn parse_iriref_relative(
     }
 }
 
-fn parse_iriref(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
+pub fn parse_iriref(
+    read: &mut impl LookAheadByteRead,
+    buffer: &mut String,
+) -> Result<(), TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
     read.check_is_current(b'<')?;
     loop {

@@ -46,7 +46,7 @@ impl<R: BufRead> GTriGParser<R> {
         })
     }
 
-    fn make_quad<'a>(&'a self) -> GeneralizedQuad<'a> {
+    fn make_quad(&self) -> GeneralizedQuad {
         let t = self.term_stack.last_triple();
         let gn = self.graph_stack.last();
         GeneralizedQuad {
@@ -65,7 +65,7 @@ impl<R: BufRead> GeneralizedQuadsParser for GTriGParser<R> {
         &mut self,
         on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
     ) -> Result<(), E> {
-        parse_block_or_directive(self, on_quad)
+        parse_generalized_block_or_directive(self, on_quad)
     }
 
     fn is_end(&self) -> bool {
@@ -73,7 +73,7 @@ impl<R: BufRead> GeneralizedQuadsParser for GTriGParser<R> {
     }
 }
 
-fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
+fn parse_generalized_block_or_directive<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
     on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
 ) -> Result<(), E> {
@@ -84,7 +84,7 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
     if parser.read.current() == EOF {
         Ok(())
     } else if parser.read.starts_with(b"@prefix") {
-        parse_prefix_id(
+        parse_generalized_prefix_id(
             &mut parser.read,
             &mut parser.namespaces,
             &parser.base_iri,
@@ -106,7 +106,7 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
         )?);
         Ok(())
     } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX") {
-        parse_sparql_prefix(
+        parse_generalized_sparql_prefix(
             &mut parser.read,
             &mut parser.namespaces,
             &parser.base_iri,
@@ -131,6 +131,53 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
     } else {
         parse_generalized_triples_or_graph(parser, on_quad)
     }
+}
+
+fn parse_generalized_prefix_id(
+    read: &mut impl LookAheadByteRead,
+    namespaces: &mut HashMap<String, String>,
+    base_iri: &Option<Iri<String>>,
+    temp_buffer: &mut String,
+) -> Result<(), TurtleError> {
+    // [4] 	prefixID 	::= 	'@prefix' PNAME_NS IRIREF '.'
+    read.consume_many("@prefix".len())?;
+    skip_whitespace(read)?;
+
+    let mut prefix = String::default();
+    parse_pname_ns(read, &mut prefix)?;
+    skip_whitespace(read)?;
+
+    let mut value = String::default();
+    parse_generalized_iriref(read, &mut value, temp_buffer, base_iri)?;
+    skip_whitespace(read)?;
+
+    read.check_is_current(b'.')?;
+    read.consume()?;
+
+    namespaces.insert(prefix, value);
+    Ok(())
+}
+
+fn parse_generalized_sparql_prefix(
+    read: &mut impl LookAheadByteRead,
+    namespaces: &mut HashMap<String, String>,
+    base_iri: &Option<Iri<String>>,
+    temp_buffer: &mut String,
+) -> Result<(), TurtleError> {
+    // [6s] 	sparqlPrefix 	::= 	"PREFIX" PNAME_NS IRIREF
+    read.consume_many("PREFIX".len())?;
+    skip_whitespace(read)?;
+
+    let mut prefix = String::default();
+    parse_pname_ns(read, &mut prefix)?;
+    skip_whitespace(read)?;
+
+    let mut value = String::default();
+    parse_generalized_iriref(read, &mut value, temp_buffer, base_iri)?;
+    skip_whitespace(read)?;
+
+    namespaces.insert(prefix, value);
+    Ok(())
 }
 
 fn parse_generalized_wrapped_graph<R: BufRead, E: From<TurtleError>>(
@@ -427,7 +474,7 @@ fn parse_generalized_term<R: BufRead>(
         EOF => parser.read.unexpected_char_error()?,
         b'<' => {
             let named_node = stack.push(OwnedTermKind::NamedNode);
-            parse_iri(
+            parse_generalized_iri(
                 &mut parser.read,
                 &mut named_node.value,
                 &mut parser.temp_buf,
@@ -475,7 +522,7 @@ fn parse_generalized_term<R: BufRead>(
                 .map(|_| ())
             } else {
                 let named_node = stack.push(OwnedTermKind::NamedNode);
-                parse_iri(
+                parse_generalized_iri(
                     &mut parser.read,
                     &mut named_node.value,
                     &mut parser.temp_buf,
@@ -484,6 +531,41 @@ fn parse_generalized_term<R: BufRead>(
                 )
             }
         }
+    }
+}
+
+pub(crate) fn parse_generalized_iri(
+    read: &mut impl LookAheadByteRead,
+    buffer: &mut String,
+    temp_buffer: &mut String,
+    base_iri: &Option<Iri<String>>,
+    namespaces: &HashMap<String, String>,
+) -> Result<(), TurtleError> {
+    // [135s] 	iri 	::= 	IRIREF | PrefixedName
+    match read.current() {
+        b'<' => {
+            parse_generalized_iriref(read, buffer, temp_buffer, base_iri)?;
+        }
+        _ => parse_prefixed_name(read, buffer, namespaces)?,
+    }
+    Ok(())
+}
+
+pub fn parse_generalized_iriref(
+    read: &mut impl LookAheadByteRead,
+    buffer: &mut String,
+    temp_buffer: &mut String,
+    base_iri: &Option<Iri<String>>,
+) -> Result<(), TurtleError> {
+    if let Some(base_iri) = base_iri {
+        parse_iriref(read, temp_buffer)?;
+        let result = base_iri
+            .resolve_into(temp_buffer, buffer)
+            .map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)));
+        temp_buffer.clear();
+        result
+    } else {
+        parse_iriref(read, buffer)
     }
 }
 
@@ -683,6 +765,60 @@ mod test {
     }
 
     #[test]
+    fn relative_iri_references() -> Result<(), TurtleError> {
+        let gtrig = r#"
+          <../s> <#p> </o>.
+        "#;
+
+        let expected = vec![(n("../s"), n("#p"), n("/o"), None)];
+
+        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> =
+            Vec::with_capacity(expected.len());
+
+        GTriGParser::new(Cursor::new(gtrig), "")?.parse_all(&mut |quad| {
+            got.push((
+                quad.subject.into(),
+                quad.predicate.into(),
+                quad.object.into(),
+                quad.graph_name.map(OwnedTerm::from),
+            ));
+            Ok(()) as Result<(), TurtleError>
+        })?;
+
+        assert_eq!(expected, got);
+        Ok(())
+    }
+
+    #[test]
+    fn relative_prefixes() -> Result<(), TurtleError> {
+        let gtrig = r#"
+          @prefix p1: <../>.
+          PREFIX p2: <#>
+          PREFIX p3: </>
+
+          p1:s p2:p p3:o.
+        "#;
+
+        let expected = vec![(n("../s"), n("#p"), n("/o"), None)];
+
+        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> =
+            Vec::with_capacity(expected.len());
+
+        GTriGParser::new(Cursor::new(gtrig), "")?.parse_all(&mut |quad| {
+            got.push((
+                quad.subject.into(),
+                quad.predicate.into(),
+                quad.object.into(),
+                quad.graph_name.map(OwnedTerm::from),
+            ));
+            Ok(()) as Result<(), TurtleError>
+        })?;
+
+        assert_eq!(expected, got);
+        Ok(())
+    }
+
+    #[test]
     fn all_literals() -> Result<(), TurtleError> {
         let gtrig = r#"
           "s1" "p1" "o1".
@@ -744,6 +880,14 @@ mod test {
         assert_eq!(v("o2"), got[1].2);
         assert_eq!(got[0].0, got[1].1);
         Ok(())
+    }
+
+    fn n<'a>(value: &'a str) -> OwnedTerm {
+        OwnedTerm {
+            kind: OwnedTermKind::NamedNode,
+            value: value.to_string(),
+            extra: String::new(),
+        }
     }
 
     fn v<'a>(value: &'a str) -> OwnedTerm {
