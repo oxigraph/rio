@@ -10,7 +10,7 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
         iri: "http://example.com/foo",
     };
     let bar = NamedNode {
-        iri: "http://example.com/b\"ar",
+        iri: "http://example.com/b%adar",
     };
     let bnode = BlankNode { id: "foobar" };
     let simple = Literal::Simple { value: "sim\"le" };
@@ -21,7 +21,7 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
     let datatype = Literal::Typed {
         value: "sim\"le",
         datatype: NamedNode {
-            iri: "http://example.com/d\"t",
+            iri: "http://example.com/d𓀀t",
         },
     };
 

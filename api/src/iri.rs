@@ -14,7 +14,9 @@
 
 use std::error::Error;
 use std::fmt;
+use std::net::{AddrParseError, Ipv6Addr};
 use std::ops::Deref;
+use std::str::{Chars, FromStr};
 
 /// A [RFC 3987](https://www.ietf.org/rfc/rfc3987) IRI.
 ///
@@ -48,13 +50,12 @@ impl<T: Deref<Target = str>> Iri<T> {
     /// Iri::parse("http://foo.com/bar/baz").unwrap();
     /// ```
     pub fn parse(iri: T) -> Result<Self, IriParseError> {
-        match parse_iri(iri.as_bytes(), 0) {
-            Ok(positions) => Ok(Self { iri, positions }),
-            Err(position) => Err(IriParseError {
-                iri: iri.to_owned(),
-                position,
-            }),
-        }
+        let positions = IriParser::parse(
+            &iri,
+            None as Option<&Iri<&str>>,
+            &mut VoidOutputBuffer::default(),
+        )?;
+        Ok(Self { iri, positions })
     }
 
     /// Validates and resolved a relative IRI against the current IRI
@@ -69,11 +70,7 @@ impl<T: Deref<Target = str>> Iri<T> {
     /// ```
     pub fn resolve(&self, iri: &str) -> Result<Iri<String>, IriParseError> {
         let mut target_buffer = String::with_capacity(self.iri.len() + iri.len());
-        let positions = resolve_relative_iri(iri, &self.iri, &self.positions, &mut target_buffer)
-            .map_err(|position| IriParseError {
-            iri: iri.to_owned(),
-            position,
-        })?;
+        let positions = IriParser::parse(iri, Some(&self), &mut target_buffer)?;
         Ok(Iri {
             iri: target_buffer,
             positions,
@@ -94,12 +91,7 @@ impl<T: Deref<Target = str>> Iri<T> {
     /// assert_eq!("http://foo.com/bar/bat#foo", result);
     /// ```
     pub fn resolve_into(&self, iri: &str, target_buffer: &mut String) -> Result<(), IriParseError> {
-        resolve_relative_iri(iri, &self.iri, &self.positions, target_buffer).map_err(
-            |position| IriParseError {
-                iri: iri.to_owned(),
-                position,
-            },
-        )?;
+        IriParser::parse(iri, Some(&self), target_buffer)?;
         Ok(())
     }
 
@@ -124,18 +116,58 @@ impl<T: Deref<Target = str> + fmt::Display> fmt::Display for Iri<T> {
 #[derive(Debug)]
 pub struct IriParseError {
     iri: String,
-    position: usize,
+    kind: IriParseErrorKind,
 }
 
 impl fmt::Display for IriParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid IRI at char {}: {}", self.position, self.iri)
+        match &self.kind {
+            IriParseErrorKind::NoScheme => write!(f, "No scheme found in IRI: {}", self.iri),
+            IriParseErrorKind::InvalidHostCharacter(c) => write!(
+                f,
+                "Invalid character '{}' found in IRI host: {}",
+                c, self.iri
+            ),
+            IriParseErrorKind::InvalidHostIp(e) => {
+                write!(f, "Invalid host IP ({}) found in IRI: {}", e, self.iri)
+            }
+            IriParseErrorKind::InvalidPortCharacter(c) => write!(
+                f,
+                "Invalid character '{}' found in IRI port: {}",
+                c, self.iri
+            ),
+            IriParseErrorKind::InvalidIriCodePoint(c) => {
+                write!(f, "Invalid IRI code point '{}' in {}", c, self.iri)
+            }
+            IriParseErrorKind::InvalidPercentEncoding(cs) => write!(
+                f,
+                "Invalid IRI percent encoding '{}' in {}",
+                cs.iter().flatten().cloned().collect::<String>(),
+                self.iri
+            ),
+        }
     }
 }
 
-impl Error for IriParseError {}
+impl Error for IriParseError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        if let IriParseErrorKind::InvalidHostIp(e) = &self.kind {
+            Some(e)
+        } else {
+            None
+        }
+    }
+}
 
-type IriState = Result<usize, usize>; // usize = the end position
+#[derive(Debug)]
+enum IriParseErrorKind {
+    NoScheme,
+    InvalidHostCharacter(char),
+    InvalidHostIp(AddrParseError),
+    InvalidPortCharacter(char),
+    InvalidIriCodePoint(char),
+    InvalidPercentEncoding([Option<char>; 3]),
+}
 
 #[derive(Eq, PartialEq, Debug, Clone, Hash)]
 struct IriElementsPositions {
@@ -143,475 +175,606 @@ struct IriElementsPositions {
     authority_end: usize,
     path_end: usize,
     query_end: usize,
-    fragment_end: usize,
+    cannot_be_a_base: bool,
 }
 
-// RFC 3986 5.2 Relative Resolution algorithm
-fn resolve_relative_iri(
-    reference_iri: &str,
-    base_iri: &str,
-    base_positions: &IriElementsPositions,
-    target_buffer: &mut String,
-) -> Result<IriElementsPositions, usize> {
-    let base_scheme = &base_iri[0..base_positions.scheme_end];
-    let base_authority = &base_iri[base_positions.scheme_end..base_positions.authority_end];
-    let base_path = &base_iri[base_positions.authority_end..base_positions.path_end];
-    let base_query = &base_iri[base_positions.path_end..base_positions.query_end];
+trait OutputBuffer {
+    fn push(&mut self, c: char);
 
-    let reference_positions = parse_iri_reference(reference_iri.as_bytes(), 0)?;
-    let r_scheme = &reference_iri[0..reference_positions.scheme_end];
-    let r_authority =
-        &reference_iri[reference_positions.scheme_end..reference_positions.authority_end];
-    let r_path = &reference_iri[reference_positions.authority_end..reference_positions.path_end];
-    let r_query = &reference_iri[reference_positions.path_end..reference_positions.query_end];
-    let r_fragment = &reference_iri[reference_positions.query_end..];
+    fn push_str(&mut self, s: &str);
 
-    let scheme_end;
-    let authority_end;
-    let path_end;
-    let query_end;
-    let fragment_end;
+    fn clear(&mut self);
 
-    // if defined(R.scheme) then
-    if !r_scheme.is_empty() {
-        // T.scheme = R.scheme;
-        target_buffer.push_str(r_scheme);
-        scheme_end = target_buffer.len();
+    fn truncate(&mut self, new_len: usize);
 
-        // T.authority = R.authority;
-        target_buffer.push_str(r_authority);
-        authority_end = target_buffer.len();
+    fn len(&self) -> usize;
 
-        // T.path = remove_dot_segments(R.path);
-        append_and_remove_dot_segments(r_path, target_buffer, target_buffer.len());
-        path_end = target_buffer.len();
+    fn as_str(&self) -> &str;
+}
 
-        // T.query = R.query;
-        target_buffer.push_str(r_query);
-        query_end = target_buffer.len();
+#[derive(Default)]
+struct VoidOutputBuffer {
+    len: usize,
+}
 
-        // T.fragment = R.fragment;
-        target_buffer.push_str(r_fragment);
-        fragment_end = target_buffer.len();
-    } else {
-        // T.scheme = Base.scheme;
-        target_buffer.push_str(base_scheme);
-        scheme_end = target_buffer.len();
+impl OutputBuffer for VoidOutputBuffer {
+    fn push(&mut self, c: char) {
+        self.len += c.len_utf8();
+    }
 
-        // if defined(R.authority) then
-        if !r_authority.is_empty() {
-            // T.authority = R.authority;
-            target_buffer.push_str(r_authority);
-            authority_end = target_buffer.len();
+    fn push_str(&mut self, s: &str) {
+        self.len += s.len();
+    }
 
-            // T.path = remove_dot_segments(R.path);
-            append_and_remove_dot_segments(r_path, target_buffer, target_buffer.len());
-            path_end = target_buffer.len();
+    fn clear(&mut self) {
+        self.len = 0;
+    }
 
-            // T.query = R.query;
-            target_buffer.push_str(r_query);
-            query_end = target_buffer.len();
+    fn truncate(&mut self, new_len: usize) {
+        self.len = new_len;
+    }
 
-            // T.fragment = R.fragment;
-            target_buffer.push_str(r_fragment);
-            fragment_end = target_buffer.len();
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn as_str(&self) -> &str {
+        ""
+    }
+}
+
+impl OutputBuffer for String {
+    fn push(&mut self, c: char) {
+        self.push(c);
+    }
+
+    fn push_str(&mut self, s: &str) {
+        self.push_str(s);
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn truncate(&mut self, new_len: usize) {
+        self.truncate(new_len);
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn as_str(&self) -> &str {
+        self.as_str()
+    }
+}
+
+struct ParserInput<'a> {
+    head: Option<char>,
+    value: Chars<'a>,
+    position: usize,
+}
+impl<'a> ParserInput<'a> {
+    fn next(&mut self) -> Option<char> {
+        if let Some(head) = self.head.take() {
+            self.position += head.len_utf8();
+            Some(head)
+        } else if let Some(head) = self.value.next() {
+            self.position += head.len_utf8();
+            Some(head)
         } else {
-            // T.authority = Base.authority;
-            target_buffer.push_str(base_authority);
-            authority_end = target_buffer.len();
+            None
+        }
+    }
 
-            // if (R.path == "") then
-            if r_path == "" {
-                // T.path = Base.path;
-                target_buffer.push_str(base_path);
-                path_end = target_buffer.len();
+    fn move_back(&mut self, head: Option<char>) {
+        self.position -= head.map_or(0, |h| h.len_utf8());
+        self.head = head
+    }
+}
 
-                // if defined(R.query) then
-                if !r_query.is_empty() {
-                    // T.query = R.query;
-                    target_buffer.push_str(r_query);
-                } else {
-                    // T.query = Base.query;
-                    target_buffer.push_str(base_query);
+/// parser implementing https://url.spec.whatwg.org/#concept-basic-url-parser without the normalization or backward compatibility bits to comply with RFC 3987
+///
+/// A sub function takes care of each state
+struct IriParser<'a, BC: Deref<Target = str>, O: OutputBuffer> {
+    iri: &'a str,
+    base: Option<&'a Iri<BC>>,
+    input: ParserInput<'a>,
+    output: &'a mut O,
+    output_positions: IriElementsPositions,
+    input_scheme_end: usize,
+}
+
+impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
+    fn parse(
+        iri: &'a str,
+        base: Option<&'a Iri<BC>>,
+        output: &'a mut O,
+    ) -> Result<IriElementsPositions, IriParseError> {
+        let mut parser = Self {
+            iri,
+            base,
+            input: ParserInput {
+                head: None,
+                value: iri.chars(),
+                position: 0,
+            },
+            output,
+            output_positions: IriElementsPositions {
+                scheme_end: 0,
+                authority_end: 0,
+                path_end: 0,
+                query_end: 0,
+                cannot_be_a_base: false,
+            },
+            input_scheme_end: 0,
+        };
+        parser.parse_scheme_start()?;
+        Ok(parser.output_positions)
+    }
+
+    fn parse_scheme_start(&mut self) -> Result<(), IriParseError> {
+        match self.input.next() {
+            Some(c) if c.is_ascii_alphabetic() => {
+                self.output.push(c);
+                self.parse_scheme()
+            }
+            c => {
+                self.input.move_back(c);
+                self.parse_no_scheme()
+            }
+        }
+    }
+
+    fn parse_scheme(&mut self) -> Result<(), IriParseError> {
+        loop {
+            let c = self.input.next();
+            match c {
+                Some(c) if c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.' => {
+                    self.output.push(c)
                 }
-                query_end = target_buffer.len();
-            } else {
-                // if (R.path starts-with "/") then
-                if r_path.starts_with('/') {
-                    // T.path = remove_dot_segments(R.path);
-                    append_and_remove_dot_segments(r_path, target_buffer, target_buffer.len());
-                } else {
-                    let path_start_in_target = target_buffer.len();
-                    // T.path = merge(Base.path, R.path);
-                    // T.path = remove_dot_segments(T.path);
-                    if base_positions.authority_end > base_positions.scheme_end
-                        && base_positions.path_end == base_positions.authority_end
-                    {
-                        append_and_remove_dot_segments_with_extra_slash(
-                            r_path,
-                            target_buffer,
-                            path_start_in_target,
-                        );
+                Some(':') => {
+                    self.output.push(':');
+                    self.output_positions.scheme_end = self.output.len();
+                    self.input_scheme_end = self.input.position;
+                    let next = self.input.next();
+                    return if next == Some('/') {
+                        self.output.push('/');
+                        self.parse_path_or_authority()
                     } else {
-                        let last_base_slash = base_path
-                            .char_indices()
-                            .rev()
-                            .find(|(_, c)| *c == '/')
-                            .map_or(0, |(i, _)| i)
-                            + base_positions.authority_end;
-                        append_and_remove_dot_segments(
-                            &base_iri[base_positions.authority_end..=last_base_slash],
-                            target_buffer,
-                            path_start_in_target,
-                        );
-                        if target_buffer.ends_with('/') {
-                            target_buffer.pop();
-                            append_and_remove_dot_segments_with_extra_slash(
-                                r_path,
-                                target_buffer,
-                                path_start_in_target,
-                            );
-                        } else {
-                            append_and_remove_dot_segments(
-                                r_path,
-                                target_buffer,
-                                path_start_in_target,
-                            );
-                        }
+                        self.input.move_back(next);
+                        self.output_positions.authority_end = self.output.len();
+                        self.output_positions.cannot_be_a_base = true;
+                        self.parse_cannot_be_a_base()
+                    };
+                }
+                _ => {
+                    self.input = ParserInput {
+                        head: None,
+                        value: self.iri.chars(),
+                        position: 0,
+                    }; // reset
+                    self.output.clear();
+                    return self.parse_no_scheme();
+                }
+            }
+        }
+    }
+
+    fn parse_no_scheme(&mut self) -> Result<(), IriParseError> {
+        let c = self.input.next();
+        if let Some(base) = self.base {
+            if base.positions.cannot_be_a_base && c != Some('#') {
+                self.parse_error(IriParseErrorKind::NoScheme)
+            } else if base.positions.cannot_be_a_base && c == Some('#') {
+                self.output.push_str(&base.iri[..base.positions.query_end]);
+                self.output.push('#');
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output_positions.authority_end = base.positions.authority_end;
+                self.output_positions.path_end = base.positions.path_end;
+                self.output_positions.query_end = base.positions.query_end;
+                self.output_positions.cannot_be_a_base = true;
+                self.parse_fragment()
+            } else {
+                self.input.move_back(c);
+                self.parse_relative()
+            }
+        } else {
+            self.parse_error(IriParseErrorKind::NoScheme)
+        }
+    }
+
+    fn parse_path_or_authority(&mut self) -> Result<(), IriParseError> {
+        match self.input.next() {
+            Some('/') => {
+                self.output.push('/');
+                self.parse_authority()
+            }
+            c => {
+                self.input.move_back(c);
+                self.output_positions.authority_end = self.output.len() - 1;
+                self.parse_path()
+            }
+        }
+    }
+
+    fn parse_relative(&mut self) -> Result<(), IriParseError> {
+        let base = self.base.unwrap();
+        match self.input.next() {
+            None => {
+                self.output.push_str(&base.iri[..base.positions.query_end]);
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output_positions.authority_end = base.positions.authority_end;
+                self.output_positions.path_end = base.positions.path_end;
+                self.output_positions.query_end = base.positions.query_end;
+                Ok(())
+            }
+            Some('/') => self.parse_relative_slash(),
+            Some('?') => {
+                self.output.push_str(&base.iri[..base.positions.path_end]);
+                self.output.push('?');
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output_positions.authority_end = base.positions.authority_end;
+                self.output_positions.path_end = base.positions.path_end;
+                self.parse_query()
+            }
+            Some('#') => {
+                self.output.push_str(&base.iri[..base.positions.query_end]);
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output_positions.authority_end = base.positions.authority_end;
+                self.output_positions.path_end = base.positions.path_end;
+                self.output_positions.query_end = base.positions.query_end;
+                self.output.push('#');
+                self.parse_fragment()
+            }
+            c => {
+                self.output.push_str(&base.iri[..base.positions.path_end]);
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output_positions.authority_end = base.positions.authority_end;
+                self.output_positions.path_end = base.positions.path_end;
+                self.remove_last_segment();
+                self.output.push('/');
+                self.input.move_back(c);
+                self.parse_path()
+            }
+        }
+    }
+
+    fn parse_relative_slash(&mut self) -> Result<(), IriParseError> {
+        let base = self.base.unwrap();
+        match self.input.next() {
+            Some('/') => {
+                self.output.push_str(&base.iri[..base.positions.scheme_end]);
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output.push('/');
+                self.output.push('/');
+                self.parse_authority()
+            }
+            c => {
+                self.output
+                    .push_str(&base.iri[..base.positions.authority_end]);
+                self.output.push('/');
+                self.output_positions.scheme_end = base.positions.scheme_end;
+                self.output_positions.authority_end = base.positions.authority_end;
+                self.input.move_back(c);
+                self.parse_path()
+            }
+        }
+    }
+
+    fn parse_authority(&mut self) -> Result<(), IriParseError> {
+        // @ are not allowed in IRI authorities so not need to take care of ambiguities
+        loop {
+            let c = self.input.next();
+            match c {
+                Some('@') => {
+                    self.output.push('@');
+                    return self.parse_host();
+                }
+                None | Some('[') | Some('/') | Some('?') | Some('#') => {
+                    self.input = ParserInput {
+                        head: None,
+                        value: self.iri[self.input_scheme_end + 2..].chars(),
+                        position: self.input_scheme_end + 2,
+                    };
+                    self.output.truncate(self.output_positions.scheme_end + 2);
+                    return self.parse_host();
+                }
+                Some(c) => {
+                    self.read_url_codepoint_or_echar(c)?;
+                    self.output.push(c);
+                }
+            }
+        }
+    }
+
+    fn parse_host(&mut self) -> Result<(), IriParseError> {
+        let mut in_bracket = false;
+        loop {
+            let c = self.input.next();
+            match c {
+                Some(':') if !in_bracket => {
+                    self.validate_host(
+                        &self.iri[self.input_scheme_end + 2..self.input.position - 1],
+                    )?;
+                    self.output.push(':');
+                    return self.parse_port();
+                }
+                None | Some('/') | Some('?') | Some('#') => {
+                    self.input.move_back(c);
+                    self.output_positions.authority_end = self.output.len();
+                    self.validate_host(&self.iri[self.input_scheme_end + 2..self.input.position])?;
+                    return self.parse_path_start();
+                }
+                Some('[') => {
+                    self.output.push('[');
+                    in_bracket = true;
+                }
+                Some(']') => {
+                    self.output.push(']');
+                    in_bracket = false;
+                }
+                Some(c) => self.output.push(c),
+            }
+        }
+    }
+
+    fn parse_port(&mut self) -> Result<(), IriParseError> {
+        loop {
+            let c = self.input.next();
+            match c {
+                Some(c) if c.is_ascii_digit() => self.output.push(c),
+                Some('/') | Some('?') | Some('#') | None => {
+                    self.input.move_back(c);
+                    self.output_positions.authority_end = self.output.len();
+                    return self.parse_path_start();
+                }
+                Some(c) => return self.parse_error(IriParseErrorKind::InvalidPortCharacter(c)),
+            }
+        }
+    }
+
+    fn parse_path_start(&mut self) -> Result<(), IriParseError> {
+        match self.input.next() {
+            None => {
+                self.output_positions.path_end = self.output.len();
+                self.output_positions.query_end = self.output.len();
+                Ok(())
+            }
+            Some('?') => {
+                self.output_positions.path_end = self.output.len();
+                self.output.push('?');
+                self.parse_query()
+            }
+            Some('#') => {
+                self.output_positions.path_end = self.output.len();
+                self.output_positions.query_end = self.output.len();
+                self.output.push('#');
+                self.parse_fragment()
+            }
+            Some('/') => {
+                self.output.push('/');
+                self.parse_path()
+            }
+            Some(c) => {
+                self.input.move_back(Some(c));
+                self.parse_path()
+            }
+        }
+    }
+
+    fn parse_path(&mut self) -> Result<(), IriParseError> {
+        loop {
+            let c = self.input.next();
+            match c {
+                None | Some('/') | Some('?') | Some('#') => {
+                    if is_last_segment_dots(self.output.as_str(), 2) {
+                        self.remove_last_segment();
+                        self.remove_last_segment();
+                        self.output.push('/');
+                    } else if is_last_segment_dots(self.output.as_str(), 1) {
+                        self.remove_last_segment();
+                        self.output.push('/');
+                    } else if c == Some('/') {
+                        self.output.push('/');
+                    }
+
+                    if c == Some('?') {
+                        self.output_positions.path_end = self.output.len();
+                        self.output.push('?');
+                        return self.parse_query();
+                    } else if c == Some('#') {
+                        self.output_positions.path_end = self.output.len();
+                        self.output_positions.query_end = self.output.len();
+                        self.output.push('#');
+                        return self.parse_fragment();
+                    } else if c == None {
+                        self.output_positions.path_end = self.output.len();
+                        self.output_positions.query_end = self.output.len();
+                        return Ok(());
                     }
                 }
-                path_end = target_buffer.len();
-
-                // T.query = R.query;
-                target_buffer.push_str(r_query);
-                query_end = target_buffer.len();
+                Some(c) => self.read_url_codepoint_or_echar(c)?,
             }
-            // T.fragment = R.fragment;
-            target_buffer.push_str(r_fragment);
-            fragment_end = target_buffer.len();
         }
     }
-    Ok(IriElementsPositions {
-        scheme_end,
-        authority_end,
-        path_end,
-        query_end,
-        fragment_end,
-    })
-}
 
-// RFC 3986 5.2.4 Remove Dot Segments
-fn append_and_remove_dot_segments(
-    mut input: &str,
-    output: &mut String,
-    path_start_in_output: usize,
-) {
-    while !input.is_empty() {
-        if input.starts_with("../") {
-            input = &input[3..];
-        } else if input.starts_with("./") || input.starts_with("/./") {
-            input = &input[2..];
-        } else if input == "/." {
-            input = "/";
-        } else if input.starts_with("/../") {
-            pop_last_segment(output, path_start_in_output);
-            input = &input[3..];
-        } else if input == "/.." {
-            pop_last_segment(output, path_start_in_output);
-            input = "/";
-        } else if input == "." || input == ".." {
-            input = "";
-        } else {
-            if input.starts_with('/') {
-                output.push('/');
-                input = &input[1..];
-            }
-            if let Some(i) = input.find('/') {
-                output.push_str(&input[..i]);
-                input = &input[i..];
+    fn parse_cannot_be_a_base(&mut self) -> Result<(), IriParseError> {
+        while let Some(c) = self.input.next() {
+            if c == '?' {
+                self.output_positions.path_end = self.output.len();
+                self.output.push('?');
+                return self.parse_query();
+            } else if c == '#' {
+                self.output_positions.path_end = self.output.len();
+                self.output_positions.query_end = self.output.len();
+                self.output.push('#');
+                return self.parse_fragment();
             } else {
-                output.push_str(input);
-                input = "";
+                self.read_url_codepoint_or_echar(c)?
             }
         }
+        self.output_positions.path_end = self.output.len();
+        self.output_positions.query_end = self.output.len();
+        Ok(())
     }
-}
 
-fn pop_last_segment(buffer: &mut String, path_start_in_buffer: usize) {
-    if let Some((last_slash_position, _)) = buffer[path_start_in_buffer..]
-        .char_indices()
-        .rev()
-        .find(|(_, c)| *c == '/')
-    {
-        buffer.truncate(last_slash_position + path_start_in_buffer)
+    fn parse_query(&mut self) -> Result<(), IriParseError> {
+        while let Some(c) = self.input.next() {
+            if c == '#' {
+                self.output_positions.query_end = self.output.len();
+                self.output.push('#');
+                return self.parse_fragment();
+            } else {
+                self.read_url_codepoint_or_echar(c)?
+            }
+        }
+        self.output_positions.query_end = self.output.len();
+        Ok(())
     }
-}
 
-fn append_and_remove_dot_segments_with_extra_slash(
-    input: &str,
-    output: &mut String,
-    path_start_in_output: usize,
-) {
-    if input.is_empty() {
-        output.push('/');
-    } else if input.starts_with("./") {
-        append_and_remove_dot_segments(&input[1..], output, path_start_in_output)
-    } else if input == "." {
-        append_and_remove_dot_segments("/", output, path_start_in_output)
-    } else if input.starts_with("../") {
-        pop_last_segment(output, path_start_in_output);
-        append_and_remove_dot_segments(&input[2..], output, path_start_in_output)
-    } else if input == ".." {
-        pop_last_segment(output, path_start_in_output);
-        append_and_remove_dot_segments("/", output, path_start_in_output)
-    } else {
-        output.push('/');
-        if let Some(i) = input.find('/') {
-            output.push_str(&input[..i]);
-            append_and_remove_dot_segments(&input[i..], output, path_start_in_output)
-        } else {
-            output.push_str(input);
+    fn parse_fragment(&mut self) -> Result<(), IriParseError> {
+        while let Some(c) = self.input.next() {
+            self.read_url_codepoint_or_echar(c)?
+        }
+        Ok(())
+    }
+
+    fn remove_last_segment(&mut self) {
+        if let Some((last_slash_position, _)) = self.output.as_str()
+            [self.output_positions.authority_end..]
+            .char_indices()
+            .rev()
+            .find(|(_, c)| *c == '/')
+        {
+            self.output
+                .truncate(last_slash_position + self.output_positions.authority_end)
         }
     }
-}
 
-fn parse_iri(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
-    // IRI = scheme ":" ihier-part [ "?" iquery ] [ "#" ifragment ]
-    let scheme_end = parse_scheme(value, start)?;
-    if scheme_end >= value.len() || value[scheme_end] != b':' {
-        return Err(scheme_end);
+    fn read_url_codepoint_or_echar(&mut self, c: char) -> Result<(), IriParseError> {
+        if c == '%' {
+            let c1 = self.input.next();
+            let c2 = self.input.next();
+            if c1.map_or(false, |c| c.is_ascii_hexdigit())
+                && c2.map_or(false, |c| c.is_ascii_hexdigit())
+            {
+                self.output.push('%');
+                self.output.push(c1.unwrap());
+                self.output.push(c2.unwrap());
+                Ok(())
+            } else {
+                self.parse_error(IriParseErrorKind::InvalidPercentEncoding([
+                    Some('%'),
+                    c1,
+                    c2,
+                ]))
+            }
+        } else if is_url_code_point(c) {
+            self.output.push(c);
+            Ok(())
+        } else {
+            self.parse_error(IriParseErrorKind::InvalidIriCodePoint(c))
+        }
     }
 
-    let (authority_end, path_end) = parse_ihier_part(value, scheme_end + 1)?;
-
-    let query_end = if path_end < value.len() && value[path_end] == b'?' {
-        parse_iquery(value, path_end + 1)?
-    } else {
-        path_end
-    };
-
-    let fragment_end = if query_end < value.len() && value[query_end] == b'#' {
-        parse_ifragment(value, query_end + 1)?
-    } else {
-        query_end
-    };
-
-    Ok(IriElementsPositions {
-        scheme_end: scheme_end + 1,
-        authority_end,
-        path_end,
-        query_end,
-        fragment_end,
-    })
-}
-
-fn parse_ihier_part(value: &[u8], start: usize) -> Result<(usize, usize), usize> {
-    // (authority_end, path_end)
-    // ihier-part = "//" iauthority ipath-abempty / ipath-absolute / ipath-rootless / ipath-empty
-    if value[start..].starts_with(b"//") {
-        let authority_end = parse_iauthority(value, start + 2)?;
-        Ok((authority_end, parse_ipath_abempty(value, authority_end)?))
-    } else if value[start..].starts_with(b"/") {
-        Ok((start, parse_ipath_absolute(value, start)?))
-    } else {
-        match parse_ipath_rootless(value, start) {
-            Ok(i) => Ok((start, i)),
-            Err(i) => {
-                if i == start {
-                    Ok((start, i)) // ipath empty
-                } else {
-                    Err(i)
+    fn validate_host(&self, host: &str) -> Result<(), IriParseError> {
+        if host.starts_with('[') {
+            if host.ends_with(']') {
+                match Ipv6Addr::from_str(&host[1..host.len() - 1]) {
+                    Ok(_) => Ok(()),
+                    Err(e) => self.parse_error(IriParseErrorKind::InvalidHostIp(e)),
+                }
+            } else {
+                self.parse_error(IriParseErrorKind::InvalidHostCharacter(
+                    host.chars().last().unwrap(),
+                ))
+            }
+        } else {
+            for c in host.chars() {
+                match c {
+                    '\0' | '\t' | '\n' | '\r' | ' ' | '#' | '/' | ':' | '?' | '@' | '[' | '\\'
+                    | ']' => return self.parse_error(IriParseErrorKind::InvalidHostCharacter(c)),
+                    _ => (),
                 }
             }
+            Ok(())
         }
     }
-}
 
-fn parse_iri_reference(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
-    // IRI-reference  = IRI / irelative-ref
-    match parse_iri(value, start) {
-        Ok(positions) => Ok(positions),
-        Err(_) => parse_irelative_ref(value, start),
+    fn parse_error<T>(&self, kind: IriParseErrorKind) -> Result<T, IriParseError> {
+        Err(IriParseError {
+            iri: self.iri.to_owned(),
+            kind,
+        })
     }
 }
 
-fn parse_irelative_ref(value: &[u8], start: usize) -> Result<IriElementsPositions, usize> {
-    // irelative-ref = irelative-part [ "?" iquery ] [ "#" ifragment ]
-    let (authority_end, path_end) = parse_irelative_path(value, start)?;
-
-    let query_end = if path_end < value.len() && value[path_end] == b'?' {
-        parse_iquery(value, path_end + 1)?
-    } else {
-        path_end
-    };
-    let fragment_end = if query_end < value.len() && value[query_end] == b'#' {
-        parse_ifragment(&value, query_end + 1)?
-    } else {
-        query_end
-    };
-
-    Ok(IriElementsPositions {
-        scheme_end: start,
-        authority_end,
-        path_end,
-        query_end,
-        fragment_end,
-    })
-}
-
-fn parse_irelative_path(value: &[u8], start: usize) -> Result<(usize, usize), usize> {
-    // (authority_end, path_end)
-    // irelative-part = "//" iauthority ipath-abempty / ipath-absolute / ipath-noscheme / ipath-empty
-    if value[start..].starts_with(b"//") {
-        let authority_end = parse_iauthority(&value, start + 2)?;
-        Ok((authority_end, parse_ipath_abempty(value, authority_end)?))
-    } else if value[start..].starts_with(b"/") {
-        Ok((start, parse_ipath_absolute(value, start)?))
-    } else {
-        match parse_ipath_noscheme(value, start) {
-            Ok(i) => Ok((start, i)),
-            Err(i) => {
-                if i == start {
-                    Ok((start, i)) // ipath empty
-                } else {
-                    Err(i)
-                }
-            }
+fn is_last_segment_dots(path: &str, number_of_dots: usize) -> bool {
+    if path.is_empty() {
+        return false;
+    }
+    let path = path.as_bytes();
+    let mut i = path.len() - 1;
+    for _ in 0..number_of_dots {
+        if i >= 1 && path[i] == b'.' {
+            i -= 1;
+        } else if i >= 3
+            && (path[i] == b'e' || path[i] == b'E')
+            && path[i - 1] == b'2'
+            && path[i - 2] == b'%'
+        {
+            i -= 3;
+        } else {
+            return false;
         }
     }
+    path[i] == b'/'
 }
 
-fn parse_scheme(value: &[u8], start: usize) -> IriState {
-    //  scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
-    if value.len() <= start || !is_alpha(value[start]) {
-        return Err(start);
-    }
-    for (i, c) in value[start..].iter().enumerate() {
-        match *c {
-            c if is_alpha(c) || is_digit(c) || c == b'+' || c == b'-' || c == b'.' => (),
-            _ => return Ok(start + i),
-        }
-    }
-    Err(value.len())
-}
-
-fn parse_iauthority(value: &[u8], start: usize) -> IriState {
-    // iauthority = [ iuserinfo "@" ] ihost [ ":" port ]
-    //TODO: implement properly
-    for (i, c) in value[start..].iter().enumerate() {
-        match *c {
-            b'/' | b'?' | b'#' => return Ok(start + i),
-            _ => (),
-        }
-    }
-    Ok(value.len())
-}
-
-fn parse_ipath_abempty(value: &[u8], start: usize) -> IriState {
-    // ipath-abempty  = *( "/" isegment )
-    let mut i = start;
-    while i < value.len() {
-        match value[i] {
-            b'/' => {
-                i = parse_isegment(value, i + 1)?;
-            }
-            _ => return Ok(i),
-        }
-    }
-    Ok(value.len())
-}
-
-fn parse_ipath_absolute(value: &[u8], start: usize) -> IriState {
-    // ipath-absolute = "/" [ isegment-nz *( "/" isegment ) ] = "/" [ isegment-nz ipath-abempty ]
-    if !value[start..].starts_with(b"/") {
-        return Err(start);
-    }
-
-    match parse_isegment_nz(value, start + 1) {
-        Ok(i) => parse_ipath_abempty(value, i),
-        Err(i) => {
-            if i == start + 1 {
-                Ok(i) // optional
-            } else {
-                Err(i)
-            }
-        }
-    }
-}
-
-fn parse_ipath_noscheme(value: &[u8], start: usize) -> IriState {
-    // ipath-noscheme = isegment-nz-nc *( "/" isegment ) =  isegment-nz-nc ipath-abempty
-    let i = parse_isegment_nz_nc(value, start)?;
-    parse_ipath_abempty(&value, i)
-}
-
-fn parse_ipath_rootless(value: &[u8], start: usize) -> IriState {
-    // ipath-rootless = isegment-nz *( "/" isegment ) = isegment-nz ipath-abempty
-    let i = parse_isegment_nz(value, start)?;
-    parse_ipath_abempty(value, i)
-}
-
-fn parse_isegment(value: &[u8], start: usize) -> IriState {
-    // isegment = *ipchar
-    //TODO: implement properly
-    for (i, c) in value[start..].iter().enumerate() {
-        match *c {
-            b'/' | b'?' | b'#' => return Ok(start + i),
-            _ => (),
-        }
-    }
-    Ok(value.len())
-}
-
-fn parse_isegment_nz(value: &[u8], start: usize) -> IriState {
-    // isegment-nz    = 1*ipchar
-    let i = parse_isegment(value, start)?;
-    if i == start {
-        Err(0)
-    } else {
-        Ok(i)
-    }
-}
-
-fn parse_isegment_nz_nc(value: &[u8], start: usize) -> IriState {
-    // isegment-nz-nc = 1*( iunreserved / pct-encoded / sub-delims / "@" )
-    //TODO: implement properly
-    for (i, c) in value[start..].iter().enumerate() {
-        match *c {
-            b'/' | b'?' | b'#' | b':' => return if i == start { Err(i) } else { Ok(i) },
-            _ => (),
-        }
-    }
-    Ok(value.len())
-}
-
-fn parse_iquery(value: &[u8], start: usize) -> IriState {
-    // iquery = *( ipchar / iprivate / "/" / "?" )
-    //TODO: implement properly
-    for (i, c) in value[start..].iter().enumerate() {
-        if *c == b'#' {
-            return Ok(start + i);
-        }
-    }
-    Ok(value.len())
-}
-
-fn parse_ifragment(value: &[u8], _start: usize) -> IriState {
-    // ifragment = *( ipchar / "/" / "?" )
-    //TODO: implement properly
-    Ok(value.len())
-}
-
-fn is_alpha(b: u8) -> bool {
-    match b {
-        b'a'..=b'z' | b'A'..=b'Z' => true,
-        _ => false,
-    }
-}
-
-fn is_digit(b: u8) -> bool {
-    match b {
-        b'0'..=b'9' => true,
+fn is_url_code_point(c: char) -> bool {
+    match c {
+        'a'..='z'
+        | 'A'..='Z'
+        | '0'..='9'
+        | '!'
+        | '$'
+        | '&'
+        | '\''
+        | '('
+        | ')'
+        | '*'
+        | '+'
+        | ','
+        | '-'
+        | '.'
+        | '/'
+        | ':'
+        | ';'
+        | '='
+        | '?'
+        | '@'
+        | '_'
+        | '~'
+        | '\u{A0}'..='\u{D7FF}'
+        | '\u{E000}'..='\u{FDCF}'
+        | '\u{FDF0}'..='\u{FFFD}'
+        | '\u{10000}'..='\u{1FFFD}'
+        | '\u{20000}'..='\u{2FFFD}'
+        | '\u{30000}'..='\u{3FFFD}'
+        | '\u{40000}'..='\u{4FFFD}'
+        | '\u{50000}'..='\u{5FFFD}'
+        | '\u{60000}'..='\u{6FFFD}'
+        | '\u{70000}'..='\u{7FFFD}'
+        | '\u{80000}'..='\u{8FFFD}'
+        | '\u{90000}'..='\u{9FFFD}'
+        | '\u{A0000}'..='\u{AFFFD}'
+        | '\u{B0000}'..='\u{BFFFD}'
+        | '\u{C0000}'..='\u{CFFFD}'
+        | '\u{D0000}'..='\u{DFFFD}'
+        | '\u{E1000}'..='\u{EFFFD}'
+        | '\u{F0000}'..='\u{FFFFD}'
+        | '\u{100000}'..='\u{10FFFD}' => true,
         _ => false,
     }
 }
@@ -642,77 +805,450 @@ fn test_parsing() {
         "http://example.com/foo/bar/#toto",
         "http://example.com/foo/bar?q=1&r=2#toto",
         "http://example.com/foo/bar/?q=1&r=2#toto",
+        "http://example.com/foo/bar/.././baz",
     ];
 
-    for e in &examples {
-        assert!(Iri::parse(*e).is_ok(), "{} is not recognized as an IRI", e);
+    for e in examples.iter() {
+        let result = Iri::parse(*e);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+}
+
+#[test]
+fn test_relative_parsing() {
+    // From https://sourceforge.net/projects/foursuite/ under Apache License
+
+    let examples = [
+        "file:///foo/bar",
+        "mailto:user@host?subject=blah",
+        "dav:",   // empty opaque part / rel-path allowed by RFC 2396bis
+        "about:", // empty opaque part / rel-path allowed by RFC 2396bis
+        //
+        // the following test cases are from a Perl script by David A. Wheeler
+        // at http://www.dwheeler.com/secure-programs/url.pl
+        "http://www.yahoo.com",
+        "http://www.yahoo.com/",
+        "http://1.2.3.4/",
+        "http://www.yahoo.com/stuff",
+        "http://www.yahoo.com/stuff/",
+        "http://www.yahoo.com/hello%20world/",
+        "http://www.yahoo.com?name=obi",
+        "http://www.yahoo.com?name=obi+wan&status=jedi",
+        "http://www.yahoo.com?onery",
+        "http://www.yahoo.com#bottom",
+        "http://www.yahoo.com/yelp.html#bottom",
+        "https://www.yahoo.com/",
+        "ftp://www.yahoo.com/",
+        "ftp://www.yahoo.com/hello",
+        "demo.txt",
+        "demo/hello.txt",
+        "demo/hello.txt?query=hello#fragment",
+        "/cgi-bin/query?query=hello#fragment",
+        "/demo.txt",
+        "/hello/demo.txt",
+        "hello/demo.txt",
+        "/",
+        "",
+        "#",
+        "#here",
+        // Wheeler"s script says these are invalid, but they aren"t
+        "http://www.yahoo.com?name=%00%01",
+        "http://www.yaho%6f.com",
+        "http://www.yahoo.com/hello%00world/",
+        "http://www.yahoo.com/hello+world/",
+        "http://www.yahoo.com?name=obi&",
+        "http://www.yahoo.com?name=obi&type=",
+        "http://www.yahoo.com/yelp.html#",
+        "//",
+        // the following test cases are from a Haskell program by Graham Klyne
+        // at http://www.ninebynine.org/Software/HaskellUtils/Network/URITest.hs
+        "http://example.org/aaa/bbb#ccc",
+        "mailto:local@domain.org",
+        "mailto:local@domain.org#frag",
+        "HTTP://EXAMPLE.ORG/AAA/BBB#CCC",
+        "//example.org/aaa/bbb#ccc",
+        "/aaa/bbb#ccc",
+        "bbb#ccc",
+        "#ccc",
+        "#",
+        "A'C",
+        //-- escapes
+        "http://example.org/aaa%2fbbb#ccc",
+        "http://example.org/aaa%2Fbbb#ccc",
+        "%2F",
+        "aaa%2Fbbb",
+        //-- ports
+        "http://example.org:80/aaa/bbb#ccc",
+        "http://example.org:/aaa/bbb#ccc",
+        "http://example.org./aaa/bbb#ccc",
+        "http://example.123./aaa/bbb#ccc",
+        //-- bare authority
+        "http://example.org",
+        //-- IPv6 literals (from RFC2732):
+        "http://[FEDC:BA98:7654:3210:FEDC:BA98:7654:3210]:80/index.html",
+        "http://[1080:0:0:0:8:800:200C:417A]/index.html",
+        "http://[3ffe:2a00:100:7031::1]",
+        "http://[1080::8:800:200C:417A]/foo",
+        "http://[::192.9.5.5]/ipng",
+        "http://[::FFFF:129.144.52.38]:80/index.html",
+        "http://[2010:836B:4179::836B:4179]",
+        "//[2010:836B:4179::836B:4179]",
+        //-- Random other things that crop up
+        "http://example/Andr&#567;",
+        "file:///C:/DEV/Haskell/lib/HXmlToolbox-3.01/examples/",
+    ];
+
+    let base = Iri::parse("http://a/b/c/d;p?q").unwrap();
+    for e in examples.iter() {
+        let result = base.resolve(*e);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+}
+
+#[test]
+fn test_wrong_relative_parsing() {
+    // From https://sourceforge.net/projects/foursuite/ under Apache License
+
+    let examples = [
+        "beepbeep\x07\x07",
+        "\n",
+        // "::", // not OK, per Roy Fielding on the W3C uri list on 2004-04-01
+        //
+        // the following test cases are from a Perl script by David A. Wheeler
+        // at http://www.dwheeler.com/secure-programs/url.pl
+        "http://www yahoo.com",
+        "http://www.yahoo.com/hello world/",
+        "http://www.yahoo.com/yelp.html#\"",
+        //
+        // the following test cases are from a Haskell program by Graham Klyne
+        // at http://www.ninebynine.org/Software/HaskellUtils/Network/URITest.hs
+        "[2010:836B:4179::836B:4179]",
+        " ",
+        "%",
+        "A%Z",
+        "%ZZ",
+        "%AZ",
+        "A C",
+        // "A'C",
+        "A`C",
+        "A<C",
+        "A>C",
+        "A^C",
+        "A\\C",
+        "A{C",
+        "A|C",
+        "A}C",
+        "A[C",
+        "A]C",
+        "A[**]C",
+        "http://[xyz]/",
+        "http://]/",
+        "http://example.org/[2010:836B:4179::836B:4179]",
+        "http://example.org/abc#[2010:836B:4179::836B:4179]",
+        "http://example.org/xxx/[qwerty]#a[b]",
+        //
+        // from a post to the W3C uri list on 2004-02-17
+        "http://w3c.org:80path1/path2",
+    ];
+
+    let base = Iri::parse("http://a/b/c/d;p?q").unwrap();
+    for e in examples.iter() {
+        let result = base.resolve(*e);
+        assert!(result.is_err(), "{} is wrongly considered valid", e);
     }
 }
 
 #[test]
 fn test_resolve_relative_iri() {
-    let base = "http://a/b/c/d;p?q";
+    // From https://sourceforge.net/projects/foursuite/ under Apache License
 
     let examples = [
-        ("g:h", "g:h"),
-        ("g", "http://a/b/c/g"),
-        ("g/", "http://a/b/c/g/"),
-        ("/g", "http://a/g"),
-        ("//g", "http://g"),
-        ("?y", "http://a/b/c/d;p?y"),
-        ("g?y", "http://a/b/c/g?y"),
-        ("#s", "http://a/b/c/d;p?q#s"),
-        ("g#s", "http://a/b/c/g#s"),
-        ("g?y#s", "http://a/b/c/g?y#s"),
-        (";x", "http://a/b/c/;x"),
-        ("g;x", "http://a/b/c/g;x"),
-        ("g;x?y#s", "http://a/b/c/g;x?y#s"),
-        ("", "http://a/b/c/d;p?q"),
-        (".", "http://a/b/c/"),
-        ("./", "http://a/b/c/"),
-        ("./g", "http://a/b/c/g"),
-        ("..", "http://a/b/"),
-        ("../", "http://a/b/"),
-        ("../g", "http://a/b/g"),
-        ("../..", "http://a/"),
-        ("../../", "http://a/"),
-        ("../../g", "http://a/g"),
-        ("../../../g", "http://a/g"),
-        ("../../../../g", "http://a/g"),
-        ("/./g", "http://a/g"),
-        ("/../g", "http://a/g"),
-        ("g.", "http://a/b/c/g."),
-        (".g", "http://a/b/c/.g"),
-        ("g..", "http://a/b/c/g.."),
-        ("..g", "http://a/b/c/..g"),
-        ("./../g", "http://a/b/g"),
-        ("./g/.", "http://a/b/c/g/"),
-        ("g/./h", "http://a/b/c/g/h"),
-        ("g/../h", "http://a/b/c/h"),
-        ("g;x=1/./y", "http://a/b/c/g;x=1/y"),
-        ("g;x=1/../y", "http://a/b/c/y"),
-        ("g?y/./x", "http://a/b/c/g?y/./x"),
-        ("g?y/../x", "http://a/b/c/g?y/../x"),
-        ("g#s/./x", "http://a/b/c/g#s/./x"),
-        ("g#s/../x", "http://a/b/c/g#s/../x"),
-        ("http:g", "http:g"),
-        ("./g:h", "http://a/b/c/g:h"),
+        // http://lists.w3.org/Archives/Public/uri/2004Feb/0114.html
+        ("/.", "http://a/b/c/d;p?q", "http://a/"),
+        ("/.foo", "http://a/b/c/d;p?q", "http://a/.foo"),
+        (".foo", "http://a/b/c/d;p?q", "http://a/b/c/.foo"),
+        // http://gbiv.com/protocols/uri/test/rel_examples1.html
+        // examples from RFC 2396
+        ("g:h", "http://a/b/c/d;p?q", "g:h"),
+        ("g", "http://a/b/c/d;p?q", "http://a/b/c/g"),
+        ("./g", "http://a/b/c/d;p?q", "http://a/b/c/g"),
+        ("g/", "http://a/b/c/d;p?q", "http://a/b/c/g/"),
+        ("/g", "http://a/b/c/d;p?q", "http://a/g"),
+        ("//g", "http://a/b/c/d;p?q", "http://g"),
+        // changed with RFC 2396bis
+        //("?y"      , "http://a/b/c/d;p?q", "http://a/b/c/d;p?y"),
+        ("?y", "http://a/b/c/d;p?q", "http://a/b/c/d;p?y"),
+        ("g?y", "http://a/b/c/d;p?q", "http://a/b/c/g?y"),
+        // changed with RFC 2396bis
+        //("#s"      , "http://a/b/c/d;p?q", CURRENT_DOC_URI + "#s"),
+        ("#s", "http://a/b/c/d;p?q", "http://a/b/c/d;p?q#s"),
+        ("g#s", "http://a/b/c/d;p?q", "http://a/b/c/g#s"),
+        ("g?y#s", "http://a/b/c/d;p?q", "http://a/b/c/g?y#s"),
+        (";x", "http://a/b/c/d;p?q", "http://a/b/c/;x"),
+        ("g;x", "http://a/b/c/d;p?q", "http://a/b/c/g;x"),
+        ("g;x?y#s", "http://a/b/c/d;p?q", "http://a/b/c/g;x?y#s"),
+        // changed with RFC 2396bis
+        //(""        , "http://a/b/c/d;p?q", CURRENT_DOC_URI),
+        ("", "http://a/b/c/d;p?q", "http://a/b/c/d;p?q"),
+        (".", "http://a/b/c/d;p?q", "http://a/b/c/"),
+        ("./", "http://a/b/c/d;p?q", "http://a/b/c/"),
+        ("..", "http://a/b/c/d;p?q", "http://a/b/"),
+        ("../", "http://a/b/c/d;p?q", "http://a/b/"),
+        ("../g", "http://a/b/c/d;p?q", "http://a/b/g"),
+        ("../..", "http://a/b/c/d;p?q", "http://a/"),
+        ("../../", "http://a/b/c/d;p?q", "http://a/"),
+        ("../../g", "http://a/b/c/d;p?q", "http://a/g"),
+        ("../../../g", "http://a/b/c/d;p?q", "http://a/g"),
+        ("../../../../g", "http://a/b/c/d;p?q", "http://a/g"),
+        // changed with RFC 2396bis
+        ("/./g", "http://a/b/c/d;p?q", "http://a/g"),
+        // changed with RFC 2396bis
+        ("/../g", "http://a/b/c/d;p?q", "http://a/g"),
+        ("g.", "http://a/b/c/d;p?q", "http://a/b/c/g."),
+        (".g", "http://a/b/c/d;p?q", "http://a/b/c/.g"),
+        ("g..", "http://a/b/c/d;p?q", "http://a/b/c/g.."),
+        ("..g", "http://a/b/c/d;p?q", "http://a/b/c/..g"),
+        ("./../g", "http://a/b/c/d;p?q", "http://a/b/g"),
+        ("./g/.", "http://a/b/c/d;p?q", "http://a/b/c/g/"),
+        ("g/./h", "http://a/b/c/d;p?q", "http://a/b/c/g/h"),
+        ("g/../h", "http://a/b/c/d;p?q", "http://a/b/c/h"),
+        ("g;x=1/./y", "http://a/b/c/d;p?q", "http://a/b/c/g;x=1/y"),
+        ("g;x=1/../y", "http://a/b/c/d;p?q", "http://a/b/c/y"),
+        ("g?y/./x", "http://a/b/c/d;p?q", "http://a/b/c/g?y/./x"),
+        ("g?y/../x", "http://a/b/c/d;p?q", "http://a/b/c/g?y/../x"),
+        ("g#s/./x", "http://a/b/c/d;p?q", "http://a/b/c/g#s/./x"),
+        ("g#s/../x", "http://a/b/c/d;p?q", "http://a/b/c/g#s/../x"),
+        ("http:g", "http://a/b/c/d;p?q", "http:g"),
+        ("http:", "http://a/b/c/d;p?q", "http:"),
+        // not sure where this one originated
+        ("/a/b/c/./../../g", "http://a/b/c/d;p?q", "http://a/a/g"),
+        // http://gbiv.com/protocols/uri/test/rel_examples2.html
+        // slashes in base URI"s query args
+        ("g", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g"),
+        ("./g", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g"),
+        ("g/", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g/"),
+        ("/g", "http://a/b/c/d;p?q=1/2", "http://a/g"),
+        ("//g", "http://a/b/c/d;p?q=1/2", "http://g"),
+        // changed in RFC 2396bis
+        ("?y", "http://a/b/c/d;p?q=1/2", "http://a/b/c/d;p?y"),
+        ("g?y", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g?y"),
+        ("g?y/./x", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g?y/./x"),
+        (
+            "g?y/../x",
+            "http://a/b/c/d;p?q=1/2",
+            "http://a/b/c/g?y/../x",
+        ),
+        ("g#s", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g#s"),
+        ("g#s/./x", "http://a/b/c/d;p?q=1/2", "http://a/b/c/g#s/./x"),
+        (
+            "g#s/../x",
+            "http://a/b/c/d;p?q=1/2",
+            "http://a/b/c/g#s/../x",
+        ),
+        ("./", "http://a/b/c/d;p?q=1/2", "http://a/b/c/"),
+        ("../", "http://a/b/c/d;p?q=1/2", "http://a/b/"),
+        ("../g", "http://a/b/c/d;p?q=1/2", "http://a/b/g"),
+        ("../../", "http://a/b/c/d;p?q=1/2", "http://a/"),
+        ("../../g", "http://a/b/c/d;p?q=1/2", "http://a/g"),
+        // http://gbiv.com/protocols/uri/test/rel_examples3.html
+        // slashes in path params
+        // all of these changed in RFC 2396bis
+        ("g", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/g"),
+        ("./g", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/g"),
+        ("g/", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/g/"),
+        ("g?y", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/g?y"),
+        (";x", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/;x"),
+        ("g;x", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/g;x"),
+        (
+            "g;x=1/./y",
+            "http://a/b/c/d;p=1/2?q",
+            "http://a/b/c/d;p=1/g;x=1/y",
+        ),
+        (
+            "g;x=1/../y",
+            "http://a/b/c/d;p=1/2?q",
+            "http://a/b/c/d;p=1/y",
+        ),
+        ("./", "http://a/b/c/d;p=1/2?q", "http://a/b/c/d;p=1/"),
+        ("../", "http://a/b/c/d;p=1/2?q", "http://a/b/c/"),
+        ("../g", "http://a/b/c/d;p=1/2?q", "http://a/b/c/g"),
+        ("../../", "http://a/b/c/d;p=1/2?q", "http://a/b/"),
+        ("../../g", "http://a/b/c/d;p=1/2?q", "http://a/b/g"),
+        // http://gbiv.com/protocols/uri/test/rel_examples4.html
+        // double and triple slash, unknown scheme
+        ("g:h", "fred:///s//a/b/c", "g:h"),
+        ("g", "fred:///s//a/b/c", "fred:///s//a/b/g"),
+        ("./g", "fred:///s//a/b/c", "fred:///s//a/b/g"),
+        ("g/", "fred:///s//a/b/c", "fred:///s//a/b/g/"),
+        ("/g", "fred:///s//a/b/c", "fred:///g"), // may change to fred:///s//a/g
+        ("//g", "fred:///s//a/b/c", "fred://g"), // may change to fred:///s//g
+        ("//g/x", "fred:///s//a/b/c", "fred://g/x"), // may change to fred:///s//g/x
+        ("///g", "fred:///s//a/b/c", "fred:///g"),
+        ("./", "fred:///s//a/b/c", "fred:///s//a/b/"),
+        ("../", "fred:///s//a/b/c", "fred:///s//a/"),
+        ("../g", "fred:///s//a/b/c", "fred:///s//a/g"),
+        ("../../", "fred:///s//a/b/c", "fred:///s//"), // may change to fred:///s//a/../
+        ("../../g", "fred:///s//a/b/c", "fred:///s//g"), // may change to fred:///s//a/../g
+        ("../../../g", "fred:///s//a/b/c", "fred:///s/g"), // may change to fred:///s//a/../../g
+        ("../../../../g", "fred:///s//a/b/c", "fred:///g"), // may change to fred:///s//a/../../../g
+        // http://gbiv.com/protocols/uri/test/rel_examples5.html
+        // double and triple slash, well-known scheme
+        ("g:h", "http:///s//a/b/c", "g:h"),
+        ("g", "http:///s//a/b/c", "http:///s//a/b/g"),
+        ("./g", "http:///s//a/b/c", "http:///s//a/b/g"),
+        ("g/", "http:///s//a/b/c", "http:///s//a/b/g/"),
+        ("/g", "http:///s//a/b/c", "http:///g"), // may change to http:///s//a/g
+        ("//g", "http:///s//a/b/c", "http://g"), // may change to http:///s//g
+        ("//g/x", "http:///s//a/b/c", "http://g/x"), // may change to http:///s//g/x
+        ("///g", "http:///s//a/b/c", "http:///g"),
+        ("./", "http:///s//a/b/c", "http:///s//a/b/"),
+        ("../", "http:///s//a/b/c", "http:///s//a/"),
+        ("../g", "http:///s//a/b/c", "http:///s//a/g"),
+        ("../../", "http:///s//a/b/c", "http:///s//"), // may change to http:///s//a/../
+        ("../../g", "http:///s//a/b/c", "http:///s//g"), // may change to http:///s//a/../g
+        ("../../../g", "http:///s//a/b/c", "http:///s/g"), // may change to http:///s//a/../../g
+        ("../../../../g", "http:///s//a/b/c", "http:///g"), // may change to http:///s//a/../../../g
+        // from Dan Connelly"s tests in http://www.w3.org/2000/10/swap/uripath.py
+        ("bar:abc", "foo:xyz", "bar:abc"),
+        ("../abc", "http://example/x/y/z", "http://example/x/abc"),
+        (
+            "http://example/x/abc",
+            "http://example2/x/y/z",
+            "http://example/x/abc",
+        ),
+        ("../r", "http://ex/x/y/z", "http://ex/x/r"),
+        ("q/r", "http://ex/x/y", "http://ex/x/q/r"),
+        ("q/r#s", "http://ex/x/y", "http://ex/x/q/r#s"),
+        ("q/r#s/t", "http://ex/x/y", "http://ex/x/q/r#s/t"),
+        ("ftp://ex/x/q/r", "http://ex/x/y", "ftp://ex/x/q/r"),
+        ("", "http://ex/x/y", "http://ex/x/y"),
+        ("", "http://ex/x/y/", "http://ex/x/y/"),
+        ("", "http://ex/x/y/pdq", "http://ex/x/y/pdq"),
+        ("z/", "http://ex/x/y/", "http://ex/x/y/z/"),
+        (
+            "#Animal",
+            "file:/swap/test/animal.rdf",
+            "file:/swap/test/animal.rdf#Animal",
+        ),
+        ("../abc", "file:/e/x/y/z", "file:/e/x/abc"),
+        (
+            "/example/x/abc",
+            "file:/example2/x/y/z",
+            "file:/example/x/abc",
+        ),
+        ("../r", "file:/ex/x/y/z", "file:/ex/x/r"),
+        ("/r", "file:/ex/x/y/z", "file:/r"),
+        ("q/r", "file:/ex/x/y", "file:/ex/x/q/r"),
+        ("q/r#s", "file:/ex/x/y", "file:/ex/x/q/r#s"),
+        ("q/r#", "file:/ex/x/y", "file:/ex/x/q/r#"),
+        ("q/r#s/t", "file:/ex/x/y", "file:/ex/x/q/r#s/t"),
+        ("ftp://ex/x/q/r", "file:/ex/x/y", "ftp://ex/x/q/r"),
+        ("", "file:/ex/x/y", "file:/ex/x/y"),
+        ("", "file:/ex/x/y/", "file:/ex/x/y/"),
+        ("", "file:/ex/x/y/pdq", "file:/ex/x/y/pdq"),
+        ("z/", "file:/ex/x/y/", "file:/ex/x/y/z/"),
+        (
+            "file://meetings.example.com/cal#m1",
+            "file:/devel/WWW/2000/10/swap/test/reluri-1.n3",
+            "file://meetings.example.com/cal#m1",
+        ),
+        (
+            "file://meetings.example.com/cal#m1",
+            "file:/home/connolly/w3ccvs/WWW/2000/10/swap/test/reluri-1.n3",
+            "file://meetings.example.com/cal#m1",
+        ),
+        ("./#blort", "file:/some/dir/foo", "file:/some/dir/#blort"),
+        ("./#", "file:/some/dir/foo", "file:/some/dir/#"),
+        // Ryan Lee
+        ("./", "http://example/x/abc.efg", "http://example/x/"),
+        // Graham Klyne"s tests
+        // http://www.ninebynine.org/Software/HaskellUtils/Network/UriTest.xls
+        // 01-31 are from Connelly"s cases
+
+        // 32-49
+        ("./q:r", "http://ex/x/y", "http://ex/x/q:r"),
+        ("./p=q:r", "http://ex/x/y", "http://ex/x/p=q:r"),
+        ("?pp/rr", "http://ex/x/y?pp/qq", "http://ex/x/y?pp/rr"),
+        ("y/z", "http://ex/x/y?pp/qq", "http://ex/x/y/z"),
+        ("y?q", "http://ex/x/y?q", "http://ex/x/y?q"),
+        ("/x/y?q", "http://ex?p", "http://ex/x/y?q"),
+        /*("c/d", "foo:a/b", "foo:a/c/d"),
+        ("/c/d", "foo:a/b", "foo:/c/d"),
+        ("", "foo:a/b?c#d", "foo:a/b?c"),
+        ("b/c", "foo:a", "foo:b/c"),*/
+        ("../b/c", "foo:/a/y/z", "foo:/a/b/c"),
+        //("./b/c", "foo:a", "foo:b/c"),
+        //("/./b/c", "foo:a", "foo:/b/c"),
+        ("../../d", "foo://a//b/c", "foo://a/d"),
+        //(".", "foo:a", "foo:"),
+        //("..", "foo:a", "foo:"),
+        // 50-57 (cf. TimBL comments --
+        //  http://lists.w3.org/Archives/Public/uri/2003Feb/0028.html,
+        //  http://lists.w3.org/Archives/Public/uri/2003Jan/0008.html)
+        ("abc", "http://example/x/y%2Fz", "http://example/x/abc"),
+        (
+            "../../x%2Fabc",
+            "http://example/a/x/y/z",
+            "http://example/a/x%2Fabc",
+        ),
+        (
+            "../x%2Fabc",
+            "http://example/a/x/y%2Fz",
+            "http://example/a/x%2Fabc",
+        ),
+        ("abc", "http://example/x%2Fy/z", "http://example/x%2Fy/abc"),
+        ("q%3Ar", "http://ex/x/y", "http://ex/x/q%3Ar"),
+        (
+            "/x%2Fabc",
+            "http://example/x/y%2Fz",
+            "http://example/x%2Fabc",
+        ),
+        ("/x%2Fabc", "http://example/x/y/z", "http://example/x%2Fabc"),
+        (
+            "/x%2Fabc",
+            "http://example/x/y%2Fz",
+            "http://example/x%2Fabc",
+        ),
+        // 70-77
+        (
+            "http://example/a/b?c/../d",
+            "foo:bar",
+            "http://example/a/b?c/../d",
+        ),
+        (
+            "http://example/a/b#c/../d",
+            "foo:bar",
+            "http://example/a/b#c/../d",
+        ),
+        // 82-88
+        ("http:this", "http://example.org/base/uri", "http:this"),
+        ("http:this", "http:base", "http:this"),
+        (
+            "mini1.xml",
+            "file:///C:/DEV/Haskell/lib/HXmlToolbox-3.01/examples/",
+            "file:///C:/DEV/Haskell/lib/HXmlToolbox-3.01/examples/mini1.xml",
+        ),
     ];
 
-    let base = Iri::parse(base).unwrap();
-    for (input, output) in examples.iter() {
-        let result = base.resolve(input);
+    for (relative, base, output) in examples.iter() {
+        let base = Iri::parse(*base).unwrap();
+        let result = base.resolve(*relative);
         assert!(
             result.is_ok(),
-            "Resolving of {} failed with error: {}",
-            input,
+            "Resolving of {} against {} failed with error: {}",
+            relative,
+            base,
             result.unwrap_err()
         );
-        let result = result.unwrap().into_inner();
+        let result = result.unwrap();
         assert_eq!(
-            result, *output,
-            "Resolving of {} is wrong. Found {} and expecting {}",
-            input, result, output
+            result.as_str(),
+            *output,
+            "Resolving of {} against {} is wrong. Found {} and expecting {}",
+            relative,
+            base,
+            result,
+            output
         );
     }
 }

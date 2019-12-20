@@ -69,6 +69,8 @@
 		<#bad-uri-scheme.nt>
 		<#bad-uri-scheme-start.nt>
 		<#bad-uri-truncated.nt>
+		<#test-escapes>
+		<#test-escapes.nt>
 	) .
 
 <#bad-00>
@@ -381,3 +383,12 @@
 	mf:name "bad-uri-truncated" ;
 	mf:action <bad-uri-truncated.nt> .
 
+<#test-escapes>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "test-escapes" ;
+	mf:action <test-escapes.ttl> .
+
+<#test-escapes.nt>
+	rdf:type rdft:TestNTriplesNegativeSyntax ;
+	mf:name "test-escapes" ;
+	mf:action <test-escapes.ttl> .

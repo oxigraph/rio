@@ -39,30 +39,23 @@ pub fn parse_iriref(
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
+    // Most of the validation is done by the IRI parser
     read.check_is_current(b'<')?;
     loop {
         read.consume()?;
         match read.current() {
+            EOF | b'\n' | b'\r' => read.unexpected_char_error()?,
             b'>' => {
                 read.consume()?;
                 return Ok(());
             }
-            b'\0'..=b' ' | b'<' | b'"' | b'{' | b'}' | b'|' | b'^' | b'`' | EOF => {
-                read.unexpected_char_error()?
-            }
             b'\\' => {
                 read.consume()?;
-                let c = match read.current() {
+                buffer.push(match read.current() {
                     b'u' => read_hexa_char(read, 4)?,
                     b'U' => read_hexa_char(read, 8)?,
                     _ => read.unexpected_char_error()?,
-                };
-                match c {
-                    '\0'..=' ' | '<' | '>' | '"' | '{' | '}' | '|' | '^' | '`' => {
-                        return Err(read.parse_error(TurtleErrorKind::UnexpectedByte(c as u8)))
-                    }
-                    c => buffer.push(c),
-                }
+                });
             }
             c => buffer.push(if c <= MAX_ASCII {
                 char::from(c) //optimization to avoid UTF-8 decoding

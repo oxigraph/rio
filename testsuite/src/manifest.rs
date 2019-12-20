@@ -126,7 +126,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                                 self.manifests_to_do.extend(
                                     RdfListIterator::iter(&self.graph, list.clone().into())
                                         .filter_map(|m| match m {
-                                            OwnedTerm::NamedNode(nm) => Some(nm.iri.clone()),
+                                            OwnedTerm::NamedNode(nm) => Some(nm.iri),
                                             _ => None,
                                         }),
                                 );

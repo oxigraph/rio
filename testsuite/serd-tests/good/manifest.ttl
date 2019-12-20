@@ -29,7 +29,7 @@
 		<#test-empty-path-base>
 		<#test-empty>
 		<#test-eof-at-page-end>
-		<#test-escapes>
+		# We prefer to decode before IRI validation <#test-escapes>
 		# this is an extension <#test-ext-namedblank-iri>
 		# this is an extension <#test-ext-namedblank-prefix>
 		<#test-form-feed>
@@ -185,12 +185,6 @@
 	mf:action <test-eof-at-page-end.ttl> ;
 	mf:result <test-eof-at-page-end.nt> .
 
-<#test-escapes>
-	rdf:type rdft:TestTurtleEval ;
-	mf:name "test-escapes" ;
-	mf:action <test-escapes.ttl> ;
-	mf:result <test-escapes.nt> .
-
 <#test-ext-namedblank-iri>
 	rdf:type rdft:TestTurtleEval ;
 	mf:name "test-ext-namedblank-iri" ;
@@ -322,4 +316,3 @@
 	mf:name "UTF-8" ;
 	mf:action <UTF-8.ttl> ;
 	mf:result <UTF-8.nt> .
-

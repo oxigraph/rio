@@ -406,7 +406,6 @@ fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
         match parser.read.next() {
             // We check that it is not a prefixed URI
             Some(c) if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII => {
-                ()
             }
             _ => {
                 parser.term_stack.push(OwnedTermKind::StaticIri(RDF_TYPE));
