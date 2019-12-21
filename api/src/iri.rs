@@ -575,11 +575,11 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
             let c = self.input.next();
             match c {
                 None | Some('/') | Some('?') | Some('#') => {
-                    if is_last_segment_dots(self.output.as_str(), 2) {
+                    if self.output.as_str().ends_with("/..") {
                         self.remove_last_segment();
                         self.remove_last_segment();
                         self.output.push('/');
-                    } else if is_last_segment_dots(self.output.as_str(), 1) {
+                    } else if self.output.as_str().ends_with("/.") {
                         self.remove_last_segment();
                         self.output.push('/');
                     } else if c == Some('/') {
@@ -713,28 +713,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
             kind,
         })
     }
-}
-
-fn is_last_segment_dots(path: &str, number_of_dots: usize) -> bool {
-    if path.is_empty() {
-        return false;
-    }
-    let path = path.as_bytes();
-    let mut i = path.len() - 1;
-    for _ in 0..number_of_dots {
-        if i >= 1 && path[i] == b'.' {
-            i -= 1;
-        } else if i >= 3
-            && (path[i] == b'e' || path[i] == b'E')
-            && path[i - 1] == b'2'
-            && path[i - 2] == b'%'
-        {
-            i -= 3;
-        } else {
-            return false;
-        }
-    }
-    path[i] == b'/'
 }
 
 fn is_url_code_point(c: char) -> bool {
