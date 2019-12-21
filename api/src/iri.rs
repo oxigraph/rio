@@ -96,17 +96,20 @@ impl<T: Deref<Target = str>> Iri<T> {
     }
 
     /// Returns the underlying IRI representation.
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.iri
     }
 
     /// Returns the underlying IRI representation.
+    #[inline]
     pub fn into_inner(self) -> T {
         self.iri
     }
 }
 
 impl<T: Deref<Target = str> + fmt::Display> fmt::Display for Iri<T> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.iri.fmt(f)
     }
@@ -198,68 +201,77 @@ struct VoidOutputBuffer {
 }
 
 impl OutputBuffer for VoidOutputBuffer {
+    #[inline]
     fn push(&mut self, c: char) {
         self.len += c.len_utf8();
     }
 
+    #[inline]
     fn push_str(&mut self, s: &str) {
         self.len += s.len();
     }
 
+    #[inline]
     fn clear(&mut self) {
         self.len = 0;
     }
 
+    #[inline]
     fn truncate(&mut self, new_len: usize) {
         self.len = new_len;
     }
 
+    #[inline]
     fn len(&self) -> usize {
         self.len
     }
 
+    #[inline]
     fn as_str(&self) -> &str {
         ""
     }
 }
 
 impl OutputBuffer for String {
+    #[inline]
     fn push(&mut self, c: char) {
         self.push(c);
     }
 
+    #[inline]
     fn push_str(&mut self, s: &str) {
         self.push_str(s);
     }
 
+    #[inline]
     fn clear(&mut self) {
         self.clear();
     }
 
+    #[inline]
     fn truncate(&mut self, new_len: usize) {
         self.truncate(new_len);
     }
 
+    #[inline]
     fn len(&self) -> usize {
         self.len()
     }
 
+    #[inline]
     fn as_str(&self) -> &str {
         self.as_str()
     }
 }
 
 struct ParserInput<'a> {
-    head: Option<char>,
     value: Chars<'a>,
     position: usize,
 }
 impl<'a> ParserInput<'a> {
+    #[inline]
     fn next(&mut self) -> Option<char> {
-        if let Some(head) = self.head.take() {
-            self.position += head.len_utf8();
-            Some(head)
-        } else if let Some(head) = self.value.next() {
+        if let Some(head) = self.value.next() {
             self.position += head.len_utf8();
             Some(head)
         } else {
@@ -267,9 +279,14 @@ impl<'a> ParserInput<'a> {
         }
     }
 
-    fn move_back(&mut self, head: Option<char>) {
-        self.position -= head.map_or(0, |h| h.len_utf8());
-        self.head = head
+    #[inline]
+    fn front(&self) -> Option<char> {
+        self.value.clone().next()
+    }
+
+    #[inline]
+    fn starts_with(&self, c: char) -> bool {
+        self.value.as_str().starts_with(c)
     }
 }
 
@@ -295,7 +312,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
             iri,
             base,
             input: ParserInput {
-                head: None,
                 value: iri.chars(),
                 position: 0,
             },
@@ -314,15 +330,9 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn parse_scheme_start(&mut self) -> Result<(), IriParseError> {
-        match self.input.next() {
-            Some(c) if c.is_ascii_alphabetic() => {
-                self.output.push(c);
-                self.parse_scheme()
-            }
-            c => {
-                self.input.move_back(c);
-                self.parse_no_scheme()
-            }
+        match self.input.front() {
+            Some(c) if c.is_ascii_alphabetic() => self.parse_scheme(),
+            _ => self.parse_no_scheme(),
         }
     }
 
@@ -337,12 +347,11 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                     self.output.push(':');
                     self.output_positions.scheme_end = self.output.len();
                     self.input_scheme_end = self.input.position;
-                    let next = self.input.next();
-                    return if next == Some('/') {
+                    return if self.input.starts_with('/') {
+                        self.input.next();
                         self.output.push('/');
                         self.parse_path_or_authority()
                     } else {
-                        self.input.move_back(next);
                         self.output_positions.authority_end = self.output.len();
                         self.output_positions.cannot_be_a_base = true;
                         self.parse_cannot_be_a_base()
@@ -350,7 +359,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 }
                 _ => {
                     self.input = ParserInput {
-                        head: None,
                         value: self.iri.chars(),
                         position: 0,
                     }; // reset
@@ -362,21 +370,21 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn parse_no_scheme(&mut self) -> Result<(), IriParseError> {
-        let c = self.input.next();
         if let Some(base) = self.base {
-            if base.positions.cannot_be_a_base && c != Some('#') {
-                self.parse_error(IriParseErrorKind::NoScheme)
-            } else if base.positions.cannot_be_a_base && c == Some('#') {
-                self.output.push_str(&base.iri[..base.positions.query_end]);
-                self.output.push('#');
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output_positions.authority_end = base.positions.authority_end;
-                self.output_positions.path_end = base.positions.path_end;
-                self.output_positions.query_end = base.positions.query_end;
-                self.output_positions.cannot_be_a_base = true;
-                self.parse_fragment()
+            if base.positions.cannot_be_a_base {
+                if self.input.starts_with('#') {
+                    self.output.push_str(&base.iri[..base.positions.query_end]);
+                    self.output.push('#');
+                    self.output_positions.scheme_end = base.positions.scheme_end;
+                    self.output_positions.authority_end = base.positions.authority_end;
+                    self.output_positions.path_end = base.positions.path_end;
+                    self.output_positions.query_end = base.positions.query_end;
+                    self.output_positions.cannot_be_a_base = true;
+                    self.parse_fragment()
+                } else {
+                    self.parse_error(IriParseErrorKind::NoScheme)
+                }
             } else {
-                self.input.move_back(c);
                 self.parse_relative()
             }
         } else {
@@ -385,22 +393,19 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn parse_path_or_authority(&mut self) -> Result<(), IriParseError> {
-        match self.input.next() {
-            Some('/') => {
-                self.output.push('/');
-                self.parse_authority()
-            }
-            c => {
-                self.input.move_back(c);
-                self.output_positions.authority_end = self.output.len() - 1;
-                self.parse_path()
-            }
+        if self.input.starts_with('/') {
+            self.input.next();
+            self.output.push('/');
+            self.parse_authority()
+        } else {
+            self.output_positions.authority_end = self.output.len() - 1;
+            self.parse_path()
         }
     }
 
     fn parse_relative(&mut self) -> Result<(), IriParseError> {
         let base = self.base.unwrap();
-        match self.input.next() {
+        match self.input.front() {
             None => {
                 self.output.push_str(&base.iri[..base.positions.query_end]);
                 self.output_positions.scheme_end = base.positions.scheme_end;
@@ -409,8 +414,12 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 self.output_positions.query_end = base.positions.query_end;
                 Ok(())
             }
-            Some('/') => self.parse_relative_slash(),
+            Some('/') => {
+                self.input.next();
+                self.parse_relative_slash()
+            }
             Some('?') => {
+                self.input.next();
                 self.output.push_str(&base.iri[..base.positions.path_end]);
                 self.output.push('?');
                 self.output_positions.scheme_end = base.positions.scheme_end;
@@ -419,6 +428,7 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 self.parse_query()
             }
             Some('#') => {
+                self.input.next();
                 self.output.push_str(&base.iri[..base.positions.query_end]);
                 self.output_positions.scheme_end = base.positions.scheme_end;
                 self.output_positions.authority_end = base.positions.authority_end;
@@ -427,14 +437,13 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 self.output.push('#');
                 self.parse_fragment()
             }
-            c => {
+            _ => {
                 self.output.push_str(&base.iri[..base.positions.path_end]);
                 self.output_positions.scheme_end = base.positions.scheme_end;
                 self.output_positions.authority_end = base.positions.authority_end;
                 self.output_positions.path_end = base.positions.path_end;
                 self.remove_last_segment();
                 self.output.push('/');
-                self.input.move_back(c);
                 self.parse_path()
             }
         }
@@ -442,23 +451,20 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
 
     fn parse_relative_slash(&mut self) -> Result<(), IriParseError> {
         let base = self.base.unwrap();
-        match self.input.next() {
-            Some('/') => {
-                self.output.push_str(&base.iri[..base.positions.scheme_end]);
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output.push('/');
-                self.output.push('/');
-                self.parse_authority()
-            }
-            c => {
-                self.output
-                    .push_str(&base.iri[..base.positions.authority_end]);
-                self.output.push('/');
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output_positions.authority_end = base.positions.authority_end;
-                self.input.move_back(c);
-                self.parse_path()
-            }
+        if self.input.starts_with('/') {
+            self.input.next();
+            self.output.push_str(&base.iri[..base.positions.scheme_end]);
+            self.output_positions.scheme_end = base.positions.scheme_end;
+            self.output.push('/');
+            self.output.push('/');
+            self.parse_authority()
+        } else {
+            self.output
+                .push_str(&base.iri[..base.positions.authority_end]);
+            self.output.push('/');
+            self.output_positions.scheme_end = base.positions.scheme_end;
+            self.output_positions.authority_end = base.positions.authority_end;
+            self.parse_path()
         }
     }
 
@@ -473,7 +479,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 }
                 None | Some('[') | Some('/') | Some('?') | Some('#') => {
                     self.input = ParserInput {
-                        head: None,
                         value: self.iri[self.input_scheme_end + 2..].chars(),
                         position: self.input_scheme_end + 2,
                     };
@@ -501,10 +506,12 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                     return self.parse_port();
                 }
                 None | Some('/') | Some('?') | Some('#') => {
-                    self.input.move_back(c);
                     self.output_positions.authority_end = self.output.len();
-                    self.validate_host(&self.iri[self.input_scheme_end + 2..self.input.position])?;
-                    return self.parse_path_start();
+                    self.validate_host(
+                        &self.iri[self.input_scheme_end + 2
+                            ..self.input.position - c.map_or(0, |c| c.len_utf8())],
+                    )?;
+                    return self.parse_path_start(c);
                 }
                 Some('[') => {
                     self.output.push('[');
@@ -525,17 +532,16 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
             match c {
                 Some(c) if c.is_ascii_digit() => self.output.push(c),
                 Some('/') | Some('?') | Some('#') | None => {
-                    self.input.move_back(c);
                     self.output_positions.authority_end = self.output.len();
-                    return self.parse_path_start();
+                    return self.parse_path_start(c);
                 }
                 Some(c) => return self.parse_error(IriParseErrorKind::InvalidPortCharacter(c)),
             }
         }
     }
 
-    fn parse_path_start(&mut self) -> Result<(), IriParseError> {
-        match self.input.next() {
+    fn parse_path_start(&mut self, c: Option<char>) -> Result<(), IriParseError> {
+        match c {
             None => {
                 self.output_positions.path_end = self.output.len();
                 self.output_positions.query_end = self.output.len();
@@ -557,7 +563,8 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 self.parse_path()
             }
             Some(c) => {
-                self.input.move_back(Some(c));
+                self.read_url_codepoint_or_echar(c)?;
+                self.output.push(c);
                 self.parse_path()
             }
         }
@@ -641,17 +648,15 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn remove_last_segment(&mut self) {
-        if let Some((last_slash_position, _)) = self.output.as_str()
-            [self.output_positions.authority_end..]
-            .char_indices()
-            .rev()
-            .find(|(_, c)| *c == '/')
+        if let Some(last_slash_position) =
+            self.output.as_str()[self.output_positions.authority_end..].rfind('/')
         {
             self.output
                 .truncate(last_slash_position + self.output_positions.authority_end)
         }
     }
 
+    #[inline]
     fn read_url_codepoint_or_echar(&mut self, c: char) -> Result<(), IriParseError> {
         if c == '%' {
             let c1 = self.input.next();
