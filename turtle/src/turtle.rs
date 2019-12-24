@@ -59,10 +59,12 @@ impl<R: BufRead> TurtleParser<R> {
         let base_iri = if base_iri.is_empty() {
             None
         } else {
-            Some(
-                Iri::parse(base_iri.to_owned())
-                    .map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)))?,
-            )
+            Some(Iri::parse(base_iri.to_owned()).map_err(|error| {
+                read.parse_error(TurtleErrorKind::InvalidIri {
+                    iri: base_iri.to_owned(),
+                    error,
+                })
+            })?)
         };
         Ok(Self {
             read,
@@ -467,8 +469,8 @@ fn parse_base_iriref(
     //TODO: avoid double parsing
     let mut buffer = String::default();
     parse_iriref_relative(read, &mut buffer, temp_buffer, base_iri)?;
-    let result =
-        Iri::parse(buffer).map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)))?;
+    let result = Iri::parse(buffer.clone())
+        .map_err(|error| read.parse_error(TurtleErrorKind::InvalidIri { iri: buffer, error }))?;
     temp_buffer.clear();
     Ok(result)
 }

@@ -30,10 +30,12 @@ impl<R: BufRead> GTriGParser<R> {
         let base_iri = if base_iri.is_empty() {
             None
         } else {
-            Some(
-                Iri::parse(base_iri.to_owned())
-                    .map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)))?,
-            )
+            Some(Iri::parse(base_iri.to_owned()).map_err(|error| {
+                read.parse_error(TurtleErrorKind::InvalidIri {
+                    iri: base_iri.to_owned(),
+                    error,
+                })
+            })?)
         };
         Ok(Self {
             read,
@@ -558,9 +560,12 @@ pub fn parse_generalized_iriref(
 ) -> Result<(), TurtleError> {
     if let Some(base_iri) = base_iri {
         parse_iriref(read, temp_buffer)?;
-        let result = base_iri
-            .resolve_into(temp_buffer, buffer)
-            .map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)));
+        let result = base_iri.resolve_into(temp_buffer, buffer).map_err(|error| {
+            read.parse_error(TurtleErrorKind::InvalidIri {
+                iri: temp_buffer.to_owned(),
+                error,
+            })
+        });
         temp_buffer.clear();
         result
     } else {

@@ -21,7 +21,7 @@ pub enum TurtleErrorKind {
     PrematureEOF,
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
-    InvalidIri(IriParseError),
+    InvalidIri { iri: String, error: IriParseError },
 }
 
 impl fmt::Display for TurtleError {
@@ -37,7 +37,9 @@ impl fmt::Display for TurtleError {
             TurtleErrorKind::InvalidUnicodeCodePoint(point) => {
                 write!(f, "invalid unicode code point '{}'", point)
             }
-            TurtleErrorKind::InvalidIri(error) => error.fmt(f),
+            TurtleErrorKind::InvalidIri { iri, error } => {
+                write!(f, "error while parsing IRI '{}': {}", iri, error)
+            }
         }?;
         if let Some(position) = self.position {
             write!(
@@ -55,7 +57,7 @@ impl Error for TurtleError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
             TurtleErrorKind::IO(error) => Some(error),
-            TurtleErrorKind::InvalidIri(error) => Some(error),
+            TurtleErrorKind::InvalidIri { error, .. } => Some(error),
             _ => None,
         }
     }

@@ -12,7 +12,12 @@ pub fn parse_iriref_absolute(
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     parse_iriref(read, buffer)?;
-    Iri::parse(buffer.as_str()).map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)))?;
+    Iri::parse(buffer.as_str()).map_err(|error| {
+        read.parse_error(TurtleErrorKind::InvalidIri {
+            iri: buffer.to_owned(),
+            error,
+        })
+    })?;
     Ok(())
 }
 
@@ -24,9 +29,12 @@ pub fn parse_iriref_relative(
 ) -> Result<(), TurtleError> {
     if let Some(base_iri) = base_iri {
         parse_iriref(read, temp_buffer)?;
-        let result = base_iri
-            .resolve_into(temp_buffer, buffer)
-            .map_err(|e| read.parse_error(TurtleErrorKind::InvalidIri(e)));
+        let result = base_iri.resolve_into(temp_buffer, buffer).map_err(|error| {
+            read.parse_error(TurtleErrorKind::InvalidIri {
+                iri: temp_buffer.to_owned(),
+                error,
+            })
+        });
         temp_buffer.clear();
         result
     } else {

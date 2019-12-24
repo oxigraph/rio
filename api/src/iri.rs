@@ -118,35 +118,25 @@ impl<T: Deref<Target = str> + fmt::Display> fmt::Display for Iri<T> {
 /// An error raised during `Iri` validation.
 #[derive(Debug)]
 pub struct IriParseError {
-    iri: String,
     kind: IriParseErrorKind,
 }
 
 impl fmt::Display for IriParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
-            IriParseErrorKind::NoScheme => write!(f, "No scheme found in IRI: {}", self.iri),
-            IriParseErrorKind::InvalidHostCharacter(c) => write!(
-                f,
-                "Invalid character '{}' found in IRI host: {}",
-                c, self.iri
-            ),
-            IriParseErrorKind::InvalidHostIp(e) => {
-                write!(f, "Invalid host IP ({}) found in IRI: {}", e, self.iri)
+            IriParseErrorKind::NoScheme => write!(f, "No scheme"),
+            IriParseErrorKind::InvalidHostCharacter(c) => {
+                write!(f, "Invalid character '{}' in host", c)
             }
-            IriParseErrorKind::InvalidPortCharacter(c) => write!(
-                f,
-                "Invalid character '{}' found in IRI port: {}",
-                c, self.iri
-            ),
+            IriParseErrorKind::InvalidHostIp(e) => write!(f, "Invalid host IP ({})", e),
+            IriParseErrorKind::InvalidPortCharacter(c) => write!(f, "Invalid character '{}'", c),
             IriParseErrorKind::InvalidIriCodePoint(c) => {
-                write!(f, "Invalid IRI code point '{}' in {}", c, self.iri)
+                write!(f, "Invalid IRI code point '{}'", c)
             }
             IriParseErrorKind::InvalidPercentEncoding(cs) => write!(
                 f,
-                "Invalid IRI percent encoding '{}' in {}",
-                cs.iter().flatten().cloned().collect::<String>(),
-                self.iri
+                "Invalid IRI percent encoding '{}'",
+                cs.iter().flatten().cloned().collect::<String>()
             ),
         }
     }
@@ -707,11 +697,9 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
         }
     }
 
+    #[inline]
     fn parse_error<T>(&self, kind: IriParseErrorKind) -> Result<T, IriParseError> {
-        Err(IriParseError {
-            iri: self.iri.to_owned(),
-            kind,
-        })
+        Err(IriParseError { kind })
     }
 }
 
