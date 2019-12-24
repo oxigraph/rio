@@ -484,34 +484,47 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn parse_host(&mut self) -> Result<(), IriParseError> {
-        let mut in_bracket = false;
-        loop {
-            let c = self.input.next();
-            match c {
-                Some(':') if !in_bracket => {
-                    self.validate_host(
-                        &self.iri[self.input_scheme_end + 2..self.input.position - 1],
-                    )?;
-                    self.output.push(':');
-                    return self.parse_port();
+        if self.input.starts_with('[') {
+            // IP v6
+            while let Some(c) = self.input.next() {
+                self.output.push(c);
+                if c == ']' {
+                    if let Err(error) = Ipv6Addr::from_str(
+                        &self.iri[self.input_scheme_end + 3..self.input.position - 1],
+                    ) {
+                        return self.parse_error(IriParseErrorKind::InvalidHostIp(error));
+                    }
+
+                    let c = self.input.next();
+                    return match c {
+                        Some(':') => {
+                            self.output.push(':');
+                            self.parse_port()
+                        }
+                        None | Some('/') | Some('?') | Some('#') => {
+                            self.output_positions.authority_end = self.output.len();
+                            self.parse_path_start(c)
+                        }
+                        Some(c) => self.parse_error(IriParseErrorKind::InvalidHostCharacter(c)),
+                    };
                 }
-                None | Some('/') | Some('?') | Some('#') => {
-                    self.output_positions.authority_end = self.output.len();
-                    self.validate_host(
-                        &self.iri[self.input_scheme_end + 2
-                            ..self.input.position - c.map_or(0, |c| c.len_utf8())],
-                    )?;
-                    return self.parse_path_start(c);
+            }
+            self.parse_error(IriParseErrorKind::InvalidHostCharacter('['))
+        } else {
+            // Other host
+            loop {
+                let c = self.input.next();
+                match c {
+                    Some(':') => {
+                        self.output.push(':');
+                        return self.parse_port();
+                    }
+                    None | Some('/') | Some('?') | Some('#') => {
+                        self.output_positions.authority_end = self.output.len();
+                        return self.parse_path_start(c);
+                    }
+                    Some(c) => self.read_url_codepoint_or_echar(c)?,
                 }
-                Some('[') => {
-                    self.output.push('[');
-                    in_bracket = true;
-                }
-                Some(']') => {
-                    self.output.push(']');
-                    in_bracket = false;
-                }
-                Some(c) => self.output.push(c),
             }
         }
     }
@@ -673,30 +686,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
         }
     }
 
-    fn validate_host(&self, host: &str) -> Result<(), IriParseError> {
-        if host.starts_with('[') {
-            if host.ends_with(']') {
-                match Ipv6Addr::from_str(&host[1..host.len() - 1]) {
-                    Ok(_) => Ok(()),
-                    Err(e) => self.parse_error(IriParseErrorKind::InvalidHostIp(e)),
-                }
-            } else {
-                self.parse_error(IriParseErrorKind::InvalidHostCharacter(
-                    host.chars().last().unwrap(),
-                ))
-            }
-        } else {
-            for c in host.chars() {
-                match c {
-                    '\0' | '\t' | '\n' | '\r' | ' ' | '#' | '/' | ':' | '?' | '@' | '[' | '\\'
-                    | ']' => return self.parse_error(IriParseErrorKind::InvalidHostCharacter(c)),
-                    _ => (),
-                }
-            }
-            Ok(())
-        }
-    }
-
     #[inline]
     fn parse_error<T>(&self, kind: IriParseErrorKind) -> Result<T, IriParseError> {
         Err(IriParseError { kind })
@@ -781,7 +770,7 @@ fn test_parsing() {
 
     for e in examples.iter() {
         let result = Iri::parse(*e);
-        assert!(result.is_ok(), "{}", result.unwrap_err());
+        assert!(result.is_ok(), "{} on IRI {}", result.unwrap_err(), e);
     }
 }
 
