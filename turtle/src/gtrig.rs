@@ -11,6 +11,37 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::str;
 
+/// A [TriG](https://www.w3.org/TR/trig/) streaming parser parsing generalized quads.
+///
+/// It implements the `GeneralizedQuadsParser` trait.
+/// Using it requires to enable the `generalized` feature.
+///
+///
+/// Count the number of of people using the `QuadsParser` API:
+/// ```
+/// use rio_turtle::{GTriGParser, TurtleError};
+/// use rio_api::parser::GeneralizedQuadsParser;
+/// use rio_api::model::NamedNode;
+///
+/// let file = b"@prefix schema: <http://schema.org/> .
+/// <http://example/> {
+///     <http://example.com/foo> a schema:Person ;
+///         schema:name  ?name .
+///     <http://example.com/bar> a schema:Person ;
+///         schema:name  ?name .
+/// }";
+///
+/// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
+/// let schema_person = NamedNode { iri: "http://schema.org/Person" };
+/// let mut count = 0;
+/// GTriGParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
+///     if t.predicate == rdf_type.into() && t.object == schema_person.into() {
+///         count += 1;
+///     }
+///     Ok(()) as Result<(), TurtleError>
+/// }).unwrap();
+/// assert_eq!(2, count)
+/// ```
 pub struct GTriGParser<R: BufRead> {
     read: LookAheadLineBasedByteReader<R>,
     base_iri: Option<Iri<String>>,

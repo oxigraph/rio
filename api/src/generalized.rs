@@ -10,7 +10,7 @@ pub mod model {
 
     pub use crate::model::*;
 
-    /// A SPARQL [variable](https://www.w3.org/TR/2013/REC-sparql11-query-20130321/#QSynVariables).
+    /// A SPARQL [variable](https://www.w3.org/TR/sparql11-query/#QSynVariables).
     ///
     /// The default string formatter is returning a SPARQL compatible representation.
     ///
@@ -22,9 +22,11 @@ pub mod model {
     ///     Variable { name: "foobar" }.to_string()
     /// )
     /// ```
+    ///
+    /// Using it requires to enable the `generalized` feature.
     #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy, Hash)]
     pub struct Variable<'a> {
-        /// The name of  the [variable](https://www.w3.org/TR/2013/REC-sparql11-query-20130321/#QSynVariables) itself.
+        /// The name of  the [variable](https://www.w3.org/TR/sparql11-query/#QSynVariables) itself.
         pub name: &'a str,
     }
 
@@ -42,9 +44,11 @@ pub mod model {
     /// * [IRIs](https://www.w3.org/TR/rdf11-concepts/#dfn-iri),
     /// * [blank nodes](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node)
     /// * [literals](https://www.w3.org/TR/rdf11-concepts/#dfn-literal) and
-    /// * [variable](https://www.w3.org/TR/2013/REC-sparql11-query-20130321/#QSynVariables).
+    /// * [variable](https://www.w3.org/TR/sparql11-query/#QSynVariables).
     ///
     /// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+    ///
+    /// Using it requires to enable the `generalized` feature.
     #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
     pub enum GeneralizedTerm<'a> {
         NamedNode(NamedNode<'a>),
@@ -101,11 +105,15 @@ pub mod model {
         fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedNode<'a>, StrictRdfError> {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(inner),
-                GeneralizedTerm::BlankNode(_) => {
-                    Err("Blankd node can not be used as predicate".into())
-                }
-                GeneralizedTerm::Literal(_) => Err("Literal can not be used as predicate".into()),
-                GeneralizedTerm::Variable(_) => Err("Variable can not be converted to Term".into()),
+                GeneralizedTerm::BlankNode(_) => Err(StrictRdfError {
+                    message: "Blank node can not be used as predicate",
+                }),
+                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
+                    message: "Literal can not be used as predicate",
+                }),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable can not be converted to Term",
+                }),
             }
         }
     }
@@ -116,8 +124,12 @@ pub mod model {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(NamedOrBlankNode::NamedNode(inner)),
                 GeneralizedTerm::BlankNode(inner) => Ok(NamedOrBlankNode::BlankNode(inner)),
-                GeneralizedTerm::Literal(_) => Err("Literal can not be used a subject".into()),
-                GeneralizedTerm::Variable(_) => Err("Variable can not be converted to Term".into()),
+                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
+                    message: "Literal can not be used a subject",
+                }),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable can not be converted to Term",
+                }),
             }
         }
     }
@@ -129,7 +141,9 @@ pub mod model {
                 GeneralizedTerm::NamedNode(inner) => Ok(Term::NamedNode(inner)),
                 GeneralizedTerm::BlankNode(inner) => Ok(Term::BlankNode(inner)),
                 GeneralizedTerm::Literal(inner) => Ok(Term::Literal(inner)),
-                GeneralizedTerm::Variable(_) => Err("Variable can not be converted to Term".into()),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable can not be converted to Term",
+                }),
             }
         }
     }
@@ -163,7 +177,7 @@ pub mod model {
     ///         graph_name: None,
     ///     }.to_string()
     /// );
-
+    ///
     /// assert_eq!(
     ///     "GRAPH ?g { ?s ?p ?o .}",
     ///     GeneralizedQuad {
@@ -174,6 +188,8 @@ pub mod model {
     ///     }.to_string()
     /// );
     /// ```
+    ///
+    /// Using it requires to enable the `generalized` feature.
     #[derive(Eq, PartialEq, Debug, Clone, Hash)]
     pub struct GeneralizedQuad<'a> {
         pub subject: GeneralizedTerm<'a>,
@@ -214,7 +230,9 @@ pub mod model {
 
         fn try_from(other: GeneralizedQuad<'a>) -> Result<Triple<'a>, StrictRdfError> {
             match other.graph_name {
-                Some(_) => Err("Quad in named graph can not be converted to Triple".into()),
+                Some(_) => Err(StrictRdfError {
+                    message: "Quad in named graph can not be converted to Triple",
+                }),
                 None => Ok(Triple {
                     subject: other.subject.try_into()?,
                     predicate: other.predicate.try_into()?,
@@ -242,24 +260,16 @@ pub mod model {
     /// An error raised when generalized RDF can not be converted to strict RDF.
     #[derive(Debug, Clone)]
     pub struct StrictRdfError {
-        message: Box<str>,
+        message: &'static str,
     }
 
     impl<'a> fmt::Display for StrictRdfError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "StrictRdfError: {}", self.message)
+            self.message.fmt(f)
         }
     }
 
     impl Error for StrictRdfError {}
-
-    impl From<&str> for StrictRdfError {
-        fn from(message: &str) -> StrictRdfError {
-            StrictRdfError {
-                message: message.into(),
-            }
-        }
-    }
 }
 
 /// Interface for generalized RDF parsers.
@@ -268,6 +278,8 @@ pub mod parser {
     use std::error::Error;
 
     /// A parser returning generalized [`Quad`](../model/struct.Quad.html).
+    ///
+    /// Using it requires to enable the `generalized` feature.
     pub trait GeneralizedQuadsParser {
         type Error: Error;
 
@@ -319,6 +331,8 @@ pub mod parser {
     }
 
     /// Created with the method [`into_iter`](trait.GeneralizedQuadsParser.html#method.into_iter).
+    ///
+    /// Using it requires to enable the `generalized` feature.
     pub struct GeneralizedQuadsParserIterator<
         T,
         E: From<P::Error>,

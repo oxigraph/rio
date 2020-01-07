@@ -42,8 +42,6 @@ impl<T: Deref<Target = str>> Iri<T> {
     ///
     /// This operation keeps internally the `iri` parameter and does not allocate.
     ///
-    /// Warning: validation is not fully implemented yet!
-    ///
     /// Example:
     /// ```
     /// use rio_api::iri::Iri;
@@ -59,7 +57,7 @@ impl<T: Deref<Target = str>> Iri<T> {
     }
 
     /// Validates and resolved a relative IRI against the current IRI
-    /// following [RFC 3987](https://www.ietf.org/rfc/rfc3986) relative URI resolution algorithm.
+    /// following [RFC 3986](https://www.ietf.org/rfc/rfc3986) relative URI resolution algorithm.
     ///
     /// Example:
     /// ```
