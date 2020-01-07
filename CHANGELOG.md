@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.0] - 2020-01-07
+- Adds "generalized" RDF support and generalized Trig parser behind a "generalized" feature flag.
+- Allows to recover NTriples and NQuads parser errors, the parser jumps to the next line if the current line parsing fail.
+- Makes `Iri` parser do the full IRI validation.
+
 ## [0.3.1] - 2019-09-02
 
 ### Added

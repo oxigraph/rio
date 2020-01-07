@@ -1,6 +1,6 @@
 [package]
 name = "rio_xml"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
@@ -12,5 +12,5 @@ RDF/XML parser and serializer
 edition = "2018"
 
 [dependencies]
-rio_api = "0.3"
+rio_api = "0.4"
 quick-xml = "0.17"
