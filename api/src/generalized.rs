@@ -258,7 +258,7 @@ pub mod model {
     //
 
     /// An error raised when generalized RDF can not be converted to strict RDF.
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Copy)]
     pub struct StrictRdfError {
         message: &'static str,
     }
@@ -288,7 +288,7 @@ pub mod parser {
         /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
         fn parse_all<E: From<Self::Error>>(
             &mut self,
-            on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+            on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
         ) -> Result<(), E> {
             while !self.is_end() {
                 self.parse_step(on_quad)?
@@ -304,7 +304,7 @@ pub mod parser {
         /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
         fn parse_step<E: From<Self::Error>>(
             &mut self,
-            on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+            on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
         ) -> Result<(), E>;
 
         /// Returns `true` if the file has been completely consumed by the parser.
@@ -319,7 +319,7 @@ pub mod parser {
         ) -> GeneralizedQuadsParserIterator<T, E, F, Self>
         where
             E: From<Self::Error>,
-            F: FnMut(GeneralizedQuad) -> Result<T, E>,
+            F: FnMut(GeneralizedQuad<'_>) -> Result<T, E>,
             Self: Sized,
         {
             GeneralizedQuadsParserIterator {
@@ -336,7 +336,7 @@ pub mod parser {
     pub struct GeneralizedQuadsParserIterator<
         T,
         E: From<P::Error>,
-        F: FnMut(GeneralizedQuad) -> Result<T, E>,
+        F: FnMut(GeneralizedQuad<'_>) -> Result<T, E>,
         P: GeneralizedQuadsParser,
     > {
         parser: P,
@@ -347,7 +347,7 @@ pub mod parser {
     impl<T, E, F, P> Iterator for GeneralizedQuadsParserIterator<T, E, F, P>
     where
         E: From<P::Error>,
-        F: FnMut(GeneralizedQuad) -> Result<T, E>,
+        F: FnMut(GeneralizedQuad<'_>) -> Result<T, E>,
         P: GeneralizedQuadsParser + Sized,
     {
         type Item = Result<T, E>;

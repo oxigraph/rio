@@ -19,7 +19,7 @@ enum RdfXmlErrorKind {
 }
 
 impl fmt::Display for RdfXmlError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => error.fmt(f),
             RdfXmlErrorKind::InvalidIri(error) => error.fmt(f),

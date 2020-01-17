@@ -40,7 +40,7 @@ impl<W: Write> NTriplesFormatter<W> {
 impl<W: Write> TriplesFormatter for NTriplesFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, triple: &Triple) -> Result<(), io::Error> {
+    fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
         writeln!(self.write, "{}", triple)
     }
 }
@@ -83,7 +83,7 @@ impl<W: Write> NQuadsFormatter<W> {
 impl<W: Write> QuadsFormatter for NQuadsFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, quad: &Quad) -> Result<(), io::Error> {
+    fn format(&mut self, quad: &Quad<'_>) -> Result<(), io::Error> {
         writeln!(self.write, "{}", quad)
     }
 }
@@ -136,7 +136,7 @@ impl<W: Write> TurtleFormatter<W> {
 impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, triple: &Triple) -> Result<(), io::Error> {
+    fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
         if let Some(current_subject_type) = self.current_subject_type {
             let current_subject = current_subject_type.with_value(&self.current_subject);
             if current_subject == triple.subject {
@@ -234,7 +234,7 @@ impl<W: Write> TriGFormatter<W> {
 impl<W: Write> QuadsFormatter for TriGFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, quad: &Quad) -> Result<(), io::Error> {
+    fn format(&mut self, quad: &Quad<'_>) -> Result<(), io::Error> {
         if let Some(current_graph_name_type) = self.current_graph_name_type {
             let current_graph_name =
                 current_graph_name_type.map(|t| t.with_value(&self.current_graph_name));

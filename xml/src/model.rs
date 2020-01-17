@@ -6,7 +6,7 @@ pub struct OwnedNamedNode {
 }
 
 impl From<NamedNode<'_>> for OwnedNamedNode {
-    fn from(n: NamedNode) -> Self {
+    fn from(n: NamedNode<'_>) -> Self {
         Self {
             iri: n.iri.to_owned(),
         }
@@ -25,7 +25,7 @@ pub struct OwnedBlankNode {
 }
 
 impl From<BlankNode<'_>> for OwnedBlankNode {
-    fn from(n: BlankNode) -> Self {
+    fn from(n: BlankNode<'_>) -> Self {
         Self {
             id: n.id.to_owned(),
         }
@@ -54,7 +54,7 @@ enum OwnedLiteral {
 }
 
 impl From<Literal<'_>> for OwnedLiteral {
-    fn from(n: Literal) -> Self {
+    fn from(n: Literal<'_>) -> Self {
         match n {
             Literal::Simple { value } => OwnedLiteral::Simple {
                 value: value.to_owned(),
@@ -98,7 +98,7 @@ pub enum OwnedNamedOrBlankNode {
 }
 
 impl From<NamedOrBlankNode<'_>> for OwnedNamedOrBlankNode {
-    fn from(t: NamedOrBlankNode) -> Self {
+    fn from(t: NamedOrBlankNode<'_>) -> Self {
         match t {
             NamedOrBlankNode::NamedNode(n) => OwnedNamedOrBlankNode::NamedNode(n.into()),
             NamedOrBlankNode::BlankNode(n) => OwnedNamedOrBlankNode::BlankNode(n.into()),
@@ -135,7 +135,7 @@ enum OwnedTerm {
 }
 
 impl From<Term<'_>> for OwnedTerm {
-    fn from(t: Term) -> Self {
+    fn from(t: Term<'_>) -> Self {
         match t {
             Term::NamedNode(n) => OwnedTerm::NamedNode(n.into()),
             Term::BlankNode(n) => OwnedTerm::BlankNode(n.into()),

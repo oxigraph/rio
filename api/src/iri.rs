@@ -48,11 +48,8 @@ impl<T: Deref<Target = str>> Iri<T> {
     /// Iri::parse("http://foo.com/bar/baz").unwrap();
     /// ```
     pub fn parse(iri: T) -> Result<Self, IriParseError> {
-        let positions = IriParser::parse(
-            &iri,
-            None as Option<&Iri<&str>>,
-            &mut VoidOutputBuffer::default(),
-        )?;
+        let base: Option<&Iri<&str>> = None;
+        let positions = IriParser::parse(&iri, base, &mut VoidOutputBuffer::default())?;
         Ok(Self { iri, positions })
     }
 
@@ -108,7 +105,7 @@ impl<T: Deref<Target = str>> Iri<T> {
 
 impl<T: Deref<Target = str> + fmt::Display> fmt::Display for Iri<T> {
     #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.iri.fmt(f)
     }
 }
@@ -120,7 +117,7 @@ pub struct IriParseError {
 }
 
 impl fmt::Display for IriParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             IriParseErrorKind::NoScheme => write!(f, "No scheme"),
             IriParseErrorKind::InvalidHostCharacter(c) => {

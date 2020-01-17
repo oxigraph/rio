@@ -79,7 +79,7 @@ impl<R: BufRead> GTriGParser<R> {
         })
     }
 
-    fn make_quad(&self) -> GeneralizedQuad {
+    fn make_quad(&self) -> GeneralizedQuad<'_> {
         let t = self.term_stack.last_triple();
         let gn = self.graph_stack.last();
         GeneralizedQuad {
@@ -96,7 +96,7 @@ impl<R: BufRead> GeneralizedQuadsParser for GTriGParser<R> {
 
     fn parse_step<E: From<TurtleError>>(
         &mut self,
-        on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+        on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         parse_generalized_block_or_directive(self, on_quad)
     }
@@ -108,7 +108,7 @@ impl<R: BufRead> GeneralizedQuadsParser for GTriGParser<R> {
 
 fn parse_generalized_block_or_directive<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [1g] 	trigDoc 	::= 	(directive | block)*
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
@@ -215,7 +215,7 @@ fn parse_generalized_sparql_prefix(
 
 fn parse_generalized_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
     // [6g] 	triplesBlock 	::= 	triples ('.' triplesBlock?)?
@@ -246,7 +246,7 @@ fn parse_generalized_wrapped_graph<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_triples<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
@@ -269,7 +269,7 @@ fn parse_generalized_triples<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_triples2<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
@@ -296,7 +296,7 @@ fn parse_generalized_triples2<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
     parse_generalized_node(parser, on_quad)?;
@@ -317,7 +317,7 @@ fn parse_generalized_triples_or_graph<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     parser.read.check_is_current(b'[')?;
     parser.read.consume()?;
@@ -341,7 +341,7 @@ fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'(')?;
@@ -407,7 +407,7 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_predicate_object_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
     loop {
@@ -432,7 +432,7 @@ fn parse_generalized_predicate_object_list<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [9] 	verb 	::= 	predicate | 'a'
     if parser.read.current() == b'a' {
@@ -452,7 +452,7 @@ fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_object_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [8] 	objectList 	::= 	object (',' object)*
     loop {
@@ -471,7 +471,7 @@ fn parse_generalized_object_list<R: BufRead, E: From<TurtleError>>(
 
 fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
     parser: &mut GTriGParser<R>,
-    on_quad: &mut impl FnMut(GeneralizedQuad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
@@ -764,6 +764,8 @@ mod test {
     use super::*;
     use std::io::Cursor;
 
+    const OK_TURTLE_ERROR: Result<(), TurtleError> = Ok(());
+
     #[test]
     fn all_variables() -> Result<(), TurtleError> {
         let gtrig = r#"
@@ -791,7 +793,7 @@ mod test {
                     quad.object.into(),
                     quad.graph_name.map(OwnedTerm::from),
                 ));
-                Ok(()) as Result<(), TurtleError>
+                OK_TURTLE_ERROR
             },
         )?;
 
@@ -817,7 +819,7 @@ mod test {
                 quad.object.into(),
                 quad.graph_name.map(OwnedTerm::from),
             ));
-            Ok(()) as Result<(), TurtleError>
+            OK_TURTLE_ERROR
         })?;
 
         assert_eq!(expected, got);
@@ -846,7 +848,7 @@ mod test {
                 quad.object.into(),
                 quad.graph_name.map(OwnedTerm::from),
             ));
-            Ok(()) as Result<(), TurtleError>
+            OK_TURTLE_ERROR
         })?;
 
         assert_eq!(expected, got);
@@ -880,7 +882,7 @@ mod test {
                     quad.object.into(),
                     quad.graph_name.map(OwnedTerm::from),
                 ));
-                Ok(()) as Result<(), TurtleError>
+                OK_TURTLE_ERROR
             },
         )?;
 
@@ -905,7 +907,7 @@ mod test {
                     quad.object.into(),
                     quad.graph_name.map(OwnedTerm::from),
                 ));
-                Ok(()) as Result<(), TurtleError>
+                OK_TURTLE_ERROR
             },
         )?;
 
@@ -917,7 +919,7 @@ mod test {
         Ok(())
     }
 
-    fn n<'a>(value: &'a str) -> OwnedTerm {
+    fn n(value: &str) -> OwnedTerm {
         OwnedTerm {
             kind: OwnedTermKind::NamedNode,
             value: value.to_string(),
@@ -925,7 +927,7 @@ mod test {
         }
     }
 
-    fn v<'a>(value: &'a str) -> OwnedTerm {
+    fn v(value: &str) -> OwnedTerm {
         OwnedTerm {
             kind: OwnedTermKind::Variable,
             value: value.to_string(),
@@ -933,7 +935,7 @@ mod test {
         }
     }
 
-    fn l<'a>(value: &'a str) -> OwnedTerm {
+    fn l(value: &str) -> OwnedTerm {
         OwnedTerm {
             kind: OwnedTermKind::LiteralSimple,
             value: value.to_string(),

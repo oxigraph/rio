@@ -209,6 +209,6 @@ pub struct BlankNodeId {
 impl AsRef<str> for BlankNodeId {
     fn as_ref(&self) -> &str {
         // We know what id is and it's always valid UTF8
-        unsafe { str::from_utf8_unchecked(&self.id) }
+        str::from_utf8(&self.id).unwrap()
     }
 }

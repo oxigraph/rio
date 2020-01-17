@@ -85,7 +85,7 @@ impl<R: BufRead> TriplesParser for TurtleParser<R> {
 
     fn parse_step<E: From<TurtleError>>(
         &mut self,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         parse_statement(self, on_triple)
     }
@@ -147,7 +147,7 @@ impl<R: BufRead> QuadsParser for TriGParser<R> {
 
     fn parse_step<E: From<TurtleError>>(
         &mut self,
-        on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+        on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         parse_block_or_directive(self, on_quad)
     }
@@ -168,7 +168,7 @@ pub(crate) const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
 fn parse_statement<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     skip_whitespace(&mut parser.read)?;
 
@@ -215,7 +215,7 @@ fn parse_statement<R: BufRead, E: From<TurtleError>>(
 
 fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
     parser: &mut TriGParser<R>,
-    on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [1g] 	trigDoc 	::= 	(directive | block)*
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
@@ -288,7 +288,7 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
 
 fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     parser: &mut TriGParser<R>,
-    on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+    on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
     let front_type = parse_label_or_subject(
@@ -328,7 +328,7 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
 
 fn parse_triples2<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
@@ -356,7 +356,7 @@ fn parse_triples2<R: BufRead, E: From<TurtleError>>(
 
 fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
     // [6g] 	triplesBlock 	::= 	triples ('.' triplesBlock?)?
@@ -499,7 +499,7 @@ fn parse_sparql_prefix(
 
 fn parse_triples<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
@@ -524,7 +524,7 @@ fn parse_triples<R: BufRead, E: From<TurtleError>>(
 
 fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
     loop {
@@ -557,7 +557,7 @@ fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
 
 fn parse_object_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [8] 	objectList 	::= 	object (',' object)*
     loop {
@@ -602,7 +602,7 @@ fn parse_verb<'a>(
 
 fn parse_subject<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
@@ -646,7 +646,7 @@ fn parse_predicate<'a>(
 
 fn parse_object<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     //[12] 	object 	::= 	iri | BlankNode | collection | blankNodePropertyList | literal
 
@@ -725,7 +725,7 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
 fn emit_triple<'a, R: BufRead, E: From<TurtleError>>(
     parser: &'a TurtleParser<R>,
     object_type: TermType,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     let subject_buf = parser.subject_buf_stack.before_last();
     let subject_type = parser.subject_type_stack[parser.subject_type_stack.len() - 1];
@@ -770,7 +770,7 @@ pub(crate) fn parse_literal<'a>(
 
 fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'[')?;
@@ -798,7 +798,7 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
 
 fn parse_collection<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
-    on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'(')?;
@@ -1419,10 +1419,10 @@ impl From<NamedOrBlankNodeType> for TermType {
 }
 
 fn on_triple_in_graph<'a, E>(
-    on_quad: &'a mut impl FnMut(Quad) -> Result<(), E>,
+    on_quad: &'a mut impl FnMut(Quad<'_>) -> Result<(), E>,
     graph_name: Option<NamedOrBlankNode<'a>>,
-) -> impl FnMut(Triple) -> Result<(), E> + 'a {
-    move |t: Triple| {
+) -> impl FnMut(Triple<'_>) -> Result<(), E> + 'a {
+    move |t: Triple<'_>| {
         on_quad(Quad {
             subject: t.subject,
             predicate: t.predicate,

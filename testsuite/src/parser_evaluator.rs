@@ -175,7 +175,7 @@ pub enum TestEvaluationError {
 }
 
 impl fmt::Display for TestEvaluationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             TestEvaluationError::UnknownTestUrl(u) => {
                 write!(f, "The URL {} does not corresponds to a known RDF test", u)

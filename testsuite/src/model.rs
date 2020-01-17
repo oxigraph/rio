@@ -15,7 +15,7 @@ impl fmt::Display for OwnedNamedNode {
 }
 
 impl From<NamedNode<'_>> for OwnedNamedNode {
-    fn from(n: NamedNode) -> Self {
+    fn from(n: NamedNode<'_>) -> Self {
         Self {
             iri: n.iri.to_owned(),
         }
@@ -40,7 +40,7 @@ impl fmt::Display for OwnedBlankNode {
 }
 
 impl From<BlankNode<'_>> for OwnedBlankNode {
-    fn from(n: BlankNode) -> Self {
+    fn from(n: BlankNode<'_>) -> Self {
         Self {
             id: n.id.to_owned(),
         }
@@ -75,7 +75,7 @@ impl fmt::Display for OwnedLiteral {
 }
 
 impl From<Literal<'_>> for OwnedLiteral {
-    fn from(n: Literal) -> Self {
+    fn from(n: Literal<'_>) -> Self {
         match n {
             Literal::Simple { value } => OwnedLiteral::Simple {
                 value: value.to_owned(),
@@ -125,7 +125,7 @@ impl fmt::Display for OwnedNamedOrBlankNode {
 }
 
 impl From<NamedOrBlankNode<'_>> for OwnedNamedOrBlankNode {
-    fn from(t: NamedOrBlankNode) -> Self {
+    fn from(t: NamedOrBlankNode<'_>) -> Self {
         match t {
             NamedOrBlankNode::NamedNode(n) => OwnedNamedOrBlankNode::NamedNode(n.into()),
             NamedOrBlankNode::BlankNode(n) => OwnedNamedOrBlankNode::BlankNode(n.into()),
@@ -168,7 +168,7 @@ impl fmt::Display for OwnedTerm {
 }
 
 impl From<Term<'_>> for OwnedTerm {
-    fn from(t: Term) -> Self {
+    fn from(t: Term<'_>) -> Self {
         match t {
             Term::NamedNode(n) => OwnedTerm::NamedNode(n.into()),
             Term::BlankNode(n) => OwnedTerm::BlankNode(n.into()),
@@ -230,7 +230,7 @@ impl fmt::Display for OwnedQuad {
 }
 
 impl From<Triple<'_>> for OwnedQuad {
-    fn from(t: Triple) -> Self {
+    fn from(t: Triple<'_>) -> Self {
         Self {
             subject: t.subject.into(),
             predicate: t.predicate.into(),
@@ -241,7 +241,7 @@ impl From<Triple<'_>> for OwnedQuad {
 }
 
 impl From<Quad<'_>> for OwnedQuad {
-    fn from(q: Quad) -> Self {
+    fn from(q: Quad<'_>) -> Self {
         Self {
             subject: q.subject.into(),
             predicate: q.predicate.into(),
@@ -292,7 +292,7 @@ impl OwnedDataset {
         &'a self,
         subject: impl Into<NamedOrBlankNode<'a>>,
     ) -> impl Iterator<Item = &'a OwnedQuad> + 'a {
-        let subject: NamedOrBlankNode = subject.into();
+        let subject: NamedOrBlankNode<'_> = subject.into();
         self.inner
             .iter()
             .filter(move |t| NamedOrBlankNode::from(&t.subject) == subject)
@@ -302,7 +302,7 @@ impl OwnedDataset {
         &'a self,
         object: impl Into<Term<'a>>,
     ) -> impl Iterator<Item = &'a OwnedQuad> + 'a {
-        let object: Term = object.into();
+        let object: Term<'_> = object.into();
         self.inner
             .iter()
             .filter(move |t| Term::from(&t.object) == object)
@@ -313,8 +313,8 @@ impl OwnedDataset {
         subject: impl Into<NamedOrBlankNode<'a>>,
         predicate: impl Into<NamedNode<'a>>,
     ) -> Option<&'a OwnedTerm> {
-        let subject: NamedOrBlankNode = subject.into();
-        let predicate: NamedNode = predicate.into();
+        let subject: NamedOrBlankNode<'_> = subject.into();
+        let predicate: NamedNode<'_> = predicate.into();
         self.inner
             .iter()
             .filter(move |t| {

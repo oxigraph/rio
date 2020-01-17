@@ -86,7 +86,7 @@ impl<R: BufRead> TriplesParser for RdfXmlParser<R> {
 
     fn parse_step<E: From<RdfXmlError>>(
         &mut self,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         let (_, event) = self
             .reader
@@ -239,7 +239,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     fn parse_start_event<E: From<RdfXmlError>>(
         &mut self,
         event: BytesStart<'_>,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         //Literal case
         if let Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) = self.state.last_mut()
@@ -593,7 +593,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     fn parse_end_event<E: From<RdfXmlError>>(
         &mut self,
         event: BytesEnd<'_>,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         //Literal case
         if self.in_literal_depth > 0 {
@@ -667,10 +667,10 @@ impl<R: BufRead> RdfXmlReader<R> {
         about_attr: Option<OwnedNamedNode>,
         type_attr: Option<OwnedNamedNode>,
         property_attrs: Vec<(OwnedNamedNode, String)>,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<RdfXmlState, E> {
         let subject_id = self.bnode_id_generator.generate(); //TODO: avoid to run it everytime
-        let subject: NamedOrBlankNode = match (&id_attr, &node_id_attr, &about_attr) {
+        let subject: NamedOrBlankNode<'_> = match (&id_attr, &node_id_attr, &about_attr) {
             (Some(id_attr), None, None) => NamedNode::from(id_attr).into(),
             (None, Some(node_id_attr), None) => BlankNode::from(node_id_attr).into(),
             (None, None, Some(about_attr)) => NamedNode::from(about_attr).into(),
@@ -730,7 +730,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         language: Option<String>,
         subject: OwnedNamedOrBlankNode,
         id_attr: Option<OwnedNamedNode>,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<RdfXmlState, E> {
         let object_id = self.bnode_id_generator.generate();
         let object = BlankNode {
@@ -756,7 +756,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     fn end_state<E: From<RdfXmlError>>(
         &mut self,
         state: RdfXmlState,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         match state {
             RdfXmlState::PropertyElt {
@@ -768,7 +768,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 object,
                 ..
             } => {
-                let object: Term = match &object {
+                let object: Term<'_> = match &object {
                     Some(NodeOrText::Node(node)) => NamedOrBlankNode::from(node).into(),
                     Some(NodeOrText::Text(text)) => {
                         self.new_literal(text, &language, &datatype_attr).into()
@@ -895,9 +895,9 @@ impl<R: BufRead> RdfXmlReader<R> {
 
     fn reify<E: From<RdfXmlError>>(
         &self,
-        triple: &Triple,
-        statement_id: NamedOrBlankNode,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        triple: &Triple<'_>,
+        statement_id: NamedOrBlankNode<'_>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         on_triple(Triple {
             subject: statement_id,
@@ -924,10 +924,10 @@ impl<R: BufRead> RdfXmlReader<R> {
 
     fn emit_property_attrs<E: From<RdfXmlError>>(
         &self,
-        subject: NamedOrBlankNode,
+        subject: NamedOrBlankNode<'_>,
         literal_attributes: Vec<(OwnedNamedNode, String)>,
         language: &Option<String>,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         for (literal_predicate, literal_value) in literal_attributes {
             on_triple(Triple {
@@ -952,7 +952,7 @@ impl<R: BufRead> RdfXmlReader<R> {
 
 fn convert_iri_attribute<B: BufRead>(
     base_iri: &Option<Iri<String>>,
-    attribute: Attribute,
+    attribute: Attribute<'_>,
     reader: &Reader<B>,
 ) -> Result<OwnedNamedNode, RdfXmlError> {
     let value = attribute.unescaped_value()?;

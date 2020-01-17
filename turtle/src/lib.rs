@@ -24,6 +24,16 @@
 //! Replace `TurtleParser` by `NTriplesParser`, `NQuadsParser` or `TriGParser` to read a N-Triples, N-Quads or TriG file instead.
 //!
 //! `NTriplesParser` and `NQuadsParser` do not use the second argument of the `new` function that is the IRI of the file.
+#![deny(
+    future_incompatible,
+    nonstandard_style,
+    rust_2018_idioms,
+    missing_copy_implementations,
+    trivial_casts,
+    trivial_numeric_casts,
+    unsafe_code,
+    unused_qualifications
+)]
 
 mod error;
 mod formatters;

@@ -63,7 +63,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 
     fn parse_step<E: From<TurtleError>>(
         &mut self,
-        on_triple: &mut impl FnMut(Triple) -> Result<(), E>,
+        on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         let result = match parse_triple_line(
             &mut self.read,
@@ -152,7 +152,7 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
 
     fn parse_step<E: From<TurtleError>>(
         &mut self,
-        on_quad: &mut impl FnMut(Quad) -> Result<(), E>,
+        on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
         let result = match parse_quad_line(
             &mut self.read,

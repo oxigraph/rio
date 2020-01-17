@@ -54,7 +54,7 @@ fn hash_blank_nodes<'a>(
 
         {
             let subject = OwnedNamedOrBlankNode::from(bnode.clone());
-            let mut po_set: BTreeSet<PredicateObject> = BTreeSet::default();
+            let mut po_set: BTreeSet<PredicateObject<'_>> = BTreeSet::default();
             for po in predicate_objects_for_subject(dataset, &subject) {
                 match &po.object {
                     OwnedTerm::BlankNode(_) => (),
@@ -70,7 +70,7 @@ fn hash_blank_nodes<'a>(
 
         {
             let object = OwnedTerm::from(bnode.clone());
-            let mut sp_set: BTreeSet<SubjectPredicate> = BTreeSet::default();
+            let mut sp_set: BTreeSet<SubjectPredicate<'_>> = BTreeSet::default();
             for sp in subject_predicates_for_object(dataset, &object) {
                 match &sp.subject {
                     OwnedNamedOrBlankNode::BlankNode(_) => (),
@@ -105,12 +105,13 @@ fn build_and_check_containment_from_hashes<'a>(
         None => return check_is_contained(a_to_b_mapping, a, b),
     };
 
+    const EMPTY_SLICE: &[&OwnedBlankNode] = &[];
     let a_nodes = a_bnodes_by_hash
         .get(hash)
-        .map_or(&[] as &[&OwnedBlankNode], |v| v.as_slice());
+        .map_or(EMPTY_SLICE, |v| v.as_slice());
     let b_nodes = b_bnodes_by_hash
         .get(hash)
-        .map_or(&[] as &[&OwnedBlankNode], |v| v.as_slice());
+        .map_or(EMPTY_SLICE, |v| v.as_slice());
     if a_nodes.len() != b_nodes.len() {
         return false;
     }

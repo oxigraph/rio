@@ -58,7 +58,7 @@ impl<W: Write> RdfXmlFormatter<W> {
 impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
     type Error = RdfXmlError;
 
-    fn format(&mut self, triple: &Triple) -> Result<(), RdfXmlError> {
+    fn format(&mut self, triple: &Triple<'_>) -> Result<(), RdfXmlError> {
         // We open a new rdf:Description if useful
         if self.current_subject.as_ref().map(|v| v.into()) != Some(triple.subject) {
             if self.current_subject.is_some() {

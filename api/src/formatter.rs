@@ -8,7 +8,7 @@ pub trait TriplesFormatter {
     type Error: Error;
 
     /// Writes a triple
-    fn format(&mut self, triple: &Triple) -> Result<(), Self::Error>;
+    fn format(&mut self, triple: &Triple<'_>) -> Result<(), Self::Error>;
 }
 
 /// A formatter for [`Quad`](../model/struct.Quad.html).
@@ -16,5 +16,5 @@ pub trait QuadsFormatter {
     type Error: Error;
 
     /// Writes a quad
-    fn format(&mut self, quad: &Quad) -> Result<(), Self::Error>;
+    fn format(&mut self, quad: &Quad<'_>) -> Result<(), Self::Error>;
 }

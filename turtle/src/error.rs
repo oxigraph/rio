@@ -25,7 +25,7 @@ pub enum TurtleErrorKind {
 }
 
 impl fmt::Display for TurtleError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             TurtleErrorKind::IO(error) => return error.fmt(f),
             TurtleErrorKind::UnknownPrefix(prefix) => write!(f, "unknown prefix '{}'", prefix),

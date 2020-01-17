@@ -176,7 +176,7 @@ pub enum TestManifestError {
 }
 
 impl fmt::Display for TestManifestError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             TestManifestError::InvalidTestType(t) => {
                 write!(f, "The test {} has an unsupported or missing rdf:type", t)
