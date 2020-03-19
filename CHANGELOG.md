@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.4.1] - 2020-03-19
+- Makes `Iri` allow resolving against base IRIs with not hierarchical path (like `file:foo`).
+- Upgrades `quick-xml` dependency to 0.18.
+
 ## [0.4.0] - 2020-01-07
 - Adds "generalized" RDF support and generalized Trig parser behind a "generalized" feature flag.
 - Allows to recover NTriples and NQuads parser errors, the parser jumps to the next line if the current line parsing fail.
