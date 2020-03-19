@@ -13,4 +13,4 @@ edition = "2018"
 
 [dependencies]
 rio_api = "0.4"
-quick-xml = "0.17"
+quick-xml = "0.18"
