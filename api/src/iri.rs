@@ -119,7 +119,7 @@ pub struct IriParseError {
 impl fmt::Display for IriParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            IriParseErrorKind::NoScheme => write!(f, "No scheme"),
+            IriParseErrorKind::NoScheme => write!(f, "No scheme found in an absolute IRI"),
             IriParseErrorKind::InvalidHostCharacter(c) => {
                 write!(f, "Invalid character '{}' in host", c)
             }
@@ -163,7 +163,6 @@ struct IriElementsPositions {
     authority_end: usize,
     path_end: usize,
     query_end: usize,
-    cannot_be_a_base: bool,
 }
 
 trait OutputBuffer {
@@ -306,7 +305,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                 authority_end: 0,
                 path_end: 0,
                 query_end: 0,
-                cannot_be_a_base: false,
             },
             input_scheme_end: 0,
         };
@@ -317,7 +315,7 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     fn parse_scheme_start(&mut self) -> Result<(), IriParseError> {
         match self.input.front() {
             Some(c) if c.is_ascii_alphabetic() => self.parse_scheme(),
-            _ => self.parse_no_scheme(),
+            _ => self.parse_relative(),
         }
     }
 
@@ -338,8 +336,7 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                         self.parse_path_or_authority()
                     } else {
                         self.output_positions.authority_end = self.output.len();
-                        self.output_positions.cannot_be_a_base = true;
-                        self.parse_cannot_be_a_base()
+                        self.parse_path()
                     };
                 }
                 _ => {
@@ -348,32 +345,9 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
                         position: 0,
                     }; // reset
                     self.output.clear();
-                    return self.parse_no_scheme();
+                    return self.parse_relative();
                 }
             }
-        }
-    }
-
-    fn parse_no_scheme(&mut self) -> Result<(), IriParseError> {
-        if let Some(base) = self.base {
-            if base.positions.cannot_be_a_base {
-                if self.input.starts_with('#') {
-                    self.output.push_str(&base.iri[..base.positions.query_end]);
-                    self.output.push('#');
-                    self.output_positions.scheme_end = base.positions.scheme_end;
-                    self.output_positions.authority_end = base.positions.authority_end;
-                    self.output_positions.path_end = base.positions.path_end;
-                    self.output_positions.query_end = base.positions.query_end;
-                    self.output_positions.cannot_be_a_base = true;
-                    self.parse_fragment()
-                } else {
-                    self.parse_error(IriParseErrorKind::NoScheme)
-                }
-            } else {
-                self.parse_relative()
-            }
-        } else {
-            self.parse_error(IriParseErrorKind::NoScheme)
         }
     }
 
@@ -389,48 +363,51 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn parse_relative(&mut self) -> Result<(), IriParseError> {
-        let base = self.base.unwrap();
-        match self.input.front() {
-            None => {
-                self.output.push_str(&base.iri[..base.positions.query_end]);
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output_positions.authority_end = base.positions.authority_end;
-                self.output_positions.path_end = base.positions.path_end;
-                self.output_positions.query_end = base.positions.query_end;
-                Ok(())
+        if let Some(base) = self.base {
+            match self.input.front() {
+                None => {
+                    self.output.push_str(&base.iri[..base.positions.query_end]);
+                    self.output_positions.scheme_end = base.positions.scheme_end;
+                    self.output_positions.authority_end = base.positions.authority_end;
+                    self.output_positions.path_end = base.positions.path_end;
+                    self.output_positions.query_end = base.positions.query_end;
+                    Ok(())
+                }
+                Some('/') => {
+                    self.input.next();
+                    self.parse_relative_slash()
+                }
+                Some('?') => {
+                    self.input.next();
+                    self.output.push_str(&base.iri[..base.positions.path_end]);
+                    self.output.push('?');
+                    self.output_positions.scheme_end = base.positions.scheme_end;
+                    self.output_positions.authority_end = base.positions.authority_end;
+                    self.output_positions.path_end = base.positions.path_end;
+                    self.parse_query()
+                }
+                Some('#') => {
+                    self.input.next();
+                    self.output.push_str(&base.iri[..base.positions.query_end]);
+                    self.output_positions.scheme_end = base.positions.scheme_end;
+                    self.output_positions.authority_end = base.positions.authority_end;
+                    self.output_positions.path_end = base.positions.path_end;
+                    self.output_positions.query_end = base.positions.query_end;
+                    self.output.push('#');
+                    self.parse_fragment()
+                }
+                _ => {
+                    self.output.push_str(&base.iri[..base.positions.path_end]);
+                    self.output_positions.scheme_end = base.positions.scheme_end;
+                    self.output_positions.authority_end = base.positions.authority_end;
+                    self.output_positions.path_end = base.positions.path_end;
+                    self.remove_last_segment();
+                    self.output.push('/');
+                    self.parse_path()
+                }
             }
-            Some('/') => {
-                self.input.next();
-                self.parse_relative_slash()
-            }
-            Some('?') => {
-                self.input.next();
-                self.output.push_str(&base.iri[..base.positions.path_end]);
-                self.output.push('?');
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output_positions.authority_end = base.positions.authority_end;
-                self.output_positions.path_end = base.positions.path_end;
-                self.parse_query()
-            }
-            Some('#') => {
-                self.input.next();
-                self.output.push_str(&base.iri[..base.positions.query_end]);
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output_positions.authority_end = base.positions.authority_end;
-                self.output_positions.path_end = base.positions.path_end;
-                self.output_positions.query_end = base.positions.query_end;
-                self.output.push('#');
-                self.parse_fragment()
-            }
-            _ => {
-                self.output.push_str(&base.iri[..base.positions.path_end]);
-                self.output_positions.scheme_end = base.positions.scheme_end;
-                self.output_positions.authority_end = base.positions.authority_end;
-                self.output_positions.path_end = base.positions.path_end;
-                self.remove_last_segment();
-                self.output.push('/');
-                self.parse_path()
-            }
+        } else {
+            self.parse_error(IriParseErrorKind::NoScheme)
         }
     }
 
@@ -604,26 +581,6 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
         }
     }
 
-    fn parse_cannot_be_a_base(&mut self) -> Result<(), IriParseError> {
-        while let Some(c) = self.input.next() {
-            if c == '?' {
-                self.output_positions.path_end = self.output.len();
-                self.output.push('?');
-                return self.parse_query();
-            } else if c == '#' {
-                self.output_positions.path_end = self.output.len();
-                self.output_positions.query_end = self.output.len();
-                self.output.push('#');
-                return self.parse_fragment();
-            } else {
-                self.read_url_codepoint_or_echar(c)?
-            }
-        }
-        self.output_positions.path_end = self.output.len();
-        self.output_positions.query_end = self.output.len();
-        Ok(())
-    }
-
     fn parse_query(&mut self) -> Result<(), IriParseError> {
         while let Some(c) = self.input.next() {
             if c == '#' {
@@ -646,12 +603,11 @@ impl<'a, BC: Deref<Target = str>, O: OutputBuffer> IriParser<'a, BC, O> {
     }
 
     fn remove_last_segment(&mut self) {
-        if let Some(last_slash_position) =
-            self.output.as_str()[self.output_positions.authority_end..].rfind('/')
-        {
-            self.output
-                .truncate(last_slash_position + self.output_positions.authority_end)
-        }
+        let last_slash_position = self.output.as_str()[self.output_positions.authority_end..]
+            .rfind('/')
+            .unwrap_or(0);
+        self.output
+            .truncate(last_slash_position + self.output_positions.authority_end)
     }
 
     #[inline]
@@ -1183,6 +1139,13 @@ fn test_resolve_relative_iri() {
             "file:///C:/DEV/Haskell/lib/HXmlToolbox-3.01/examples/",
             "file:///C:/DEV/Haskell/lib/HXmlToolbox-3.01/examples/mini1.xml",
         ),
+        // More bad test by Rio
+        ("?bar", "file:foo", "file:foo?bar"),
+        ("#bar", "file:foo", "file:foo#bar"),
+        ("/lv2.h", "file:foo", "file:/lv2.h"),
+        ("/lv2.h", "file:foo", "file:/lv2.h"),
+        ("///lv2.h", "file:foo", "file:///lv2.h"),
+        ("lv2.h", "file:foo", "file:/lv2.h"),
     ];
 
     for (relative, base, output) in examples.iter() {
