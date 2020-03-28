@@ -39,7 +39,7 @@ use std::io::BufRead;
 /// assert_eq!(2, count)
 /// ```
 pub struct NTriplesParser<R: BufRead> {
-    read: LookAheadLineBasedByteReader<R>,
+    read: LookAheadByteReader<R>,
     subject_buf: String,
     predicate_buf: String,
     object_buf: String,
@@ -49,7 +49,7 @@ pub struct NTriplesParser<R: BufRead> {
 impl<R: BufRead> NTriplesParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
-            read: LookAheadLineBasedByteReader::new(reader),
+            read: LookAheadByteReader::new(reader),
             subject_buf: String::default(),
             predicate_buf: String::default(),
             object_buf: String::default(),
@@ -90,7 +90,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
     }
 
     fn is_end(&self) -> bool {
-        self.read.current() == EOF
+        self.read.current().is_none()
     }
 }
 
@@ -126,7 +126,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 /// assert_eq!(2, count)
 /// ```
 pub struct NQuadsParser<R: BufRead> {
-    read: LookAheadLineBasedByteReader<R>,
+    read: LookAheadByteReader<R>,
     subject_buf: String,
     predicate_buf: String,
     object_buf: String,
@@ -137,7 +137,7 @@ pub struct NQuadsParser<R: BufRead> {
 impl<R: BufRead> NQuadsParser<R> {
     pub fn new(reader: R) -> Result<Self, TurtleError> {
         Ok(Self {
-            read: LookAheadLineBasedByteReader::new(reader),
+            read: LookAheadByteReader::new(reader),
             subject_buf: String::default(),
             predicate_buf: String::default(),
             object_buf: String::default(),
@@ -181,7 +181,7 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
     }
 
     fn is_end(&self) -> bool {
-        self.read.current() == EOF
+        self.read.current().is_none()
     }
 }
 
@@ -195,7 +195,7 @@ fn parse_triple_line<'a>(
     skip_whitespace(read)?;
 
     let subject = match read.current() {
-        EOF | b'#' | b'\r' | b'\n' => {
+        None | Some(b'#') | Some(b'\r') | Some(b'\n') => {
             skip_until_eol(read)?;
             return Ok(None);
         }
@@ -214,7 +214,7 @@ fn parse_triple_line<'a>(
     skip_whitespace(read)?;
 
     match read.current() {
-        EOF | b'#' | b'\r' | b'\n' => skip_until_eol(read)?,
+        None | Some(b'#') | Some(b'\r') | Some(b'\n') => skip_until_eol(read)?,
         _ => read.unexpected_char_error()?,
     }
 
@@ -236,7 +236,7 @@ fn parse_quad_line<'a>(
     skip_whitespace(read)?;
 
     let subject = match read.current() {
-        EOF | b'#' | b'\r' | b'\n' => {
+        None | Some(b'#') | Some(b'\r') | Some(b'\n') => {
             skip_until_eol(read)?;
             return Ok(None);
         }
@@ -251,7 +251,7 @@ fn parse_quad_line<'a>(
     skip_whitespace(read)?;
 
     let graph_name = match read.current() {
-        b'<' | b'_' => Some(parse_named_or_blank_node(read, graph_name_buf)?),
+        Some(b'<') | Some(b'_') => Some(parse_named_or_blank_node(read, graph_name_buf)?),
         _ => None,
     };
     skip_whitespace(read)?;
@@ -261,7 +261,7 @@ fn parse_quad_line<'a>(
     skip_whitespace(read)?;
 
     match read.current() {
-        EOF | b'#' | b'\r' | b'\n' => skip_until_eol(read)?,
+        None | Some(b'#') | Some(b'\r') | Some(b'\n') => skip_until_eol(read)?,
         _ => read.unexpected_char_error()?,
     }
 
@@ -278,7 +278,7 @@ fn parse_term<'a>(
     buffer: &'a mut String,
     annotation_buffer: &'a mut String,
 ) -> Result<Term<'a>, TurtleError> {
-    match read.current() {
+    match read.required_current()? {
         b'<' => Ok(parse_iriref(read, buffer)?.into()),
         b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
         b'"' => Ok(parse_literal(read, buffer, annotation_buffer)?.into()),
@@ -290,7 +290,7 @@ fn parse_named_or_blank_node<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
 ) -> Result<NamedOrBlankNode<'a>, TurtleError> {
-    match read.current() {
+    match read.required_current()? {
         b'<' => Ok(parse_iriref(read, buffer)?.into()),
         b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
         _ => read.unexpected_char_error(),
@@ -306,14 +306,14 @@ fn parse_literal<'a>(
     skip_whitespace(read)?;
 
     match read.current() {
-        b'@' => {
+        Some(b'@') => {
             parse_langtag(read, annotation_buffer)?;
             Ok(Literal::LanguageTaggedString {
                 value: buffer,
                 language: annotation_buffer,
             })
         }
-        b'^' => {
+        Some(b'^') => {
             read.consume()?;
             read.check_is_current(b'^')?;
             read.consume()?;
@@ -330,7 +330,7 @@ fn parse_literal<'a>(
 fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
-            b' ' | b'\t' => read.consume()?,
+            Some(b' ') | Some(b'\t') => read.consume()?,
             _ => return Ok(()),
         }
     }
@@ -339,8 +339,8 @@ fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError>
 fn skip_until_eol(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
-            EOF => return Ok(()),
-            b'\n' => {
+            None => return Ok(()),
+            Some(b'\n') => {
                 read.consume()?;
                 return Ok(());
             }

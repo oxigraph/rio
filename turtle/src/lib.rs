@@ -2,6 +2,8 @@
 //!
 //! All the provided parsers work in streaming from a `BufRead` implementation.
 //! They do not rely on any dependencies outside of Rust standard library.
+//! The parsers are not protected against memory overflows.
+//! For example if the parsed content contains a literal string of 16GB, 16GB of memory will be allocated.
 //!
 //! How to read a file `foo.ttl` and count the number of `rdf:type` triples:
 //! ```no_run

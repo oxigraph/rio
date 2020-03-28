@@ -43,7 +43,7 @@ use std::str;
 /// assert_eq!(2, count)
 /// ```
 pub struct GTriGParser<R: BufRead> {
-    read: LookAheadLineBasedByteReader<R>,
+    read: LookAheadByteReader<R>,
     base_iri: Option<Iri<String>>,
     namespaces: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
@@ -57,7 +57,7 @@ impl<R: BufRead> GTriGParser<R> {
     ///
     /// The base IRI might be empty to state there is no base IRI.
     pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
-        let read = LookAheadLineBasedByteReader::new(reader);
+        let read = LookAheadByteReader::new(reader);
         let base_iri = if base_iri.is_empty() {
             None
         } else {
@@ -102,7 +102,7 @@ impl<R: BufRead> GeneralizedQuadsParser for GTriGParser<R> {
     }
 
     fn is_end(&self) -> bool {
-        self.read.current() == EOF
+        self.read.current().is_none()
     }
 }
 
@@ -114,7 +114,7 @@ fn parse_generalized_block_or_directive<R: BufRead, E: From<TurtleError>>(
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
     skip_whitespace(&mut parser.read)?;
 
-    if parser.read.current() == EOF {
+    if parser.read.current().is_none() {
         Ok(())
     } else if parser.read.starts_with(b"@prefix") {
         parse_generalized_prefix_id(
@@ -154,11 +154,11 @@ fn parse_generalized_block_or_directive<R: BufRead, E: From<TurtleError>>(
         parse_generalized_wrapped_graph(parser, on_quad)?;
         parser.graph_stack.pop();
         Ok(())
-    } else if parser.read.current() == b'{' {
+    } else if parser.read.current() == Some(b'{') {
         parse_generalized_wrapped_graph(parser, on_quad)
-    } else if parser.read.current() == b'['
-        && !is_followed_by_space_and_closing_bracket(&parser.read)
-        || parser.read.current() == b'('
+    } else if parser.read.current() == Some(b'[')
+        && !is_followed_by_space_and_closing_bracket(&mut parser.read)?
+        || parser.read.current() == Some(b'(')
     {
         parse_generalized_triples2(parser, on_quad)
     } else {
@@ -224,13 +224,13 @@ fn parse_generalized_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     skip_whitespace(&mut parser.read)?;
 
     loop {
-        if parser.read.current() == b'}' {
+        if parser.read.current() == Some(b'}') {
             parser.read.consume()?;
             return Ok(());
         }
 
         parse_generalized_triples(parser, on_quad)?;
-        match parser.read.current() {
+        match parser.read.required_current()? {
             b'.' => {
                 parser.read.consume()?;
                 skip_whitespace(&mut parser.read)?;
@@ -250,10 +250,10 @@ fn parse_generalized_triples<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
-        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
+        Some(b'[') if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
             parse_generalized_blank_node_property_list(parser, on_quad)?;
             skip_whitespace(&mut parser.read)?;
-            if parser.read.current() != b'.' && parser.read.current() != b'}' {
+            if parser.read.current() != Some(b'.') && parser.read.current() != Some(b'}') {
                 parse_generalized_predicate_object_list(parser, on_quad)?;
             }
         }
@@ -273,10 +273,10 @@ fn parse_generalized_triples2<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
-        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
+        Some(b'[') if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
             parse_generalized_blank_node_property_list(parser, on_quad)?;
             skip_whitespace(&mut parser.read)?;
-            if parser.read.current() != b'.' {
+            if parser.read.current() != Some(b'.') {
                 parse_generalized_predicate_object_list(parser, on_quad)?;
             }
         }
@@ -302,7 +302,7 @@ fn parse_generalized_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     parse_generalized_node(parser, on_quad)?;
     skip_whitespace(&mut parser.read)?;
 
-    if parser.read.current() == b'{' {
+    if parser.read.current() == Some(b'{') {
         parser.graph_stack.steal(&mut parser.term_stack);
         parse_generalized_wrapped_graph(parser, on_quad)?;
         parser.graph_stack.pop();
@@ -332,7 +332,7 @@ fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
         parse_generalized_predicate_object_list(parser, on_quad)?;
         skip_whitespace(&mut parser.read)?;
 
-        if parser.read.current() == b']' {
+        if parser.read.current() == Some(b']') {
             parser.read.consume()?;
             return Ok(());
         }
@@ -352,9 +352,9 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
     loop {
         skip_whitespace(&mut parser.read)?;
 
-        if parser.read.current() == EOF {
+        if parser.read.current().is_none() {
             return Ok(parser.read.unexpected_char_error()?);
-        } else if parser.read.current() == b')' {
+        } else if parser.read.current() == Some(b')') {
             parser.read.consume()?;
             match root {
                 Some(id) => {
@@ -419,12 +419,12 @@ fn parse_generalized_predicate_object_list<R: BufRead, E: From<TurtleError>>(
 
         parser.term_stack.pop();
 
-        while parser.read.current() == b';' {
+        while parser.read.current() == Some(b';') {
             parser.read.consume()?;
             skip_whitespace(&mut parser.read)?;
         }
         match parser.read.current() {
-            b'.' | b']' | b'}' | EOF => return Ok(()),
+            Some(b'.') | Some(b']') | Some(b'}') | None => return Ok(()),
             _ => (), //continue
         }
     }
@@ -435,8 +435,8 @@ fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [9] 	verb 	::= 	predicate | 'a'
-    if parser.read.current() == b'a' {
-        match parser.read.next() {
+    if parser.read.current() == Some(b'a') {
+        match parser.read.next()? {
             // We check that it is not a prefixed URI
             Some(c) if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII => {
             }
@@ -461,7 +461,7 @@ fn parse_generalized_object_list<R: BufRead, E: From<TurtleError>>(
         parser.term_stack.pop();
 
         skip_whitespace(&mut parser.read)?;
-        if parser.read.current() != b',' {
+        if parser.read.current() != Some(b',') {
             return Ok(());
         }
         parser.read.consume()?;
@@ -475,7 +475,7 @@ fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
-        b'_' | b'[' if is_followed_by_space_and_closing_bracket(&parser.read) => {
+        Some(b'_') | Some(b'[') if is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
             let blank_node = parser.term_stack.push(OwnedTermKind::BlankNode);
             parse_blank_node(
                 &mut parser.read,
@@ -484,8 +484,8 @@ fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
             )?;
             Ok(())
         }
-        b'[' => parse_generalized_blank_node_property_list(parser, on_quad),
-        b'(' => parse_generalized_collection(parser, on_quad),
+        Some(b'[') => parse_generalized_blank_node_property_list(parser, on_quad),
+        Some(b'(') => parse_generalized_collection(parser, on_quad),
         _ => {
             parse_generalized_term(parser, false)?;
             Ok(())
@@ -502,8 +502,7 @@ fn parse_generalized_term<R: BufRead>(
     } else {
         &mut parser.term_stack
     };
-    match parser.read.current() {
-        EOF => parser.read.unexpected_char_error()?,
+    match parser.read.required_current()? {
         b'<' => {
             let named_node = stack.push(OwnedTermKind::NamedNode);
             parse_generalized_iri(
@@ -574,13 +573,11 @@ pub(crate) fn parse_generalized_iri(
     namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
-    match read.current() {
-        b'<' => {
-            parse_generalized_iriref(read, buffer, temp_buffer, base_iri)?;
-        }
-        _ => parse_prefixed_name(read, buffer, namespaces)?,
+    if read.current() == Some(b'<') {
+        parse_generalized_iriref(read, buffer, temp_buffer, base_iri)
+    } else {
+        parse_prefixed_name(read, buffer, namespaces)
     }
-    Ok(())
 }
 
 pub fn parse_generalized_iriref(
@@ -608,7 +605,7 @@ pub(crate) fn parse_variable_name<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
 ) -> Result<(), TurtleError> {
-    let c = read.current();
+    let c = read.required_current()?;
     if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9') {
         buffer.push(char::from(c))
     } else {
@@ -622,18 +619,21 @@ pub(crate) fn parse_variable_name<'a>(
 
     loop {
         read.consume()?;
-        let c = read.current();
-        if c <= MAX_ASCII
-            && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9' || c == 0xb7)
-        {
-            buffer.push(char::from(c))
-        } else {
-            let c = read_utf8_char(read)?;
-            if is_possible_pn_chars_u_unicode(c) {
-                buffer.push(c);
+        if let Some(c) = read.current() {
+            if c <= MAX_ASCII
+                && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9' || c == 0xb7)
+            {
+                buffer.push(char::from(c))
             } else {
-                return Ok(());
+                let c = read_utf8_char(read)?;
+                if is_possible_pn_chars_u_unicode(c) {
+                    buffer.push(c);
+                } else {
+                    return Ok(());
+                }
             }
+        } else {
+            return Ok(());
         }
     }
 }

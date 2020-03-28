@@ -52,20 +52,20 @@ pub fn parse_iriref(
     loop {
         read.consume()?;
         match read.current() {
-            EOF | b'\n' | b'\r' => read.unexpected_char_error()?,
-            b'>' => {
+            None | Some(b'\n') | Some(b'\r') => read.unexpected_char_error()?,
+            Some(b'>') => {
                 read.consume()?;
                 return Ok(());
             }
-            b'\\' => {
+            Some(b'\\') => {
                 read.consume()?;
                 buffer.push(match read.current() {
-                    b'u' => read_hexa_char(read, 4)?,
-                    b'U' => read_hexa_char(read, 8)?,
+                    Some(b'u') => read_hexa_char(read, 4)?,
+                    Some(b'U') => read_hexa_char(read, 8)?,
                     _ => read.unexpected_char_error()?,
                 });
             }
-            c => buffer.push(if c <= MAX_ASCII {
+            Some(c) => buffer.push(if c <= MAX_ASCII {
                 char::from(c) //optimization to avoid UTF-8 decoding
             } else {
                 read_utf8_char(read)?
@@ -84,7 +84,7 @@ pub fn parse_blank_node_label<'a>(
     read.check_is_current(b':')?;
     read.consume()?;
 
-    let c = read.current();
+    let c = read.required_current()?;
     if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9') {
         buffer.push(char::from(c))
     } else {
@@ -99,13 +99,13 @@ pub fn parse_blank_node_label<'a>(
     loop {
         read.consume()?;
         match read.current() {
-            b'.' => match read.next() {
+            Some(b'.') => match read.next()? {
                 Some(c) if is_possible_pn_chars_ascii(c) || c > MAX_ASCII => buffer.push('.'),
                 _ => {
                     return Ok(BlankNode { id: buffer });
                 }
             },
-            c if c < MAX_ASCII && is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
+            Some(c) if c < MAX_ASCII && is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
             _ => {
                 let c = read_utf8_char(read)?;
                 if is_possible_pn_chars_unicode(c) {
@@ -127,7 +127,7 @@ pub fn parse_langtag(
     read.consume()?;
 
     //[a-zA-Z]
-    let c = read.current();
+    let c = read.required_current()?;
     match c {
         b'a'..=b'z' | b'A'..=b'Z' => buffer.push(char::from(c)),
         _ => read.unexpected_char_error()?,
@@ -136,27 +136,33 @@ pub fn parse_langtag(
     //[a-zA-Z]*
     loop {
         read.consume()?;
-        let c = read.current();
-        match c {
-            b'a'..=b'z' | b'A'..=b'Z' => buffer.push(char::from(c)),
-            b'-' => break, // follow-up
-            _ => return Ok(()),
+        if let Some(c) = read.current() {
+            match c {
+                b'a'..=b'z' | b'A'..=b'Z' => buffer.push(char::from(c)),
+                b'-' => break, // follow-up
+                _ => return Ok(()),
+            }
+        } else {
+            return Ok(());
         }
     }
 
     // ('-' [a-zA-Z0-9]+)*
     loop {
-        let c = read.current();
-        match c {
-            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push(char::from(c)),
-            b'-' => match read.next() {
-                Some(n) => match n {
-                    b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push('-'),
-                    _ => return Ok(()),
+        if let Some(c) = read.current() {
+            match c {
+                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push(char::from(c)),
+                b'-' => match read.next()? {
+                    Some(n) => match n {
+                        b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push('-'),
+                        _ => return Ok(()),
+                    },
+                    None => return Ok(()),
                 },
-                None => return Ok(()),
-            },
-            _ => return Ok(()),
+                _ => return Ok(()),
+            }
+        } else {
+            return Ok(());
         }
         read.consume()?
     }
@@ -178,13 +184,13 @@ pub fn parse_string_literal_quote_inner(
     read.check_is_current(quote)?;
     loop {
         read.consume()?;
-        match read.current() {
+        match read.required_current()? {
             c if c == quote => {
                 read.consume()?;
                 return Ok(());
             }
             b'\\' => parse_echar_or_uchar(read, buffer)?,
-            b'\n' | b'\r' | EOF => read.unexpected_char_error()?,
+            b'\n' | b'\r' => read.unexpected_char_error()?,
             c => buffer.push(if c <= MAX_ASCII {
                 char::from(c) //optimization to avoid UTF-8 decoding
             } else {
@@ -200,7 +206,7 @@ pub fn parse_echar_or_uchar(
 ) -> Result<(), TurtleError> {
     read.check_is_current(b'\\')?;
     read.consume()?;
-    match read.current() {
+    match read.required_current()? {
         b't' => buffer.push('\t'),
         b'b' => buffer.push('\u{8}'),
         b'n' => buffer.push('\n'),
@@ -229,7 +235,7 @@ fn read_hexa_u32(read: &mut impl LookAheadByteRead, len: usize) -> Result<u32, T
     let mut value = 0;
     for _ in 0..len {
         read.consume()?;
-        if let Some(d) = convert_hexa_byte(read.current()) {
+        if let Some(d) = convert_hexa_byte(read.required_current()?) {
             value = value * 16 + u32::from(d);
         } else {
             read.unexpected_char_error()?;
@@ -250,7 +256,6 @@ fn convert_hexa_byte(c: u8) -> Option<u8> {
 // [157s] 	PN_CHARS_BASE 	::= 	[A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
 pub fn is_possible_pn_chars_base_ascii(c: u8) -> bool {
     match c {
-        EOF => false,
         b'A'..=b'Z' | b'a'..=b'z' => true,
         _ => false,
     }
@@ -312,7 +317,7 @@ pub fn read_utf8_char(read: &mut impl LookAheadByteRead) -> Result<char, TurtleE
     let mut lower_boundary = 0x80;
     let mut upper_boundary = 0xBF;
 
-    let byte = read.current();
+    let byte = read.required_current()?;
     match byte {
         0x00..=0x7F => return Ok(char::from(byte)),
         0xC2..=0xDF => {
@@ -344,7 +349,7 @@ pub fn read_utf8_char(read: &mut impl LookAheadByteRead) -> Result<char, TurtleE
 
     for _ in 0..bytes_needed {
         read.consume()?;
-        let byte = read.current();
+        let byte = read.required_current()?;
         if byte < lower_boundary || upper_boundary < byte {
             return read.unexpected_char_error();
         }

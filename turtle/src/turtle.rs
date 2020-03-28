@@ -39,7 +39,7 @@ use std::str;
 /// assert_eq!(2, count)
 /// ```
 pub struct TurtleParser<R: BufRead> {
-    read: LookAheadLineBasedByteReader<R>,
+    read: LookAheadByteReader<R>,
     base_iri: Option<Iri<String>>,
     namespaces: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
@@ -55,7 +55,7 @@ impl<R: BufRead> TurtleParser<R> {
     ///
     /// The base IRI might be empty to state there is no base IRI.
     pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
-        let read = LookAheadLineBasedByteReader::new(reader);
+        let read = LookAheadByteReader::new(reader);
         let base_iri = if base_iri.is_empty() {
             None
         } else {
@@ -91,7 +91,7 @@ impl<R: BufRead> TriplesParser for TurtleParser<R> {
     }
 
     fn is_end(&self) -> bool {
-        self.read.current() == EOF
+        self.read.current().is_none()
     }
 }
 
@@ -153,7 +153,7 @@ impl<R: BufRead> QuadsParser for TriGParser<R> {
     }
 
     fn is_end(&self) -> bool {
-        self.inner.read.current() == EOF
+        self.inner.read.current().is_none()
     }
 }
 
@@ -172,7 +172,7 @@ fn parse_statement<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     skip_whitespace(&mut parser.read)?;
 
-    if parser.read.current() == EOF {
+    if parser.read.current().is_none() {
         Ok(())
     } else if parser.read.starts_with(b"@prefix") {
         parse_prefix_id(
@@ -221,7 +221,7 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
     // [2g] 	block 	::= 	triplesOrGraph | wrappedGraph | triples2 | "GRAPH" labelOrSubject wrappedGraph
     skip_whitespace(&mut parser.inner.read)?;
 
-    if parser.inner.read.current() == EOF {
+    if parser.inner.read.current().is_none() {
         Ok(())
     } else if parser.inner.read.starts_with(b"@prefix") {
         parse_prefix_id(
@@ -274,11 +274,11 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
         )?;
         parser.graph_name_buf.clear();
         Ok(())
-    } else if parser.inner.read.current() == b'{' {
+    } else if parser.inner.read.current() == Some(b'{') {
         parse_wrapped_graph(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))
-    } else if parser.inner.read.current() == b'['
-        && !is_followed_by_space_and_closing_bracket(&parser.inner.read)
-        || parser.inner.read.current() == b'('
+    } else if parser.inner.read.current() == Some(b'[')
+        && !is_followed_by_space_and_closing_bracket(&mut parser.inner.read)?
+        || parser.inner.read.current() == Some(b'(')
     {
         parse_triples2(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))
     } else {
@@ -301,7 +301,7 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     )?;
     skip_whitespace(&mut parser.inner.read)?;
 
-    if parser.inner.read.current() == b'{' {
+    if parser.inner.read.current() == Some(b'{') {
         let graph_name = front_type.with_value(&parser.graph_name_buf);
         parse_wrapped_graph(
             &mut parser.inner,
@@ -332,10 +332,10 @@ fn parse_triples2<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
-        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
+        Some(b'[') if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
             parse_blank_node_property_list(parser, on_triple)?;
             skip_whitespace(&mut parser.read)?;
-            if parser.read.current() != b'.' {
+            if parser.read.current() != Some(b'.') {
                 parse_predicate_object_list(parser, on_triple)?;
             }
         }
@@ -365,18 +365,18 @@ fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     skip_whitespace(&mut parser.read)?;
 
     loop {
-        if parser.read.current() == b'}' {
+        if parser.read.current() == Some(b'}') {
             parser.read.consume()?;
             return Ok(());
         }
 
         parse_triples(parser, on_triple)?;
         match parser.read.current() {
-            b'.' => {
+            Some(b'.') => {
                 parser.read.consume()?;
                 skip_whitespace(&mut parser.read)?;
             }
-            b'}' => {
+            Some(b'}') => {
                 parser.read.consume()?;
                 return Ok(());
             }
@@ -395,7 +395,7 @@ fn parse_label_or_subject(
 ) -> Result<NamedOrBlankNodeType, TurtleError> {
     //[7g] 	labelOrSubject 	::= 	iri | BlankNode
     Ok(match read.current() {
-        b'_' | b'[' => {
+        Some(b'_') | Some(b'[') => {
             parse_blank_node(read, buffer, bnode_id_generator)?;
             NamedOrBlankNodeType::BlankNode
         }
@@ -503,10 +503,10 @@ fn parse_triples<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
-        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
+        Some(b'[') if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
             parse_blank_node_property_list(parser, on_triple)?;
             skip_whitespace(&mut parser.read)?;
-            if parser.read.current() != b'.' && parser.read.current() != b'}' {
+            if parser.read.current() != Some(b'.') && parser.read.current() != Some(b'}') {
                 parse_predicate_object_list(parser, on_triple)?;
             }
         }
@@ -541,15 +541,15 @@ fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
         skip_whitespace(&mut parser.read)?;
 
         parser.predicate_buf_stack.pop();
-        if parser.read.current() != b';' {
+        if parser.read.current() != Some(b';') {
             return Ok(());
         }
-        while parser.read.current() == b';' {
+        while parser.read.current() == Some(b';') {
             parser.read.consume()?;
             skip_whitespace(&mut parser.read)?;
         }
         match parser.read.current() {
-            b'.' | b']' | b'}' | EOF => return Ok(()),
+            Some(b'.') | Some(b']') | Some(b'}') | None => return Ok(()),
             _ => (), //continue
         }
     }
@@ -564,7 +564,7 @@ fn parse_object_list<R: BufRead, E: From<TurtleError>>(
         parse_object(parser, on_triple)?;
         skip_whitespace(&mut parser.read)?;
 
-        if parser.read.current() != b',' {
+        if parser.read.current() != Some(b',') {
             return Ok(());
         }
         parser.read.consume()?;
@@ -580,23 +580,20 @@ fn parse_verb<'a>(
     namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [9] 	verb 	::= 	predicate | 'a'
-    match read.current() {
-        b'a' => {
-            match read.next() {
-                // We check that it is not a prefixed URI
-                Some(c)
-                    if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII =>
-                {
-                    parse_predicate(read, buffer, temp_buffer, base_iri, namespaces)
-                }
-                _ => {
-                    buffer.push_str(RDF_TYPE);
-                    read.consume()?;
-                    Ok(())
-                }
+    if read.current() == Some(b'a') {
+        match read.next()? {
+            // We check that it is not a prefixed URI
+            Some(c) if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII => {
+                parse_predicate(read, buffer, temp_buffer, base_iri, namespaces)
+            }
+            _ => {
+                buffer.push_str(RDF_TYPE);
+                read.consume()?;
+                Ok(())
             }
         }
-        _ => parse_predicate(read, buffer, temp_buffer, base_iri, namespaces),
+    } else {
+        parse_predicate(read, buffer, temp_buffer, base_iri, namespaces)
     }
 }
 
@@ -606,7 +603,7 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
-        b'_' | b'[' => {
+        Some(b'_') | Some(b'[') => {
             parser
                 .subject_type_stack
                 .push(NamedOrBlankNodeType::BlankNode);
@@ -616,7 +613,7 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
                 &mut parser.bnode_id_generator,
             )?;
         }
-        b'(' => parse_collection(parser, on_triple)?,
+        Some(b'(') => parse_collection(parser, on_triple)?,
         _ => {
             parser
                 .subject_type_stack
@@ -650,8 +647,7 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     //[12] 	object 	::= 	iri | BlankNode | collection | blankNodePropertyList | literal
 
-    match parser.read.current() {
-        EOF => parser.read.unexpected_char_error()?,
+    match parser.read.required_current()? {
         b'<' => {
             parse_iri(
                 &mut parser.read,
@@ -668,7 +664,7 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
             parser.subject_type_stack.pop();
             emit_triple(parser, object_type.into(), on_triple)?;
         }
-        b'[' if !is_followed_by_space_and_closing_bracket(&parser.read) => {
+        b'[' if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
             parse_blank_node_property_list(parser, on_triple)?;
             let object_type = *parser.subject_type_stack.last().unwrap();
             parser.subject_type_stack.pop();
@@ -748,7 +744,7 @@ pub(crate) fn parse_literal<'a>(
     namespaces: &HashMap<String, String>,
 ) -> Result<TermType, TurtleError> {
     // [13] 	literal 	::= 	RDFLiteral | NumericLiteral | BooleanLiteral
-    match read.current() {
+    match read.required_current()? {
         b'"' | b'\'' => parse_rdf_literal(
             read,
             buffer,
@@ -789,7 +785,7 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
         parse_predicate_object_list(parser, on_triple)?;
         skip_whitespace(&mut parser.read)?;
 
-        if parser.read.current() == b']' {
+        if parser.read.current() == Some(b']') {
             parser.read.consume()?;
             return Ok(());
         }
@@ -813,9 +809,9 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
     loop {
         skip_whitespace(&mut parser.read)?;
 
-        if parser.read.current() == EOF {
+        if parser.read.current().is_none() {
             return Ok(parser.read.unexpected_char_error()?);
-        } else if parser.read.current() == b')' {
+        } else if parser.read.current() == Some(b')') {
             parser.read.consume()?;
             match root {
                 Some(id) => {
@@ -872,7 +868,7 @@ fn parse_numeric_literal(
     // [20] 	DECIMAL 	::= 	[+-]? [0-9]* '.' [0-9]+
     // [21] 	DOUBLE 	::= 	[+-]? ([0-9]+ '.' [0-9]* EXPONENT | '.' [0-9]+ EXPONENT | [0-9]+ EXPONENT)
     // merged [+-] [0-9]* ('.' [0-9]*)? EXPONENT?
-    let c = read.current();
+    let c = read.required_current()?;
     match c {
         b'+' | b'-' => {
             buffer.push(char::from(c));
@@ -883,8 +879,7 @@ fn parse_numeric_literal(
 
     // We read the digits before .
     let mut count_before: usize = 0;
-    loop {
-        let c = read.current();
+    while let Some(c) = read.current() {
         match c {
             b'0'..=b'9' => {
                 buffer.push(char::from(c));
@@ -896,9 +891,9 @@ fn parse_numeric_literal(
     }
 
     // We read the digits after .
-    let count_after = if read.current() == b'.' {
+    let count_after = if read.current() == Some(b'.') {
         //We check if it is not the end of a statement
-        if let Some(c) = read.next() {
+        if let Some(c) = read.next()? {
             match c {
                 b'0'..=b'9' | b'e' | b'E' => (),
                 _ => {
@@ -922,12 +917,12 @@ fn parse_numeric_literal(
         buffer.push('.');
         let mut count_after = 0;
 
-        loop {
-            read.consume()?;
-            let c = read.current();
+        read.consume()?;
+        while let Some(c) = read.current() {
             match c {
                 b'0'..=b'9' => {
                     buffer.push(char::from(c));
+                    read.consume()?;
                     count_after += 1;
                 }
                 _ => break,
@@ -939,9 +934,8 @@ fn parse_numeric_literal(
     };
 
     // End
-    let c = read.current();
-    match c {
-        b'e' | b'E' => {
+    match read.current() {
+        Some(b'e') | Some(b'E') => {
             if count_before > 0 || count_after.unwrap_or(0) > 0 {
                 parse_exponent(read, buffer)?;
                 annotation_buffer.push_str(XSD_DOUBLE);
@@ -977,11 +971,11 @@ fn parse_rdf_literal(
     skip_whitespace(read)?;
 
     match read.current() {
-        b'@' => {
+        Some(b'@') => {
             parse_langtag(read, annotation_buffer)?;
             Ok(TermType::LanguageTaggedString)
         }
-        b'^' => {
+        Some(b'^') => {
             read.consume()?;
             read.check_is_current(b'^')?;
             read.consume()?;
@@ -1015,14 +1009,14 @@ fn parse_boolean_literal(
 
 fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
     match read.current() {
-        b'"' => {
+        Some(b'"') => {
             if read.starts_with(b"\"\"\"") {
                 parse_string_literal_long_quote(read, buffer)
             } else {
                 parse_string_literal_quote(read, buffer)
             }
         }
-        b'\'' => {
+        Some(b'\'') => {
             if read.starts_with(b"'''") {
                 parse_string_literal_long_single_quote(read, buffer)
             } else {
@@ -1041,13 +1035,11 @@ pub(crate) fn parse_iri(
     namespaces: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
-    match read.current() {
-        b'<' => {
-            parse_iriref_relative(read, buffer, temp_buffer, base_iri)?;
-        }
-        _ => parse_prefixed_name(read, buffer, namespaces)?,
+    if read.current() == Some(b'<') {
+        parse_iriref_relative(read, buffer, temp_buffer, base_iri)
+    } else {
+        parse_prefixed_name(read, buffer, namespaces)
     }
-    Ok(())
 }
 
 pub(crate) fn parse_prefixed_name<'a>(
@@ -1068,35 +1060,39 @@ pub(crate) fn parse_prefixed_name<'a>(
     }
 
     // [168s] 	PN_LOCAL 	::= 	(PN_CHARS_U | ':' | [0-9] | PLX) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX))?
-    match read.current() {
-        b'\\' => parse_pn_local_esc(read, buffer)?,
-        b'%' => parse_percent(read, buffer)?,
-        b':' | b'0'..=b'9' => buffer.push(char::from(read.current())),
-        c if is_possible_pn_chars_u_ascii(c) => buffer.push(char::from(c)),
-        _ => {
-            let c = read_utf8_char(read)?;
-            if is_possible_pn_chars_u_unicode(c) {
-                buffer.push(c)
-            } else {
-                return Ok(());
+    if let Some(c) = read.current() {
+        match c {
+            b'\\' => parse_pn_local_esc(read, buffer)?,
+            b'%' => parse_percent(read, buffer)?,
+            b':' | b'0'..=b'9' => buffer.push(char::from(c)),
+            c if is_possible_pn_chars_u_ascii(c) => buffer.push(char::from(c)),
+            _ => {
+                let c = read_utf8_char(read)?;
+                if is_possible_pn_chars_u_unicode(c) {
+                    buffer.push(c)
+                } else {
+                    return Ok(());
+                }
             }
         }
+    } else {
+        return Ok(());
     }
 
     loop {
         read.consume()?;
         match read.current() {
-            b'.' => {
-                if has_future_char_valid_pname_local(read) {
+            Some(b'.') => {
+                if has_future_char_valid_pname_local(read)? {
                     buffer.push('.')
                 } else {
                     return Ok(());
                 }
             }
-            b'\\' => parse_pn_local_esc(read, buffer)?,
-            b'%' => parse_percent(read, buffer)?,
-            b':' => buffer.push(':'),
-            c if is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
+            Some(b'\\') => parse_pn_local_esc(read, buffer)?,
+            Some(b'%') => parse_percent(read, buffer)?,
+            Some(b':') => buffer.push(':'),
+            Some(c) if is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
             _ => {
                 let c = read_utf8_char(read)?;
                 if is_possible_pn_chars_unicode(c) {
@@ -1109,14 +1105,16 @@ pub(crate) fn parse_prefixed_name<'a>(
     }
 }
 
-fn has_future_char_valid_pname_local(read: &impl LookAheadByteRead) -> bool {
+fn has_future_char_valid_pname_local(
+    read: &mut impl LookAheadByteRead,
+) -> Result<bool, TurtleError> {
     let mut i = 1;
     loop {
-        match read.ahead(i) {
-            Some(b':') | Some(b'%') | Some(b'\\') => return true,
-            Some(c) if c > MAX_ASCII || is_possible_pn_chars_ascii(c) => return true,
+        match read.ahead(i)? {
+            Some(b':') | Some(b'%') | Some(b'\\') => return Ok(true),
+            Some(c) if c > MAX_ASCII || is_possible_pn_chars_ascii(c) => return Ok(true),
             Some(b'.') => (),
-            _ => return false,
+            _ => return Ok(false),
         }
         i += 1;
     }
@@ -1129,10 +1127,10 @@ pub(crate) fn parse_blank_node<'a>(
 ) -> Result<(), TurtleError> {
     // [137s] 	BlankNode 	::= 	BLANK_NODE_LABEL | ANON
     match read.current() {
-        b'_' => {
+        Some(b'_') => {
             parse_blank_node_label(read, buffer)?;
         }
-        b'[' => {
+        Some(b'[') => {
             parse_anon(read, buffer, bnode_id_generator)?;
         }
         _ => read.unexpected_char_error()?,
@@ -1146,12 +1144,11 @@ pub(crate) fn parse_pname_ns(
 ) -> Result<(), TurtleError> {
     // [139s] 	PNAME_NS 	::= 	PN_PREFIX? ':'
     parse_pn_prefix(read, buffer)?;
-    match read.current() {
-        b':' => {
-            read.consume()?;
-            Ok(())
-        }
-        _ => read.unexpected_char_error()?,
+    if read.current() == Some(b':') {
+        read.consume()?;
+        Ok(())
+    } else {
+        read.unexpected_char_error()
     }
 }
 
@@ -1160,34 +1157,37 @@ fn parse_exponent(
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [154s] 	EXPONENT 	::= 	[eE] [+-]? [0-9]+
-    let c = read.current();
+    let c = read.required_current()?;
     match c {
         b'e' | b'E' => buffer.push(char::from(c)),
         _ => read.unexpected_char_error()?,
     };
     read.consume()?;
 
-    let c = read.current();
-    match c {
-        b'+' | b'-' => {
-            buffer.push(char::from(c));
-            read.consume()?
+    if let Some(c) = read.current() {
+        match c {
+            b'+' | b'-' => {
+                buffer.push(char::from(c));
+                read.consume()?
+            }
+            _ => (),
         }
-        _ => (),
     }
 
-    let c = read.current();
-    match c {
-        b'0'..=b'9' => buffer.push(char::from(c)),
+    match read.required_current()? {
+        c @ b'0'..=b'9' => buffer.push(char::from(c)),
         _ => read.unexpected_char_error()?,
     }
 
     loop {
         read.consume()?;
-        let c = read.current();
-        match c {
-            b'0'..=b'9' => buffer.push(char::from(c)),
-            _ => return Ok(()),
+        if let Some(c) = read.current() {
+            match c {
+                b'0'..=b'9' => buffer.push(char::from(c)),
+                _ => return Ok(()),
+            }
+        } else {
+            return Ok(());
         }
     }
 }
@@ -1225,13 +1225,12 @@ fn parse_string_literal_long_quote_inner(
     read.consume_many(2)?;
     loop {
         read.consume()?;
-        match read.current() {
+        match read.required_current()? {
             c if c == quote && read.starts_with(&prefix) => {
                 read.consume_many(3)?;
                 return Ok(());
             }
             b'\\' => parse_echar_or_uchar(read, buffer)?,
-            EOF => read.unexpected_char_error()?,
             c => buffer.push(if c <= 0x7F {
                 char::from(c) //optimization to avoid UTF-8 decoding
             } else {
@@ -1263,7 +1262,9 @@ fn parse_pn_prefix(
 ) -> Result<(), TurtleError> {
     // [167s] 	PN_PREFIX 	::= 	PN_CHARS_BASE ((PN_CHARS | '.')* PN_CHARS)?
     match read.current() {
-        c if c <= MAX_ASCII && is_possible_pn_chars_base_ascii(c) => buffer.push(char::from(c)),
+        Some(c) if c <= MAX_ASCII && is_possible_pn_chars_base_ascii(c) => {
+            buffer.push(char::from(c))
+        }
         _ => {
             let c = read_utf8_char(read)?;
             if is_possible_pn_chars_base_unicode(c) {
@@ -1277,13 +1278,15 @@ fn parse_pn_prefix(
     loop {
         read.consume()?;
         match read.current() {
-            b'.' => match read.next() {
+            Some(b'.') => match read.next()? {
                 Some(c) if is_possible_pn_chars_ascii(c) || c > MAX_ASCII => buffer.push('.'),
                 _ => {
                     return Ok(());
                 }
             },
-            c if c <= MAX_ASCII && is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
+            Some(c) if c <= MAX_ASCII && is_possible_pn_chars_ascii(c) => {
+                buffer.push(char::from(c))
+            }
             _ => {
                 let c = read_utf8_char(read)?;
                 if is_possible_pn_chars_unicode(c) {
@@ -1312,7 +1315,7 @@ fn parse_percent(
 
 fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
     // [171s] 	HEX 	::= 	[0-9] | [A-F] | [a-f]
-    let c = read.current();
+    let c = read.required_current()?;
     match c {
         b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {
             buffer.push(char::from(c));
@@ -1329,7 +1332,7 @@ fn parse_pn_local_esc(
     // [172s] 	PN_LOCAL_ESC 	::= 	'\' ('_' | '~' | '.' | '-' | '!' | '$' | '&' | "'" | '(' | ')' | '*' | '+' | ',' | ';' | '=' | '/' | '?' | '#' | '@' | '%')
     read.check_is_current(b'\\')?;
     read.consume()?;
-    let c = read.current();
+    let c = read.required_current()?;
     match c {
         b'_' | b'~' | b'.' | b'-' | b'!' | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+'
         | b',' | b';' | b'=' | b'/' | b'?' | b'#' | b'@' | b'%' => {
@@ -1343,9 +1346,12 @@ fn parse_pn_local_esc(
 pub(crate) fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     loop {
         match read.current() {
-            b' ' | b'\t' | b'\n' | b'\r' => read.consume()?,
-            b'#' => {
-                while read.current() != b'\r' && read.current() != b'\n' && read.current() != EOF {
+            Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') => read.consume()?,
+            Some(b'#') => {
+                while read.current() != Some(b'\r')
+                    && read.current() != Some(b'\n')
+                    && read.current() != None
+                {
                     read.consume()?;
                 }
             }
@@ -1354,15 +1360,17 @@ pub(crate) fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), T
     }
 }
 
-pub(crate) fn is_followed_by_space_and_closing_bracket(read: &impl LookAheadByteRead) -> bool {
+pub(crate) fn is_followed_by_space_and_closing_bracket(
+    read: &mut impl LookAheadByteRead,
+) -> Result<bool, TurtleError> {
     for i in 1.. {
-        match read.ahead(i) {
+        match read.ahead(i)? {
             Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') => (),
-            Some(b']') => return true,
-            _ => return false,
+            Some(b']') => return Ok(true),
+            _ => return Ok(false),
         }
     }
-    false
+    Ok(false)
 }
 
 #[derive(Clone, Copy)]
