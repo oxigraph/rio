@@ -58,6 +58,8 @@ impl<'a> fmt::Display for BlankNode<'a> {
 ///
 /// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
 ///
+/// The language tags should be lowercased  [as suggested by the RDF specification](https://www.w3.org/TR/rdf11-concepts/#dfn-language-tagged-string).
+///
 /// ```
 /// use rio_api::model::NamedNode;
 /// use rio_api::model::Literal;
@@ -88,14 +90,14 @@ pub enum Literal<'a> {
     LanguageTaggedString {
         /// The [lexical form](https://www.w3.org/TR/rdf11-concepts/#dfn-lexical-form).
         value: &'a str,
-        /// The [language tag](https://www.w3.org/TR/rdf11-concepts/#dfn-datatype-iri).
+        /// The [language tag](https://www.w3.org/TR/rdf11-concepts/#dfn-language-tag).
         language: &'a str,
     },
     /// A literal with an explicit datatype
     Typed {
         /// The [lexical form](https://www.w3.org/TR/rdf11-concepts/#dfn-lexical-form).
         value: &'a str,
-        /// The [datatype IRI](https://www.w3.org/TR/rdf11-concepts/#dfn-language-tag).
+        /// The [datatype IRI](https://www.w3.org/TR/rdf11-concepts/#dfn-datatype-iri).
         datatype: NamedNode<'a>,
     },
 }

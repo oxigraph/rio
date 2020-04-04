@@ -302,7 +302,8 @@ impl<R: BufRead> RdfXmlReader<R> {
                         LanguageTag::parse(
                             attribute
                                 .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?,
+                                .map_err(RdfXmlError::from)?
+                                .to_ascii_lowercase(),
                         )
                         .map_err(RdfXmlError::from)?,
                     );

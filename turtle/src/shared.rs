@@ -130,7 +130,7 @@ pub fn parse_langtag(
     while let Some(c) = read.current() {
         match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' => {
-                buffer.push(char::from(c));
+                buffer.push(char::from(c).to_ascii_lowercase());
                 read.consume()?;
             }
             _ => {
