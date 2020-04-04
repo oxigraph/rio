@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.2] - 2020-04-04
+- Normalizes all language tags to lowercase in the `rio_turtle` and `rio_xml` crates.
+- Introduces the `LanguageTag` struct to parse and normalize case of language tags.
+- Fixes Turtle parsing when the parser look ahead needs to span multiple lines.
+- Makes `Iri` implement `AsRef<str>` and `FromStr`.
+
 ## [0.4.1] - 2020-03-19
 - Makes `Iri` allow resolving against base IRIs with not hierarchical path (like `file:foo`).
 - Upgrades `quick-xml` dependency to 0.18.
