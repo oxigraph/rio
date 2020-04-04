@@ -103,10 +103,26 @@ impl<T: Deref<Target = str>> Iri<T> {
     }
 }
 
+impl<T: Deref<Target = str>> AsRef<T> for Iri<T> {
+    #[inline]
+    fn as_ref(&self) -> &T {
+        &self.iri
+    }
+}
+
 impl<T: Deref<Target = str> + fmt::Display> fmt::Display for Iri<T> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.iri.fmt(f)
+    }
+}
+
+impl FromStr for Iri<String> {
+    type Err = IriParseError;
+
+    #[inline]
+    fn from_str(iri: &str) -> Result<Self, IriParseError> {
+        Self::parse(iri.to_owned())
     }
 }
 
