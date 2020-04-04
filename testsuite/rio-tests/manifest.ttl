@@ -9,6 +9,8 @@
 	mf:entries (
 		<#blank_node_with_linebreak>
 		<#bad_lang>
+		<#language_normalization_ttl>
+		<#language_normalization_xml>
 	) .
 
 <#blank_node_with_linebreak>
@@ -16,6 +18,18 @@
 	mf:name "blank node with linebreak" ;
 	mf:action <blank_node_with_linebreak.ttl> ;
 	mf:result <blank_node_with_linebreak.nt> .
+
+<#language_normalization_ttl>
+	rdf:type rdft:TestTurtleEval ;
+	mf:name "language case normalization" ;
+	mf:action <language_normalization.ttl> ;
+	mf:result <language_normalization.nt> .
+
+<#language_normalization_xml>
+	rdf:type rdft:TestXMLEval ;
+	mf:name "language case normalization" ;
+	mf:action <language_normalization.rdf> ;
+	mf:result <language_normalization.nt> .
 
 <#bad_lang>
 	rdf:type rdft:TestTurtleNegativeSyntax ;

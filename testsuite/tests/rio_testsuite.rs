@@ -4,6 +4,7 @@ use rio_testsuite::model::OwnedDataset;
 use rio_testsuite::parser_evaluator::*;
 use rio_testsuite::report::TestOutcome;
 use rio_turtle::{NQuadsParser, NTriplesParser, TriGParser, TurtleParser};
+use rio_xml::RdfXmlParser;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
@@ -29,6 +30,10 @@ pub fn parse_rdf_test_file(url: &str) -> Result<OwnedDataset, Box<dyn Error>> {
             .collect()
     } else if url.ends_with(".trig") {
         TriGParser::new(read, url)?
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".rdf") {
+        RdfXmlParser::new(read, url)?
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else {
