@@ -8,6 +8,7 @@
 	rdfs:comment "Rio test case" ;
 	mf:entries (
 		<#blank_node_with_linebreak>
+		<#bad_lang>
 	) .
 
 <#blank_node_with_linebreak>
@@ -15,3 +16,8 @@
 	mf:name "blank node with linebreak" ;
 	mf:action <blank_node_with_linebreak.ttl> ;
 	mf:result <blank_node_with_linebreak.nt> .
+
+<#bad_lang>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad language tag" ;
+	mf:action <bad_lang.ttl> .

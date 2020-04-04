@@ -1,4 +1,5 @@
 use rio_api::iri::IriParseError;
+use rio_api::language_tag::LanguageTagParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::error::Error;
 use std::fmt;
@@ -15,6 +16,7 @@ pub struct RdfXmlError {
 enum RdfXmlErrorKind {
     Xml(quick_xml::Error),
     InvalidIri(IriParseError),
+    InvalidLanguageTag(LanguageTagParseError),
     Other(String),
 }
 
@@ -23,6 +25,7 @@ impl fmt::Display for RdfXmlError {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => error.fmt(f),
             RdfXmlErrorKind::InvalidIri(error) => error.fmt(f),
+            RdfXmlErrorKind::InvalidLanguageTag(error) => error.fmt(f),
             RdfXmlErrorKind::Other(message) => write!(f, "{}", message),
         }
     }
@@ -31,9 +34,9 @@ impl fmt::Display for RdfXmlError {
 impl Error for RdfXmlError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
-            RdfXmlErrorKind::Xml(quick_xml::Error::Io(error)) => Some(error),
-            RdfXmlErrorKind::Xml(quick_xml::Error::Utf8(error)) => Some(error),
+            RdfXmlErrorKind::Xml(error) => Some(error),
             RdfXmlErrorKind::InvalidIri(error) => Some(error),
+            RdfXmlErrorKind::InvalidLanguageTag(error) => Some(error),
             _ => None,
         }
     }
@@ -57,6 +60,14 @@ impl From<IriParseError> for RdfXmlError {
     fn from(error: IriParseError) -> Self {
         Self {
             kind: RdfXmlErrorKind::InvalidIri(error),
+        }
+    }
+}
+
+impl From<LanguageTagParseError> for RdfXmlError {
+    fn from(error: LanguageTagParseError) -> Self {
+        Self {
+            kind: RdfXmlErrorKind::InvalidLanguageTag(error),
         }
     }
 }

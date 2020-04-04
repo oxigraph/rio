@@ -1,6 +1,7 @@
 use crate::error::*;
 use crate::utils::*;
 use rio_api::iri::Iri;
+use rio_api::language_tag::LanguageTag;
 use rio_api::model::*;
 use std::char;
 use std::u8;
@@ -126,46 +127,24 @@ pub fn parse_langtag(
     read.check_is_current(b'@')?;
     read.consume()?;
 
-    //[a-zA-Z]
-    let c = read.required_current()?;
-    match c {
-        b'a'..=b'z' | b'A'..=b'Z' => buffer.push(char::from(c)),
-        _ => read.unexpected_char_error()?,
-    };
-
-    //[a-zA-Z]*
-    loop {
-        read.consume()?;
-        if let Some(c) = read.current() {
-            match c {
-                b'a'..=b'z' | b'A'..=b'Z' => buffer.push(char::from(c)),
-                b'-' => break, // follow-up
-                _ => return Ok(()),
+    while let Some(c) = read.current() {
+        match c {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' => {
+                buffer.push(char::from(c));
+                read.consume()?;
             }
-        } else {
-            return Ok(());
+            _ => {
+                break;
+            }
         }
     }
-
-    // ('-' [a-zA-Z0-9]+)*
-    loop {
-        if let Some(c) = read.current() {
-            match c {
-                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push(char::from(c)),
-                b'-' => match read.next()? {
-                    Some(n) => match n {
-                        b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' => buffer.push('-'),
-                        _ => return Ok(()),
-                    },
-                    None => return Ok(()),
-                },
-                _ => return Ok(()),
-            }
-        } else {
-            return Ok(());
-        }
-        read.consume()?
-    }
+    LanguageTag::parse(buffer.as_str()).map_err(|error| {
+        read.parse_error(TurtleErrorKind::InvalidLanguageTag {
+            tag: buffer.to_owned(),
+            error,
+        })
+    })?;
+    Ok(())
 }
 
 pub fn parse_string_literal_quote(

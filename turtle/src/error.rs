@@ -1,4 +1,5 @@
 use rio_api::iri::IriParseError;
+use rio_api::language_tag::LanguageTagParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::char;
 use std::error::Error;
@@ -21,7 +22,14 @@ pub enum TurtleErrorKind {
     PrematureEOF,
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
-    InvalidIri { iri: String, error: IriParseError },
+    InvalidIri {
+        iri: String,
+        error: IriParseError,
+    },
+    InvalidLanguageTag {
+        tag: String,
+        error: LanguageTagParseError,
+    },
 }
 
 impl fmt::Display for TurtleError {
@@ -39,6 +47,9 @@ impl fmt::Display for TurtleError {
             }
             TurtleErrorKind::InvalidIri { iri, error } => {
                 write!(f, "error while parsing IRI '{}': {}", iri, error)
+            }
+            TurtleErrorKind::InvalidLanguageTag { tag, error } => {
+                write!(f, "error while parsing language tag '{}': {}", tag, error)
             }
         }?;
         if let Some(position) = self.position {
@@ -58,6 +69,7 @@ impl Error for TurtleError {
         match &self.kind {
             TurtleErrorKind::IO(error) => Some(error),
             TurtleErrorKind::InvalidIri { error, .. } => Some(error),
+            TurtleErrorKind::InvalidLanguageTag { error, .. } => Some(error),
             _ => None,
         }
     }

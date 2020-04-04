@@ -14,6 +14,7 @@
 
 pub mod formatter;
 pub mod iri;
+pub mod language_tag;
 pub mod model;
 pub mod parser;
 
