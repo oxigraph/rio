@@ -10,10 +10,11 @@ fn ntriples_error_recovery() -> Result<(), TurtleError> {
     let mut count_err = 0;
     let mut parser = NTriplesParser::new(Cursor::new(&data))?;
     while !parser.is_end() {
-        if let Err(_) = parser.parse_step(&mut |_| {
+        let step = parser.parse_step(&mut |_| {
             count += 1;
             Ok(()) as Result<(), TurtleError>
-        }) {
+        });
+        if step.is_err() {
             count_err += 1;
         }
     }
@@ -32,10 +33,11 @@ fn nquads_error_recovery() -> Result<(), TurtleError> {
     let mut count_err = 0;
     let mut parser = NQuadsParser::new(Cursor::new(&data))?;
     while !parser.is_end() {
-        if let Err(_) = parser.parse_step(&mut |_| {
+        let step = parser.parse_step(&mut |_| {
             count += 1;
             Ok(()) as Result<(), TurtleError>
-        }) {
+        });
+        if step.is_err() {
             count_err += 1;
         }
     }

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 fn get_test_path() -> PathBuf {
     let mut base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     base_path.push("rdf-tests");
-    return base_path;
+    base_path
 }
 
 fn test_data_from_testsuite(
