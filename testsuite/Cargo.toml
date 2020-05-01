@@ -4,7 +4,7 @@ version = "0.4.2"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
-repository = "https://github.com/Tpt/rio"
+repository = "https://github.com/oxigraph/rio"
 description = """
 W3C testsuite evaluator for Rio parsers
 """
@@ -20,6 +20,7 @@ permutohedron = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"
+iref = "1"
 
 [features]
 default = ["generalized"]

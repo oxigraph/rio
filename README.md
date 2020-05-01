@@ -1,8 +1,7 @@
 Rio
 ===
 
-[![actions status](https://github.com/Tpt/rio/workflows/build/badge.svg)](https://github.com/Tpt/rio/actions)
-[![dependency status](https://deps.rs/repo/github/Tpt/rio/status.svg)](https://deps.rs/repo/github/Tpt/rio)
+[![actions status](https://github.com/oxigraph/rio/workflows/build/badge.svg)](https://github.com/oxigraph/rio/actions)
 
 Rio is a low level library which provides conformant and fast parsers and formatters for RDF related file formats.
 

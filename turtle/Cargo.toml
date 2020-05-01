@@ -5,7 +5,7 @@ authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
 keywords = ["RDF", "Turtle", "TriG", "N-Triples", "N-Quads"]
-repository = "https://github.com/Tpt/rio"
+repository = "https://github.com/oxigraph/rio"
 description = """
 RDF Turtle, Trig, N-Triples and N-Quads parsers and serializers
 """
