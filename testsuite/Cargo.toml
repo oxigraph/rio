@@ -29,7 +29,3 @@ generalized = ["rio_api/generalized", "rio_turtle/generalized"]
 [[bench]]
 name = "w3c_testsuite"
 harness = false
-
-[[bench]]
-name = "iri"
-harness = false

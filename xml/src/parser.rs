@@ -7,9 +7,9 @@ use std::str;
 
 use crate::error::RdfXmlError;
 use crate::model::*;
+use oxilangtag::LanguageTag;
+use oxiri::Iri;
 use quick_xml::events::attributes::Attribute;
-use rio_api::iri::Iri;
-use rio_api::language_tag::LanguageTag;
 use std::collections::HashSet;
 
 /// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.

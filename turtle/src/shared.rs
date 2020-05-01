@@ -1,7 +1,7 @@
 use crate::error::*;
 use crate::utils::*;
-use rio_api::iri::Iri;
-use rio_api::language_tag::LanguageTag;
+use oxilangtag::LanguageTag;
+use oxiri::Iri;
 use rio_api::model::*;
 use std::char;
 use std::u8;

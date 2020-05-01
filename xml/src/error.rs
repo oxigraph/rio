@@ -1,5 +1,5 @@
-use rio_api::iri::IriParseError;
-use rio_api::language_tag::LanguageTagParseError;
+use oxilangtag::LanguageTagParseError;
+use oxiri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::error::Error;
 use std::fmt;

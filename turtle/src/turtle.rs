@@ -3,7 +3,7 @@
 use crate::error::*;
 use crate::shared::*;
 use crate::utils::*;
-use rio_api::iri::Iri;
+use oxiri::Iri;
 use rio_api::model::*;
 use rio_api::parser::{QuadsParser, TriplesParser};
 use std::collections::HashMap;

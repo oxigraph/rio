@@ -1,5 +1,8 @@
 # Changelog
 
+## Master
+- Removes `language_tag` and `iri` from `rio_api`. These modules are now the crates [`oxiri`](https://github.com/oxigraph/oxiri) and [`oxilangtag`](https://github.com/oxigraph/oxilangtag).
+
 ## [0.4.2] - 2020-04-04
 - Normalizes all language tags to lowercase in the `rio_turtle` and `rio_xml` crates.
 - Introduces the `LanguageTag` struct to parse and normalize case of language tags.

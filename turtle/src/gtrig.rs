@@ -4,7 +4,7 @@ use crate::error::*;
 use crate::shared::*;
 use crate::turtle::*;
 use crate::utils::*;
-use rio_api::iri::Iri;
+use oxiri::Iri;
 use rio_api::model::*;
 use rio_api::parser::GeneralizedQuadsParser;
 use std::collections::HashMap;
