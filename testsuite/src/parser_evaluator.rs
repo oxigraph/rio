@@ -73,7 +73,7 @@ pub fn evaluate_parser_tests(
                     },
                 }
             } else {
-                return Err(TestManifestError::InvalidTestType(test.kind.clone()).into())
+                return Err(TestManifestError::InvalidTestType(test.kind).into())
             };
             Ok(TestResult {
                 test: test.id,

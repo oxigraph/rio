@@ -117,7 +117,7 @@ fn example_graph() -> Vec<Triple<'static>> {
     let bar = NamedNode {
         iri: "http://example.com/bar",
     };
-    let bnode = BlankNode { id: "foobar" };
+    let bnode = BlankNode::Named { id: "foobar" };
     let simple = Literal::Simple { value: "simp\"le" };
     let language = Literal::LanguageTaggedString {
         value: "sim\"le",

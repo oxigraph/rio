@@ -355,7 +355,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                             ))
                             .into());
                         }
-                        node_id_attr = Some(OwnedBlankNode { id });
+                        node_id_attr = Some(OwnedBlankNode::Named { id });
                     } else if *attribute_url == *RDF_ABOUT {
                         about_attr = Some(attribute);
                     } else if *attribute_url == *RDF_RESOURCE {
@@ -516,8 +516,8 @@ impl<R: BufRead> RdfXmlReader<R> {
                     {
                         (Some(resource_attr), None) => resource_attr.into(),
                         (None, Some(node_id_attr)) => node_id_attr.into(),
-                        (None, None) => OwnedBlankNode {
-                            id: self.bnode_id_generator.generate().as_ref().to_owned(),
+                        (None, None) => OwnedBlankNode::Anonymous {
+                            id: self.bnode_id_generator.generate(),
                         }.into(),
                         (Some(_), Some(_)) => return Err(RdfXmlError::from("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
                     };
@@ -675,13 +675,12 @@ impl<R: BufRead> RdfXmlReader<R> {
         property_attrs: Vec<(OwnedNamedNode, String)>,
         on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<RdfXmlState, E> {
-        let subject_id = self.bnode_id_generator.generate(); //TODO: avoid to run it everytime
         let subject: NamedOrBlankNode<'_> = match (&id_attr, &node_id_attr, &about_attr) {
             (Some(id_attr), None, None) => NamedNode::from(id_attr).into(),
             (None, Some(node_id_attr), None) => BlankNode::from(node_id_attr).into(),
             (None, None, Some(about_attr)) => NamedNode::from(about_attr).into(),
-            (None, None, None) => BlankNode {
-                id: subject_id.as_ref(),
+            (None, None, None) => BlankNode::Anonymous {
+                id: self.bnode_id_generator.generate(),
             }
             .into(),
             (Some(_), Some(_), _) => {
@@ -738,9 +737,8 @@ impl<R: BufRead> RdfXmlReader<R> {
         id_attr: Option<OwnedNamedNode>,
         on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<RdfXmlState, E> {
-        let object_id = self.bnode_id_generator.generate();
-        let object = BlankNode {
-            id: object_id.as_ref(),
+        let object = BlankNode::Anonymous {
+            id: self.bnode_id_generator.generate(),
         };
         let triple = Triple {
             subject: (&subject).into(),
@@ -803,8 +801,8 @@ impl<R: BufRead> RdfXmlReader<R> {
                 }
                 .into();
                 for object in objects.iter().rev() {
-                    let subject: OwnedNamedOrBlankNode = OwnedBlankNode {
-                        id: self.bnode_id_generator.generate().as_ref().to_owned(),
+                    let subject: OwnedNamedOrBlankNode = OwnedBlankNode::Anonymous {
+                        id: self.bnode_id_generator.generate(),
                     }
                     .into();
                     on_triple(Triple {
@@ -1036,35 +1034,12 @@ fn is_name_char(c: char) -> bool {
 
 #[derive(Default)]
 pub struct BlankNodeIdGenerator {
-    //TODO: avoid collisions
-    counter: usize,
+    counter: u64,
 }
 
 impl BlankNodeIdGenerator {
-    pub fn generate(&mut self) -> BlankNodeId {
-        let mut id: [u8; 12] = [
-            b'r', b'i', b'o', b'g', b'0', b'0', b'0', b'0', b'0', b'0', b'0', b'0',
-        ];
+    pub fn generate(&mut self) -> u64 {
         self.counter += 1;
-        write_usize_to_slice(self.counter, &mut id[4..]);
-        BlankNodeId { id }
-    }
-}
-
-fn write_usize_to_slice(mut v: usize, s: &mut [u8]) {
-    for i in (0..s.len()).rev() {
-        s[i] = b'0' + (v % 10) as u8;
-        v /= 10;
-    }
-}
-
-pub struct BlankNodeId {
-    id: [u8; 12],
-}
-
-impl AsRef<str> for BlankNodeId {
-    fn as_ref(&self) -> &str {
-        // We know what id is and it's always valid UTF8
-        str::from_utf8(&self.id).unwrap()
+        self.counter
     }
 }

@@ -103,7 +103,7 @@ pub fn parse_blank_node_label<'a>(
             Some(b'.') => match read.next()? {
                 Some(c) if is_possible_pn_chars_ascii(c) || c > MAX_ASCII => buffer.push('.'),
                 _ => {
-                    return Ok(BlankNode { id: buffer });
+                    return Ok(BlankNode::Named { id: buffer });
                 }
             },
             Some(c) if c < MAX_ASCII && is_possible_pn_chars_ascii(c) => buffer.push(char::from(c)),
@@ -112,7 +112,7 @@ pub fn parse_blank_node_label<'a>(
                 if is_possible_pn_chars_unicode(c) {
                     buffer.push(c);
                 } else {
-                    return Ok(BlankNode { id: buffer });
+                    return Ok(BlankNode::Named { id: buffer });
                 }
             }
         }

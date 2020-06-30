@@ -394,16 +394,13 @@ fn parse_label_or_subject(
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<NamedOrBlankNodeType, TurtleError> {
     //[7g] 	labelOrSubject 	::= 	iri | BlankNode
-    Ok(match read.current() {
-        Some(b'_') | Some(b'[') => {
-            parse_blank_node(read, buffer, bnode_id_generator)?;
-            NamedOrBlankNodeType::BlankNode
-        }
+    match read.current() {
+        Some(b'_') | Some(b'[') => parse_blank_node(read, buffer, bnode_id_generator),
         _ => {
             parse_iri(read, buffer, temp_buffer, base_iri, namespaces)?;
-            NamedOrBlankNodeType::NamedNode
+            Ok(NamedOrBlankNodeType::NamedNode)
         }
-    })
+    }
 }
 
 fn parse_prefix_id(
@@ -604,14 +601,11 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
         Some(b'_') | Some(b'[') => {
-            parser
-                .subject_type_stack
-                .push(NamedOrBlankNodeType::BlankNode);
-            parse_blank_node(
+            parser.subject_type_stack.push(parse_blank_node(
                 &mut parser.read,
                 parser.subject_buf_stack.push(),
                 &mut parser.bnode_id_generator,
-            )?;
+            )?);
         }
         Some(b'(') => parse_collection(parser, on_triple)?,
         _ => {
@@ -671,12 +665,12 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
             emit_triple(parser, object_type.into(), on_triple)?;
         }
         b'_' | b'[' => {
-            parse_blank_node(
+            let object_type = parse_blank_node(
                 &mut parser.read,
                 &mut parser.subject_buf_stack.push(),
                 &mut parser.bnode_id_generator,
             )?;
-            emit_triple(parser, TermType::BlankNode, on_triple)?;
+            emit_triple(parser, object_type.into(), on_triple)?;
         }
         b'"' | b'\'' | b'+' | b'-' | b'.' | b'0'..=b'9' => {
             let object_type = parse_literal(
@@ -774,12 +768,11 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     skip_whitespace(&mut parser.read)?;
 
     parser
-        .subject_buf_stack
-        .push()
-        .push_str(parser.bnode_id_generator.generate().as_ref());
-    parser
         .subject_type_stack
-        .push(NamedOrBlankNodeType::BlankNode);
+        .push(NamedOrBlankNodeType::AnonymousBlankNode {
+            id: parser.bnode_id_generator.generate(),
+        });
+    parser.subject_buf_stack.push();
 
     loop {
         parse_predicate_object_list(parser, on_triple)?;
@@ -800,12 +793,9 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
 
-    parser
-        .subject_type_stack
-        .push(NamedOrBlankNodeType::BlankNode);
     parser.predicate_buf_stack.push().push_str(RDF_FIRST);
 
-    let mut root: Option<BlankNodeId> = None;
+    let mut root: Option<u64> = None;
     loop {
         skip_whitespace(&mut parser.read)?;
 
@@ -816,22 +806,26 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
             match root {
                 Some(id) => {
                     on_triple(Triple {
-                        subject: BlankNode {
-                            id: parser.subject_buf_stack.last(),
-                        }
-                        .into(),
+                        subject: parser
+                            .subject_type_stack
+                            .pop()
+                            .unwrap()
+                            .with_value(&parser.subject_buf_stack.last())
+                            .into(),
                         predicate: NamedNode { iri: RDF_REST },
                         object: NamedNode { iri: RDF_NIL }.into(),
                     })?;
                     parser.subject_buf_stack.pop();
-                    parser.subject_buf_stack.push().push_str(id.as_ref());
+                    parser
+                        .subject_type_stack
+                        .push(NamedOrBlankNodeType::AnonymousBlankNode { id });
+                    parser.subject_buf_stack.push();
                 }
                 None => {
-                    parser.subject_buf_stack.push().push_str(RDF_NIL);
-                    parser.subject_type_stack.pop();
                     parser
                         .subject_type_stack
                         .push(NamedOrBlankNodeType::NamedNode);
+                    parser.subject_buf_stack.push().push_str(RDF_NIL);
                 }
             }
             parser.predicate_buf_stack.pop();
@@ -842,16 +836,21 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
                 root = Some(new);
             } else {
                 on_triple(Triple {
-                    subject: BlankNode {
-                        id: parser.subject_buf_stack.last(),
-                    }
-                    .into(),
+                    subject: parser
+                        .subject_type_stack
+                        .pop()
+                        .unwrap()
+                        .with_value(&parser.subject_buf_stack.last())
+                        .into(),
                     predicate: NamedNode { iri: RDF_REST },
-                    object: BlankNode { id: new.as_ref() }.into(),
+                    object: BlankNode::Anonymous { id: new }.into(),
                 })?;
                 parser.subject_buf_stack.pop();
             }
-            parser.subject_buf_stack.push().push_str(new.as_ref());
+            parser.subject_buf_stack.push();
+            parser
+                .subject_type_stack
+                .push(NamedOrBlankNodeType::AnonymousBlankNode { id: new });
 
             parse_object(parser, on_triple)?;
         }
@@ -1124,18 +1123,21 @@ pub(crate) fn parse_blank_node<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
-) -> Result<(), TurtleError> {
+) -> Result<NamedOrBlankNodeType, TurtleError> {
     // [137s] 	BlankNode 	::= 	BLANK_NODE_LABEL | ANON
     match read.current() {
         Some(b'_') => {
             parse_blank_node_label(read, buffer)?;
+            Ok(NamedOrBlankNodeType::NamedBlankNode)
         }
         Some(b'[') => {
-            parse_anon(read, buffer, bnode_id_generator)?;
+            parse_anon(read)?;
+            Ok(NamedOrBlankNodeType::AnonymousBlankNode {
+                id: bnode_id_generator.generate(),
+            })
         }
         _ => read.unexpected_char_error()?,
     }
-    Ok(())
 }
 
 pub(crate) fn parse_pname_ns(
@@ -1240,19 +1242,13 @@ fn parse_string_literal_long_quote_inner(
     }
 }
 
-fn parse_anon(
-    read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
-    bnode_id_generator: &mut BlankNodeIdGenerator,
-) -> Result<(), TurtleError> {
+fn parse_anon(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
     read.check_is_current(b'[')?;
     read.consume()?;
     skip_whitespace(read)?;
 
     read.check_is_current(b']')?;
     read.consume()?;
-
-    buffer.push_str(bnode_id_generator.generate().as_ref());
     Ok(())
 }
 
@@ -1374,16 +1370,20 @@ pub(crate) fn is_followed_by_space_and_closing_bracket(
 }
 
 #[derive(Clone, Copy)]
-enum NamedOrBlankNodeType {
+pub(crate) enum NamedOrBlankNodeType {
     NamedNode,
-    BlankNode,
+    NamedBlankNode,
+    AnonymousBlankNode { id: u64 },
 }
 
 impl NamedOrBlankNodeType {
     fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
         match self {
             NamedOrBlankNodeType::NamedNode => NamedNode { iri: value }.into(),
-            NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
+            NamedOrBlankNodeType::NamedBlankNode => BlankNode::Named { id: value }.into(),
+            NamedOrBlankNodeType::AnonymousBlankNode { id } => {
+                BlankNode::Anonymous { id: *id }.into()
+            }
         }
     }
 }
@@ -1391,7 +1391,8 @@ impl NamedOrBlankNodeType {
 #[derive(Clone, Copy)]
 pub(crate) enum TermType {
     NamedNode,
-    BlankNode,
+    NamedBlankNode,
+    AnonymousBlankNode { id: u64 },
     SimpleLiteral,
     LanguageTaggedString,
     TypedLiteral,
@@ -1401,7 +1402,8 @@ impl TermType {
     fn with_value<'a>(&self, value: &'a str, annotation: &'a str) -> Term<'a> {
         match self {
             TermType::NamedNode => NamedNode { iri: value }.into(),
-            TermType::BlankNode => BlankNode { id: value }.into(),
+            TermType::NamedBlankNode => BlankNode::Named { id: value }.into(),
+            TermType::AnonymousBlankNode { id } => BlankNode::Anonymous { id: *id }.into(),
             TermType::SimpleLiteral => Literal::Simple { value }.into(),
             TermType::LanguageTaggedString => Literal::LanguageTaggedString {
                 value,
@@ -1421,7 +1423,8 @@ impl From<NamedOrBlankNodeType> for TermType {
     fn from(t: NamedOrBlankNodeType) -> Self {
         match t {
             NamedOrBlankNodeType::NamedNode => TermType::NamedNode,
-            NamedOrBlankNodeType::BlankNode => TermType::BlankNode,
+            NamedOrBlankNodeType::NamedBlankNode => TermType::NamedBlankNode,
+            NamedOrBlankNodeType::AnonymousBlankNode { id } => TermType::AnonymousBlankNode { id },
         }
     }
 }

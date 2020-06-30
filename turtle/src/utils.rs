@@ -231,36 +231,12 @@ impl StringBufferStack {
 
 #[derive(Default)]
 pub struct BlankNodeIdGenerator {
-    //TODO: avoid collisions
-    counter: usize,
+    counter: u64,
 }
 
 impl BlankNodeIdGenerator {
-    pub fn generate(&mut self) -> BlankNodeId {
-        let mut id: [u8; 12] = [
-            b'r', b'i', b'o', b'g', b'0', b'0', b'0', b'0', b'0', b'0', b'0', b'0',
-        ];
+    pub fn generate(&mut self) -> u64 {
         self.counter += 1;
-        write_usize_to_slice(self.counter, &mut id[4..]);
-        BlankNodeId { id }
-    }
-}
-
-fn write_usize_to_slice(mut v: usize, s: &mut [u8]) {
-    for i in (0..s.len()).rev() {
-        s[i] = b'0' + (v % 10) as u8;
-        v /= 10;
-    }
-}
-
-#[derive(Eq, PartialEq, Copy, Clone, Hash)]
-pub struct BlankNodeId {
-    id: [u8; 12],
-}
-
-impl AsRef<str> for BlankNodeId {
-    fn as_ref(&self) -> &str {
-        // We know what id is and it's always valid UTF8
-        str::from_utf8(&self.id).unwrap()
+        self.counter
     }
 }

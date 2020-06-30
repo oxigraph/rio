@@ -20,21 +20,26 @@ impl<'a> From<&'a OwnedNamedNode> for NamedNode<'a> {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
-pub struct OwnedBlankNode {
-    pub id: String,
+pub enum OwnedBlankNode {
+    Named { id: String },
+    Anonymous { id: u64 },
 }
 
 impl From<BlankNode<'_>> for OwnedBlankNode {
     fn from(n: BlankNode<'_>) -> Self {
-        Self {
-            id: n.id.to_owned(),
+        match n {
+            BlankNode::Named { id } => OwnedBlankNode::Named { id: id.to_owned() },
+            BlankNode::Anonymous { id } => OwnedBlankNode::Anonymous { id },
         }
     }
 }
 
 impl<'a> From<&'a OwnedBlankNode> for BlankNode<'a> {
     fn from(n: &'a OwnedBlankNode) -> Self {
-        Self { id: &n.id }
+        match n {
+            OwnedBlankNode::Named { id } => BlankNode::Named { id },
+            OwnedBlankNode::Anonymous { id } => BlankNode::Anonymous { id: *id },
+        }
     }
 }
 

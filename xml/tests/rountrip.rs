@@ -12,7 +12,7 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
     let bar = NamedNode {
         iri: "http://example.com/b%adar",
     };
-    let bnode = BlankNode { id: "foobar" };
+    let bnode = BlankNode::Named { id: "foobar" };
     let simple = Literal::Simple { value: "sim\"le" };
     let language = Literal::LanguageTaggedString {
         value: "sim\"le",

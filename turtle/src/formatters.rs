@@ -167,7 +167,13 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
                 self.current_subject_type = Some(NamedOrBlankNodeType::NamedNode);
             }
             NamedOrBlankNode::BlankNode(n) => {
-                self.current_subject.push_str(n.id);
+                match n {
+                    BlankNode::Named { id } => self.current_subject.push_str(id),
+                    BlankNode::Anonymous { id } => {
+                        use std::fmt::Write;
+                        write!(&mut self.current_subject, "{}", id).unwrap()
+                    }
+                }
                 self.current_subject_type = Some(NamedOrBlankNodeType::BlankNode);
             }
         }
@@ -302,7 +308,13 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
                 self.current_graph_name_type = Some(Some(NamedOrBlankNodeType::NamedNode));
             }
             Some(NamedOrBlankNode::BlankNode(n)) => {
-                self.current_graph_name.push_str(n.id);
+                match n {
+                    BlankNode::Named { id } => self.current_graph_name.push_str(id),
+                    BlankNode::Anonymous { id } => {
+                        use std::fmt::Write;
+                        write!(&mut self.current_graph_name, "{}", id).unwrap()
+                    }
+                }
                 self.current_graph_name_type = Some(Some(NamedOrBlankNodeType::BlankNode));
             }
             None => self.current_graph_name_type = Some(None),
@@ -314,7 +326,13 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
                 self.current_subject_type = Some(NamedOrBlankNodeType::NamedNode);
             }
             NamedOrBlankNode::BlankNode(n) => {
-                self.current_subject.push_str(n.id);
+                match n {
+                    BlankNode::Named { id } => self.current_subject.push_str(id),
+                    BlankNode::Anonymous { id } => {
+                        use std::fmt::Write;
+                        write!(&mut self.current_subject, "{}", id).unwrap()
+                    }
+                }
                 self.current_subject_type = Some(NamedOrBlankNodeType::BlankNode);
             }
         }
@@ -335,7 +353,7 @@ impl NamedOrBlankNodeType {
     fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
         match self {
             NamedOrBlankNodeType::NamedNode => NamedNode { iri: value }.into(),
-            NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
+            NamedOrBlankNodeType::BlankNode => BlankNode::Named { id: value }.into(),
         }
     }
 }

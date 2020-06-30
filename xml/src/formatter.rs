@@ -71,8 +71,11 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
                 NamedOrBlankNode::NamedNode(n) => {
                     description_open.push_attribute(("rdf:about", n.iri))
                 }
-                NamedOrBlankNode::BlankNode(n) => {
-                    description_open.push_attribute(("rdf:nodeID", n.id))
+                NamedOrBlankNode::BlankNode(BlankNode::Named { id }) => {
+                    description_open.push_attribute(("rdf:nodeID", id))
+                }
+                NamedOrBlankNode::BlankNode(BlankNode::Anonymous { id }) => {
+                    description_open.push_attribute(("rdf:nodeID", id.to_string().as_str()))
                 }
             }
             self.writer.write_event(Event::Start(description_open))?;
@@ -83,7 +86,12 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
         property_open.push_attribute(("xmlns:prop", triple.predicate.iri));
         match triple.object {
             Term::NamedNode(n) => property_open.push_attribute(("rdf:resource", n.iri)),
-            Term::BlankNode(n) => property_open.push_attribute(("rdf:nodeID", n.id)),
+            Term::BlankNode(BlankNode::Named { id }) => {
+                property_open.push_attribute(("rdf:nodeID", id))
+            }
+            Term::BlankNode(BlankNode::Anonymous { id }) => {
+                property_open.push_attribute(("rdf:nodeID", id.to_string().as_str()))
+            }
             Term::Literal(l) => match l {
                 Literal::Simple { value } => content = Some(value),
                 Literal::LanguageTaggedString { value, language } => {

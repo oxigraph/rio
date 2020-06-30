@@ -323,10 +323,9 @@ fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     parser.read.consume()?;
     skip_whitespace(&mut parser.read)?;
 
-    let blank_node = parser.term_stack.push(OwnedTermKind::BlankNode);
-    blank_node
-        .value
-        .push_str(parser.bnode_id_generator.generate().as_ref());
+    parser.term_stack.push(OwnedTermKind::AnonymousBlankNode {
+        id: parser.bnode_id_generator.generate(),
+    });
 
     loop {
         parse_generalized_predicate_object_list(parser, on_quad)?;
@@ -347,8 +346,7 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
 
-    parser.term_stack.push(OwnedTermKind::BlankNode);
-    let mut root: Option<BlankNodeId> = None;
+    let mut root: Option<u64> = None;
     loop {
         skip_whitespace(&mut parser.read)?;
 
@@ -363,16 +361,12 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
                     on_quad(parser.make_quad())?;
                     parser.term_stack.pop();
                     parser.term_stack.pop();
-                    assert_eq!(
-                        parser.term_stack.last().unwrap().kind,
-                        OwnedTermKind::BlankNode
-                    );
-                    let buffer = &mut parser.term_stack.last_mut().value;
-                    buffer.clear();
-                    buffer.push_str(id.as_ref());
+                    parser.term_stack.pop();
+                    parser
+                        .term_stack
+                        .push(OwnedTermKind::AnonymousBlankNode { id });
                 }
                 None => {
-                    parser.term_stack.pop();
                     parser.term_stack.push(OwnedTermKind::StaticIri(RDF_NIL));
                 }
             }
@@ -383,19 +377,17 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
                 root = Some(new);
             } else {
                 parser.term_stack.push(OwnedTermKind::StaticIri(RDF_REST));
-                let blank_node = parser.term_stack.push(OwnedTermKind::BlankNode);
-                blank_node.value.push_str(new.as_ref());
+                parser
+                    .term_stack
+                    .push(OwnedTermKind::AnonymousBlankNode { id: new });
                 on_quad(parser.make_quad())?;
                 parser.term_stack.pop();
                 parser.term_stack.pop();
+                parser.term_stack.pop();
             }
-            assert_eq!(
-                parser.term_stack.last().unwrap().kind,
-                OwnedTermKind::BlankNode
-            );
-            let buffer = &mut parser.term_stack.last_mut().value;
-            buffer.clear();
-            buffer.push_str(new.as_ref());
+            parser
+                .term_stack
+                .push(OwnedTermKind::AnonymousBlankNode { id: new });
             parser.term_stack.push(OwnedTermKind::StaticIri(RDF_FIRST));
             parse_generalized_node(parser, on_quad)?;
             on_quad(parser.make_quad())?;
@@ -476,12 +468,17 @@ fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
         Some(b'_') | Some(b'[') if is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
-            let blank_node = parser.term_stack.push(OwnedTermKind::BlankNode);
-            parse_blank_node(
+            let blank_node = parser.term_stack.push(OwnedTermKind::NamedBlankNode);
+            if let NamedOrBlankNodeType::AnonymousBlankNode { id } = parse_blank_node(
                 &mut parser.read,
                 &mut blank_node.value,
                 &mut parser.bnode_id_generator,
-            )?;
+            )? {
+                parser.term_stack.pop();
+                parser
+                    .term_stack
+                    .push(OwnedTermKind::AnonymousBlankNode { id });
+            }
             Ok(())
         }
         Some(b'[') => parse_generalized_blank_node_property_list(parser, on_quad),
@@ -514,12 +511,16 @@ fn parse_generalized_term<R: BufRead>(
             )
         }
         b'_' | b'[' => {
-            let blank_node = stack.push(OwnedTermKind::BlankNode);
-            parse_blank_node(
+            let blank_node = stack.push(OwnedTermKind::NamedBlankNode);
+            if let NamedOrBlankNodeType::AnonymousBlankNode { id } = parse_blank_node(
                 &mut parser.read,
                 &mut blank_node.value,
                 &mut parser.bnode_id_generator,
-            )
+            )? {
+                stack.pop();
+                stack.push(OwnedTermKind::AnonymousBlankNode { id });
+            }
+            Ok(())
         }
         b'"' | b'\'' | b'+' | b'-' | b'.' | b'0'..=b'9' => {
             let literal = stack.push(OwnedTermKind::LiteralSimple);
@@ -692,11 +693,6 @@ impl OwnedTermStack {
         }
     }
 
-    fn last_mut(&mut self) -> &mut OwnedTerm {
-        assert!(self.len > 0);
-        &mut self.inner[self.len - 1]
-    }
-
     fn last_triple(&self) -> &[OwnedTerm] {
         assert!(self.len >= 3);
         &self.inner[self.len - 3..]
@@ -714,7 +710,8 @@ struct OwnedTerm {
 enum OwnedTermKind {
     NamedNode,
     StaticIri(&'static str),
-    BlankNode,
+    NamedBlankNode,
+    AnonymousBlankNode { id: u64 },
     LiteralSimple,
     LiteralLanguage,
     LiteralDatatype,
@@ -726,7 +723,12 @@ impl<'a> From<&'a OwnedTerm> for GeneralizedTerm<'a> {
         match other.kind {
             OwnedTermKind::NamedNode => GeneralizedTerm::NamedNode(NamedNode { iri: &other.value }),
             OwnedTermKind::StaticIri(val) => GeneralizedTerm::NamedNode(NamedNode { iri: val }),
-            OwnedTermKind::BlankNode => GeneralizedTerm::BlankNode(BlankNode { id: &other.value }),
+            OwnedTermKind::NamedBlankNode => {
+                GeneralizedTerm::BlankNode(BlankNode::Named { id: &other.value })
+            }
+            OwnedTermKind::AnonymousBlankNode { id } => {
+                GeneralizedTerm::BlankNode(BlankNode::Anonymous { id })
+            }
             OwnedTermKind::LiteralSimple => GeneralizedTerm::Literal(Literal::Simple {
                 value: &other.value,
             }),
@@ -749,7 +751,8 @@ impl From<TermType> for OwnedTermKind {
     fn from(other: TermType) -> OwnedTermKind {
         match other {
             TermType::NamedNode => OwnedTermKind::NamedNode,
-            TermType::BlankNode => OwnedTermKind::BlankNode,
+            TermType::NamedBlankNode => OwnedTermKind::NamedBlankNode,
+            TermType::AnonymousBlankNode { id } => OwnedTermKind::AnonymousBlankNode { id },
             TermType::SimpleLiteral => OwnedTermKind::LiteralSimple,
             TermType::LanguageTaggedString => OwnedTermKind::LiteralLanguage,
             TermType::TypedLiteral => OwnedTermKind::LiteralDatatype,
@@ -951,9 +954,14 @@ mod test {
                     value: n.iri.to_string(),
                     extra: String::new(),
                 },
-                GeneralizedTerm::BlankNode(n) => OwnedTerm {
-                    kind: OwnedTermKind::BlankNode,
-                    value: n.id.to_string(),
+                GeneralizedTerm::BlankNode(BlankNode::Named { id }) => OwnedTerm {
+                    kind: OwnedTermKind::NamedBlankNode,
+                    value: id.to_string(),
+                    extra: String::new(),
+                },
+                GeneralizedTerm::BlankNode(BlankNode::Anonymous { id }) => OwnedTerm {
+                    kind: OwnedTermKind::AnonymousBlankNode { id },
+                    value: String::new(),
                     extra: String::new(),
                 },
                 GeneralizedTerm::Literal(Literal::Simple { value }) => OwnedTerm {
