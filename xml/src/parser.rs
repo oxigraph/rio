@@ -39,7 +39,7 @@ use std::collections::HashSet;
 /// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
-/// RdfXmlParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
+/// RdfXmlParser::new(file.as_ref(), None).parse_all(&mut |t| {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
@@ -55,22 +55,14 @@ pub struct RdfXmlParser<R: BufRead> {
 
 impl<R: BufRead> RdfXmlParser<R> {
     /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
-    ///
-    /// The base IRI might be empty to state there is no base IRI.
-    pub fn new(reader: R, base_iri: &str) -> Result<Self, RdfXmlError> {
+    pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         let mut reader = Reader::from_reader(reader);
         reader.expand_empty_elements(true);
         reader.trim_text(true);
-        Ok(Self {
+        Self {
             reader: RdfXmlReader {
                 reader,
-                state: vec![RdfXmlState::Doc {
-                    base_iri: if base_iri.is_empty() {
-                        None
-                    } else {
-                        Some(Iri::parse(base_iri.to_owned())?)
-                    },
-                }],
+                state: vec![RdfXmlState::Doc { base_iri }],
                 namespace_buffer: Vec::default(),
                 bnode_id_generator: BlankNodeIdGenerator::default(),
                 in_literal_depth: 0,
@@ -78,7 +70,7 @@ impl<R: BufRead> RdfXmlParser<R> {
             },
             reader_buffer: Vec::default(),
             is_end: false,
-        })
+        }
     }
 }
 

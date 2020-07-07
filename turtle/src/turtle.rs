@@ -52,22 +52,9 @@ pub struct TurtleParser<R: BufRead> {
 
 impl<R: BufRead> TurtleParser<R> {
     /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
-    ///
-    /// The base IRI might be empty to state there is no base IRI.
-    pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
-        let read = LookAheadByteReader::new(reader);
-        let base_iri = if base_iri.is_empty() {
-            None
-        } else {
-            Some(Iri::parse(base_iri.to_owned()).map_err(|error| {
-                read.parse_error(TurtleErrorKind::InvalidIri {
-                    iri: base_iri.to_owned(),
-                    error,
-                })
-            })?)
-        };
-        Ok(Self {
-            read,
+    pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
+        Self {
+            read: LookAheadByteReader::new(reader),
             base_iri,
             namespaces: HashMap::default(),
             bnode_id_generator: BlankNodeIdGenerator::default(),
@@ -76,7 +63,7 @@ impl<R: BufRead> TurtleParser<R> {
             predicate_buf_stack: StringBufferStack::default(),
             object_annotation_buf: String::default(),
             temp_buf: String::default(),
-        })
+        }
     }
 }
 
@@ -132,13 +119,11 @@ pub struct TriGParser<R: BufRead> {
 
 impl<R: BufRead> TriGParser<R> {
     /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
-    ///
-    /// The base IRI might be empty to state there is no base URL.
-    pub fn new(reader: R, base_iri: &str) -> Result<Self, TurtleError> {
-        Ok(Self {
-            inner: TurtleParser::new(reader, base_iri)?,
+    pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
+        Self {
+            inner: TurtleParser::new(reader, base_iri),
             graph_name_buf: String::default(),
-        })
+        }
     }
 }
 

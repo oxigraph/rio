@@ -16,11 +16,11 @@ rio_api = "0.4"
 rio_turtle = "0.4"
 rio_xml = "0.4"
 chrono = "0.4"
+oxiri = "0.1"
 permutohedron = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"
-iref = "1"
 
 [features]
 default = ["generalized"]
