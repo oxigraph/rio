@@ -51,3 +51,6 @@ mod parser;
 pub use error::RdfXmlError;
 pub use formatter::RdfXmlFormatter;
 pub use parser::RdfXmlParser;
+
+#[cfg(feature = "sophia")]
+pub mod sophia;

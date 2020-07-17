@@ -11,8 +11,20 @@ RDF/XML parser and serializer
 """
 edition = "2018"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 oxilangtag = "0.1"
 oxiri = "0.1"
 rio_api = "0.4"
 quick-xml = "0.18"
+sophia_api = { version = "0.6.1", optional = true }
+
+[dev-dependencies.sophia_api]
+version = "0.6.1"
+features = ["test_macro"]
+
+[features]
+default = []
+sophia = ["rio_api/sophia", "sophia_api"]
