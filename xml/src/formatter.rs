@@ -1,4 +1,5 @@
 use crate::model::OwnedNamedOrBlankNode;
+use crate::utils::*;
 use crate::RdfXmlError;
 use quick_xml::events::*;
 use quick_xml::Writer;
@@ -33,7 +34,7 @@ impl<W: Write> RdfXmlFormatter<W> {
     /// Builds a new formatter from a `Write` implementation and starts writing
     pub fn new(write: W) -> Result<Self, RdfXmlError> {
         let mut writer = Writer::new(write);
-        writer.write_event(Event::Decl(BytesDecl::new(b"1.0", None, None)))?;
+        writer.write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))?;
         let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
         rdf_open.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
         writer.write_event(Event::Start(rdf_open))?;
@@ -78,30 +79,41 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
             self.writer.write_event(Event::Start(description_open))?;
         }
 
-        let mut property_open = BytesStart::borrowed_name(b"prop:");
-        let mut content = None;
-        property_open.push_attribute(("xmlns:prop", triple.predicate.iri));
-        match triple.object {
-            Term::NamedNode(n) => property_open.push_attribute(("rdf:resource", n.iri)),
-            Term::BlankNode(n) => property_open.push_attribute(("rdf:nodeID", n.id)),
+        let (prop_prefix, prop_value) = split_iri(triple.predicate.iri);
+        let (prop_qname, prop_xmlns) = if prop_value.is_empty() {
+            ("prop:", ("xmlns:prop", prop_prefix))
+        } else {
+            (prop_value, ("xmlns", prop_prefix))
+        };
+        let mut property_open = BytesStart::borrowed_name(prop_qname.as_bytes());
+        property_open.push_attribute(prop_xmlns);
+        let content = match triple.object {
+            Term::NamedNode(n) => {
+                property_open.push_attribute(("rdf:resource", n.iri));
+                None
+            }
+            Term::BlankNode(n) => {
+                property_open.push_attribute(("rdf:nodeID", n.id));
+                None
+            }
             Term::Literal(l) => match l {
-                Literal::Simple { value } => content = Some(value),
+                Literal::Simple { value } => Some(value),
                 Literal::LanguageTaggedString { value, language } => {
-                    content = Some(value);
-                    property_open.push_attribute(("xml:lang", language))
+                    property_open.push_attribute(("xml:lang", language));
+                    Some(value)
                 }
                 Literal::Typed { value, datatype } => {
-                    content = Some(value);
-                    property_open.push_attribute(("rdf:datatype", datatype.iri))
+                    property_open.push_attribute(("rdf:datatype", datatype.iri));
+                    Some(value)
                 }
             },
-        }
+        };
         if let Some(content) = content {
             self.writer.write_event(Event::Start(property_open))?;
             self.writer
                 .write_event(Event::Text(BytesText::from_plain_str(&content)))?;
             self.writer
-                .write_event(Event::End(BytesEnd::borrowed(b"prop:")))?;
+                .write_event(Event::End(BytesEnd::borrowed(prop_qname.as_bytes())))?;
         } else {
             self.writer.write_event(Event::Empty(property_open))?;
         }
@@ -109,4 +121,28 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
         self.current_subject = Some(triple.subject.into());
         Ok(())
     }
+}
+
+fn split_iri(iri: &str) -> (&str, &str) {
+    if let Some(position_base) = iri.rfind(|c| !is_name_char(c)) {
+        if let Some(position_add) = iri[position_base..].find(is_name_start_char) {
+            (
+                &iri[..position_base + position_add],
+                &iri[position_base + position_add..],
+            )
+        } else {
+            (iri, "")
+        }
+    } else {
+        (iri, "")
+    }
+}
+
+#[test]
+fn test_split_iri() {
+    assert_eq!(
+        split_iri("http://schema.org/Person"),
+        ("http://schema.org/", "Person")
+    );
+    assert_eq!(split_iri("http://schema.org/"), ("http://schema.org/", ""));
 }

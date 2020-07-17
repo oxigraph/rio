@@ -48,6 +48,7 @@ mod error;
 mod formatter;
 mod model;
 mod parser;
+mod utils;
 
 pub use error::RdfXmlError;
 pub use formatter::RdfXmlFormatter;
