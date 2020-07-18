@@ -1,6 +1,6 @@
 //! Provide implementation of Sophia traits for Rio types.
 use crate::model::*;
-use sophia_api::ns::xsd;
+use sophia_api::ns::{rdf, xsd};
 #[cfg(feature = "generalized")]
 use sophia_api::quad::Quad as SophiaQuad;
 use sophia_api::term::{RawValue, SimpleIri, TTerm, TermKind};
@@ -61,7 +61,7 @@ impl<'a> TTerm for Literal<'a> {
         match self {
             Literal::Simple { .. } => Some(xsd::string),
             Literal::Typed { datatype, .. } => Some(datatype.into()),
-            _ => None,
+            _ => Some(rdf::langString),
         }
     }
     #[inline]
