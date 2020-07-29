@@ -1,10 +1,10 @@
 use crate::model::OwnedNamedOrBlankNode;
 use crate::utils::*;
-use crate::RdfXmlError;
 use quick_xml::events::*;
 use quick_xml::Writer;
 use rio_api::formatter::TriplesFormatter;
 use rio_api::model::*;
+use std::io;
 use std::io::Write;
 
 /// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) formatter.
@@ -32,12 +32,16 @@ pub struct RdfXmlFormatter<W: Write> {
 
 impl<W: Write> RdfXmlFormatter<W> {
     /// Builds a new formatter from a `Write` implementation and starts writing
-    pub fn new(write: W) -> Result<Self, RdfXmlError> {
+    pub fn new(write: W) -> Result<Self, io::Error> {
         let mut writer = Writer::new(write);
-        writer.write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))?;
+        writer
+            .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
+            .map_err(map_err)?;
         let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
         rdf_open.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
-        writer.write_event(Event::Start(rdf_open))?;
+        writer
+            .write_event(Event::Start(rdf_open))
+            .map_err(map_err)?;
         Ok(Self {
             writer,
             current_subject: None,
@@ -45,26 +49,29 @@ impl<W: Write> RdfXmlFormatter<W> {
     }
 
     /// Finishes to write and returns the underlying `Write`
-    pub fn finish(mut self) -> Result<W, RdfXmlError> {
+    pub fn finish(mut self) -> Result<W, io::Error> {
         if self.current_subject.is_some() {
             self.writer
-                .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))?;
+                .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
+                .map_err(map_err)?;
         }
         self.writer
-            .write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))?;
+            .write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
+            .map_err(map_err)?;
         Ok(self.writer.into_inner())
     }
 }
 
 impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
-    type Error = RdfXmlError;
+    type Error = io::Error;
 
-    fn format(&mut self, triple: &Triple<'_>) -> Result<(), RdfXmlError> {
+    fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
         // We open a new rdf:Description if useful
         if self.current_subject.as_ref().map(|v| v.into()) != Some(triple.subject) {
             if self.current_subject.is_some() {
                 self.writer
-                    .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))?;
+                    .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
+                    .map_err(map_err)?;
             }
 
             let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
@@ -76,7 +83,9 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
                     description_open.push_attribute(("rdf:nodeID", n.id))
                 }
             }
-            self.writer.write_event(Event::Start(description_open))?;
+            self.writer
+                .write_event(Event::Start(description_open))
+                .map_err(map_err)?;
         }
 
         let (prop_prefix, prop_value) = split_iri(triple.predicate.iri);
@@ -109,17 +118,31 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
             },
         };
         if let Some(content) = content {
-            self.writer.write_event(Event::Start(property_open))?;
             self.writer
-                .write_event(Event::Text(BytesText::from_plain_str(&content)))?;
+                .write_event(Event::Start(property_open))
+                .map_err(map_err)?;
             self.writer
-                .write_event(Event::End(BytesEnd::borrowed(prop_qname.as_bytes())))?;
+                .write_event(Event::Text(BytesText::from_plain_str(&content)))
+                .map_err(map_err)?;
+            self.writer
+                .write_event(Event::End(BytesEnd::borrowed(prop_qname.as_bytes())))
+                .map_err(map_err)?;
         } else {
-            self.writer.write_event(Event::Empty(property_open))?;
+            self.writer
+                .write_event(Event::Empty(property_open))
+                .map_err(map_err)?;
         }
 
         self.current_subject = Some(triple.subject.into());
         Ok(())
+    }
+}
+
+fn map_err(error: quick_xml::Error) -> io::Error {
+    if let quick_xml::Error::Io(error) = error {
+        error
+    } else {
+        io::Error::new(io::ErrorKind::Other, error)
     }
 }
 

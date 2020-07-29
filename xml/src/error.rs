@@ -2,7 +2,7 @@ use oxilangtag::LanguageTagParseError;
 use oxiri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::error::Error;
-use std::fmt;
+use std::{fmt, io};
 
 /// Error that might be returned during parsing.
 ///
@@ -68,6 +68,14 @@ impl From<LanguageTagParseError> for RdfXmlError {
     fn from(error: LanguageTagParseError) -> Self {
         Self {
             kind: RdfXmlErrorKind::InvalidLanguageTag(error),
+        }
+    }
+}
+
+impl From<io::Error> for RdfXmlError {
+    fn from(error: io::Error) -> Self {
+        Self {
+            kind: RdfXmlErrorKind::Xml(quick_xml::Error::Io(error)),
         }
     }
 }
