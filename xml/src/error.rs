@@ -89,6 +89,7 @@ impl From<RdfXmlError> for io::Error {
                 quick_xml::Error::Io(error) => error,
                 error => io::Error::new(io::ErrorKind::InvalidData, error),
             },
+            RdfXmlErrorKind::Other(error) => io::Error::new(io::ErrorKind::InvalidData, error),
             _ => io::Error::new(io::ErrorKind::InvalidData, error),
         }
     }
