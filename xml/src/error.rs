@@ -81,3 +81,15 @@ impl From<io::Error> for RdfXmlError {
         }
     }
 }
+
+impl From<RdfXmlError> for io::Error {
+    fn from(error: RdfXmlError) -> Self {
+        match error.kind {
+            RdfXmlErrorKind::Xml(error) => match error {
+                quick_xml::Error::Io(error) => error,
+                error => io::Error::new(io::ErrorKind::InvalidData, error),
+            },
+            _ => io::Error::new(io::ErrorKind::InvalidData, error),
+        }
+    }
+}

@@ -89,3 +89,12 @@ impl From<io::Error> for TurtleError {
         }
     }
 }
+
+impl From<TurtleError> for io::Error {
+    fn from(error: TurtleError) -> Self {
+        match error.kind {
+            TurtleErrorKind::IO(error) => error,
+            _ => io::Error::new(io::ErrorKind::InvalidData, error),
+        }
+    }
+}
