@@ -7,10 +7,11 @@
 //! use rio_api::model::NamedNode;
 //! use std::io::BufReader;
 //! use std::fs::File;
+//! use oxiri::Iri;
 //!
 //! let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 //! let mut count = 0;
-//! RdfXmlParser::new(BufReader::new(File::open("foo.rdf").unwrap()), "file:foo.rdf").unwrap().parse_all(&mut |t| {
+//! RdfXmlParser::new(BufReader::new(File::open("foo.rdf").unwrap()), Some(Iri::parse("file:foo.rdf".to_owned())).parse_all(&mut |t| {
 //!     if t.predicate == rdf_type {
 //!         count += 1;
 //!     }

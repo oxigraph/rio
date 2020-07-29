@@ -1,3 +1,4 @@
+use oxiri::Iri;
 use rio_api::parser::{QuadsParser, TriplesParser};
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::model::OwnedDataset;
@@ -15,25 +16,26 @@ pub fn parse_rdf_test_file(url: &str) -> Result<OwnedDataset, Box<dyn Error>> {
         File::open(&url.replace("https://github.com/Tpt/rio/tests", &base))
             .map_err(|e| TestEvaluationError::IO(url.to_owned(), e))?,
     );
+    let base_iri = Iri::parse(url.to_owned())?;
 
     if url.ends_with(".nt") {
-        NTriplesParser::new(read)?
+        NTriplesParser::new(read)
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".nq") {
-        NQuadsParser::new(read)?
+        NQuadsParser::new(read)
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".ttl") {
-        TurtleParser::new(read, url)?
+        TurtleParser::new(read, Some(base_iri))
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".trig") {
-        TriGParser::new(read, url)?
+        TriGParser::new(read, Some(base_iri))
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".rdf") {
-        RdfXmlParser::new(read, url)?
+        RdfXmlParser::new(read, Some(base_iri))
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else {

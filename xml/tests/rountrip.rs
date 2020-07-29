@@ -70,7 +70,7 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
     let xml = formatter.finish()?;
 
     let mut count = 0;
-    RdfXmlParser::new(Cursor::new(&xml), "")?.parse_all(&mut |_| {
+    RdfXmlParser::new(Cursor::new(&xml), None).parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), RdfXmlError>
     })?;

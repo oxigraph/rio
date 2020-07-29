@@ -30,7 +30,7 @@ use std::io::BufRead;
 /// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
-/// NTriplesParser::new(file.as_ref()).unwrap().parse_all(&mut |t| {
+/// NTriplesParser::new(file.as_ref()).parse_all(&mut |t| {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
@@ -47,14 +47,14 @@ pub struct NTriplesParser<R: BufRead> {
 }
 
 impl<R: BufRead> NTriplesParser<R> {
-    pub fn new(reader: R) -> Result<Self, TurtleError> {
-        Ok(Self {
+    pub fn new(reader: R) -> Self {
+        Self {
             read: LookAheadByteReader::new(reader),
             subject_buf: String::default(),
             predicate_buf: String::default(),
             object_buf: String::default(),
             object_annotation_buf: String::default(),
-        })
+        }
     }
 }
 
@@ -117,7 +117,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 /// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
-/// NQuadsParser::new(file.as_ref()).unwrap().parse_all(&mut |t| {
+/// NQuadsParser::new(file.as_ref()).parse_all(&mut |t| {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
@@ -135,15 +135,15 @@ pub struct NQuadsParser<R: BufRead> {
 }
 
 impl<R: BufRead> NQuadsParser<R> {
-    pub fn new(reader: R) -> Result<Self, TurtleError> {
-        Ok(Self {
+    pub fn new(reader: R) -> Self {
+        Self {
             read: LookAheadByteReader::new(reader),
             subject_buf: String::default(),
             predicate_buf: String::default(),
             object_buf: String::default(),
             object_annotation_buf: String::default(),
             graph_name_buf: String::default(),
-        })
+        }
     }
 }
 

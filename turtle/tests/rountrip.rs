@@ -15,7 +15,7 @@ fn ntriples_roundtrip() -> Result<(), TurtleError> {
     let nt = formatter.finish();
 
     let mut count = 0;
-    NTriplesParser::new(Cursor::new(&nt))?.parse_all(&mut |_| {
+    NTriplesParser::new(Cursor::new(&nt)).parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), TurtleError>
     })?;
@@ -36,7 +36,7 @@ fn nquads_roundtrip() -> Result<(), TurtleError> {
     let nt = formatter.finish();
 
     let mut count = 0;
-    NQuadsParser::new(Cursor::new(&nt))?.parse_all(&mut |_| {
+    NQuadsParser::new(Cursor::new(&nt)).parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), TurtleError>
     })?;
@@ -57,7 +57,7 @@ fn turtle_roundtrip() -> Result<(), TurtleError> {
     let turtle = formatter.finish()?;
 
     let mut count = 0;
-    TurtleParser::new(Cursor::new(&turtle), "")?.parse_all(&mut |_| {
+    TurtleParser::new(Cursor::new(&turtle), None).parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), TurtleError>
     })?;
@@ -78,7 +78,7 @@ fn trig_roundtrip() -> Result<(), TurtleError> {
     let trig = formatter.finish()?;
 
     let mut count = 0;
-    TriGParser::new(Cursor::new(&trig), "")?.parse_all(&mut |_| {
+    TriGParser::new(Cursor::new(&trig), None).parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), TurtleError>
     })?;
@@ -100,7 +100,7 @@ fn gtrig_roundtrip() -> Result<(), TurtleError> {
     let trig = formatter.finish()?;
 
     let mut count = 0;
-    GTriGParser::new(Cursor::new(&trig), "")?.parse_all(&mut |_| {
+    GTriGParser::new(Cursor::new(&trig), None).parse_all(&mut |_| {
         count += 1;
         Ok(()) as Result<(), TurtleError>
     })?;

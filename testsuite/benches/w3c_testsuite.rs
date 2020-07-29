@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use oxiri::Iri;
 use rio_api::parser::*;
 use rio_testsuite::manifest::TestManifest;
 use rio_testsuite::parser_evaluator::*;
@@ -85,7 +86,6 @@ fn parse_ntriples(c: &mut Criterion, name: &str, data: Vec<u8>) {
     parse_bench(c, "ntriples", name, data, |data| {
         let mut count: usize = 0;
         NTriplesParser::new(data)
-            .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
@@ -98,7 +98,6 @@ fn parse_nquads(c: &mut Criterion, name: &str, data: Vec<u8>) {
     parse_bench(c, "nquads", name, data, |data| {
         let mut count: usize = 0;
         NQuadsParser::new(data)
-            .unwrap()
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
@@ -108,10 +107,10 @@ fn parse_nquads(c: &mut Criterion, name: &str, data: Vec<u8>) {
 }
 
 fn parse_turtle(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    let base_iri = Iri::parse("http://example.com/ex".to_owned()).unwrap();
     parse_bench(c, "turtle", name, data, |data| {
         let mut count: usize = 0;
-        TurtleParser::new(data, "http://example.com/ex")
-            .unwrap()
+        TurtleParser::new(data, Some(base_iri.clone()))
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
@@ -121,10 +120,10 @@ fn parse_turtle(c: &mut Criterion, name: &str, data: Vec<u8>) {
 }
 
 fn parse_trig(c: &mut Criterion, name: &str, data: Vec<u8>) {
+    let base_iri = Iri::parse("http://example.com/ex".to_owned()).unwrap();
     parse_bench(c, "trig", name, data, |data| {
         let mut count: usize = 0;
-        TriGParser::new(data, "http://example.com/ex")
-            .unwrap()
+        TriGParser::new(data, Some(base_iri.clone()))
             .parse_all(&mut |_| {
                 count += 1;
                 Ok(()) as Result<(), TurtleError>
@@ -137,13 +136,15 @@ fn parse_trig(c: &mut Criterion, name: &str, data: Vec<u8>) {
 fn parse_gtrig(c: &mut Criterion, name: &str, data: Vec<u8>) {
     parse_bench(c, "gtrig", name, data, |data| {
         let mut count: usize = 0;
-        GTriGParser::new(data, "http://example.com/ex")
-            .unwrap()
-            .parse_all(&mut |_| {
-                count += 1;
-                Ok(()) as Result<(), TurtleError>
-            })
-            .unwrap();
+        GTriGParser::new(
+            data,
+            Some(Iri::parse("http://example.org/base/".to_owned()).unwrap()),
+        )
+        .parse_all(&mut |_| {
+            count += 1;
+            Ok(()) as Result<(), TurtleError>
+        })
+        .unwrap();
     });
 }
 
