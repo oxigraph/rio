@@ -5,7 +5,7 @@ use rio_api::parser::TriplesParser;
 use std::io::BufRead;
 use std::str;
 
-use crate::error::RdfXmlError;
+use crate::error::{RdfXmlError, RdfXmlErrorKind};
 use crate::model::*;
 use crate::utils::*;
 use oxilangtag::LanguageTag;
@@ -291,24 +291,25 @@ impl<R: BufRead> RdfXmlReader<R> {
             let attribute = attribute.map_err(RdfXmlError::from)?;
             match attribute.key {
                 b"xml:lang" => {
-                    language = Some(
-                        LanguageTag::parse(
-                            attribute
-                                .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?
-                                .to_ascii_lowercase(),
-                        )
-                        .map_err(RdfXmlError::from)?,
-                    );
+                    let tag = attribute
+                        .unescape_and_decode_value(&self.reader)
+                        .map_err(RdfXmlError::from)?;
+                    language = Some(LanguageTag::parse(tag.to_ascii_lowercase()).map_err(
+                        |error| RdfXmlError {
+                            kind: RdfXmlErrorKind::InvalidLanguageTag { tag, error },
+                        },
+                    )?);
                 }
                 b"xml:base" => {
+                    let iri = attribute
+                        .unescape_and_decode_value(&self.reader)
+                        .map_err(RdfXmlError::from)?;
                     base_iri = Some(
-                        Iri::parse(
-                            attribute
-                                .unescape_and_decode_value(&self.reader)
-                                .map_err(RdfXmlError::from)?,
-                        )
-                        .map_err(RdfXmlError::from)?,
+                        Iri::parse(iri.clone())
+                            .map_err(|error| RdfXmlError {
+                                kind: RdfXmlErrorKind::InvalidIri { iri, error },
+                            })?
+                            .to_owned(),
                     )
                 }
                 key if !key.starts_with(b"xml") => {
@@ -318,7 +319,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                             .unescape_and_decode_value(&self.reader)
                             .map_err(RdfXmlError::from)?;
                         if !is_nc_name(&id) {
-                            return Err(RdfXmlError::from(format!(
+                            return Err(RdfXmlError::msg(format!(
                                 "{} is not a valid rdf:ID value",
                                 &id
                             ))
@@ -331,7 +332,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                             .unescape_and_decode_value(&self.reader)
                             .map_err(RdfXmlError::from)?;
                         if !is_nc_name(&bag_id) {
-                            return Err(RdfXmlError::from(format!(
+                            return Err(RdfXmlError::msg(format!(
                                 "{} is not a valid rdf:bagID value",
                                 &bag_id
                             ))
@@ -342,7 +343,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                             .unescape_and_decode_value(&self.reader)
                             .map_err(RdfXmlError::from)?;
                         if !is_nc_name(&id) {
-                            return Err(RdfXmlError::from(format!(
+                            return Err(RdfXmlError::msg(format!(
                                 "{} is not a valid rdf:nodeID value",
                                 &id
                             ))
@@ -365,7 +366,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     } else if *attribute_url == *RDF_TYPE {
                         type_attr = Some(attribute);
                     } else if RESERVED_RDF_ATTRIBUTES.contains(&&*attribute_url) {
-                        return Err(RdfXmlError::from(format!(
+                        return Err(RdfXmlError::msg(format!(
                             "{} is not a valid attribute",
                             &attribute_url
                         ))
@@ -388,7 +389,7 @@ impl<R: BufRead> RdfXmlReader<R> {
             Some(iri) => {
                 let iri = resolve(&base_iri, iri)?;
                 if self.known_rdf_id.contains(&iri) {
-                    return Err(RdfXmlError::from(format!(
+                    return Err(RdfXmlError::msg(format!(
                         "{} has already been used as rdf:ID value",
                         &iri
                     ))
@@ -430,7 +431,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         panic!("ParseTypeLiteralPropertyElt production children should never be considered as a RDF/XML content")
     }
     None => {
-        return Err(RdfXmlError::from("No state in the stack: the XML is not balanced").into());
+        return Err(RdfXmlError::msg("No state in the stack: the XML is not balanced").into());
     }
 };
 
@@ -439,7 +440,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 if *iri == *RDF_RDF {
                     RdfXmlState::RDF { base_iri, language }
                 } else if RESERVED_RDF_ELEMENTS.contains(&&*iri) {
-                    return Err(RdfXmlError::from(format!(
+                    return Err(RdfXmlError::msg(format!(
                         "Invalid node element tag name: {}",
                         &iri
                     ))
@@ -460,7 +461,7 @@ impl<R: BufRead> RdfXmlReader<R> {
             }
             RdfXmlNextProduction::NodeElt => {
                 if RESERVED_RDF_ELEMENTS.contains(&&*iri) {
-                    return Err(RdfXmlError::from(format!(
+                    return Err(RdfXmlError::msg(format!(
                         "Invalid property element tag name: {}",
                         &iri
                     ))
@@ -484,14 +485,14 @@ impl<R: BufRead> RdfXmlReader<R> {
                         *li_counter += 1;
                         format!("http://www.w3.org/1999/02/22-rdf-syntax-ns#_{}", li_counter)
                     } else {
-                        return Err(RdfXmlError::from(format!(
+                        return Err(RdfXmlError::msg(format!(
                             "Invalid property element tag name: {}",
                             &iri
                         ))
                         .into());
                     }
                 } else if RESERVED_RDF_ELEMENTS.contains(&&*iri) || *iri == *RDF_DESCRIPTION {
-                    return Err(RdfXmlError::from(format!(
+                    return Err(RdfXmlError::msg(format!(
                         "Invalid property element tag name: {}",
                         &iri
                     ))
@@ -512,7 +513,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                         (None, None) => OwnedBlankNode {
                             id: self.bnode_id_generator.generate().as_ref().to_owned(),
                         }.into(),
-                        (Some(_), Some(_)) => return Err(RdfXmlError::from("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
+                        (Some(_), Some(_)) => return Err(RdfXmlError::msg("Not both rdf:resource and rdf:nodeID could be set at the same time").into())
                     };
                             self.emit_property_attrs(
                                 (&object).into(),
@@ -623,11 +624,10 @@ impl<R: BufRead> RdfXmlReader<R> {
                 writer.write_event(Event::Text(event))?;
                 Ok(())
             }
-            _ => Err(format!(
+            _ => Err(RdfXmlError::msg(format!(
                 "Unexpected text event: {}",
                 event.unescape_and_decode(&self.reader)?
-            )
-            .into()),
+            ))),
         }
     }
 
@@ -678,19 +678,19 @@ impl<R: BufRead> RdfXmlReader<R> {
             }
             .into(),
             (Some(_), Some(_), _) => {
-                return Err(RdfXmlError::from(
+                return Err(RdfXmlError::msg(
                     "Not both rdf:ID and rdf:nodeID could be set at the same time",
                 )
                 .into())
             }
             (_, Some(_), Some(_)) => {
-                return Err(RdfXmlError::from(
+                return Err(RdfXmlError::msg(
                     "Not both rdf:nodeID and rdf:resource could be set at the same time",
                 )
                 .into())
             }
             (Some(_), _, Some(_)) => {
-                return Err(RdfXmlError::from(
+                return Err(RdfXmlError::msg(
                     "Not both rdf:ID and rdf:resource could be set at the same time",
                 )
                 .into())
@@ -833,7 +833,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                 if emit {
                     let object = writer.into_inner();
                     if object.is_empty() {
-                        return Err(RdfXmlError::from(format!(
+                        return Err(RdfXmlError::msg(format!(
                             "No value found for rdf:XMLLiteral value of property {}",
                             iri
                         ))
@@ -844,9 +844,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                         predicate: NamedNode { iri: &iri },
                         object: Literal::Typed {
                             value: &str::from_utf8(&object).map_err(|_| {
-                                RdfXmlError::from(
-                                    "The XML literal is not in valid UTF-8".to_owned(),
-                                )
+                                RdfXmlError::msg("The XML literal is not in valid UTF-8".to_owned())
                             })?,
                             datatype: NamedNode {
                                 iri: RDF_XML_LITERAL,
@@ -960,20 +958,30 @@ fn convert_iri_attribute<B: BufRead>(
     let value = attribute.unescaped_value()?;
     let value = reader.decode(&value)?;
     Ok(OwnedNamedNode {
-        iri: if let Some(base_iri) = base_iri {
-            base_iri.resolve(&value)
-        } else {
-            Iri::parse(value.to_string())
-        }?
-        .into_inner(),
+        iri: resolve(base_iri, value)?,
     })
 }
 
-fn resolve(base_iri: &Option<Iri<String>>, relative_iri: String) -> Result<String, RdfXmlError> {
+fn resolve(
+    base_iri: &Option<Iri<String>>,
+    relative_iri: impl AsRef<str> + Into<String> + Clone,
+) -> Result<String, RdfXmlError> {
     Ok(if let Some(base_iri) = base_iri {
-        base_iri.resolve(&relative_iri)
+        base_iri
+            .resolve(relative_iri.as_ref())
+            .map_err(|error| RdfXmlError {
+                kind: RdfXmlErrorKind::InvalidIri {
+                    iri: relative_iri.into(),
+                    error,
+                },
+            })
     } else {
-        Iri::parse(relative_iri)
+        Iri::parse(relative_iri.clone().into()).map_err(|error| RdfXmlError {
+            kind: RdfXmlErrorKind::InvalidIri {
+                iri: relative_iri.into(),
+                error,
+            },
+        })
     }?
     .into_inner())
 }

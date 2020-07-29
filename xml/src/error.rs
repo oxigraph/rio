@@ -9,23 +9,41 @@ use std::{fmt, io};
 /// It might wrap an IO error or be a parsing error.
 #[derive(Debug)]
 pub struct RdfXmlError {
-    kind: RdfXmlErrorKind,
+    pub(crate) kind: RdfXmlErrorKind,
 }
 
 #[derive(Debug)]
-enum RdfXmlErrorKind {
+pub(crate) enum RdfXmlErrorKind {
     Xml(quick_xml::Error),
-    InvalidIri(IriParseError),
-    InvalidLanguageTag(LanguageTagParseError),
+    InvalidIri {
+        iri: String,
+        error: IriParseError,
+    },
+    InvalidLanguageTag {
+        tag: String,
+        error: LanguageTagParseError,
+    },
     Other(String),
+}
+
+impl RdfXmlError {
+    pub(crate) fn msg(msg: impl Into<String>) -> Self {
+        Self {
+            kind: RdfXmlErrorKind::Other(msg.into()),
+        }
+    }
 }
 
 impl fmt::Display for RdfXmlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => error.fmt(f),
-            RdfXmlErrorKind::InvalidIri(error) => error.fmt(f),
-            RdfXmlErrorKind::InvalidLanguageTag(error) => error.fmt(f),
+            RdfXmlErrorKind::InvalidIri { iri, error } => {
+                write!(f, "error while parsing IRI '{}': {}", iri, error)
+            }
+            RdfXmlErrorKind::InvalidLanguageTag { tag, error } => {
+                write!(f, "error while parsing language tag '{}': {}", tag, error)
+            }
             RdfXmlErrorKind::Other(message) => write!(f, "{}", message),
         }
     }
@@ -35,8 +53,8 @@ impl Error for RdfXmlError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => Some(error),
-            RdfXmlErrorKind::InvalidIri(error) => Some(error),
-            RdfXmlErrorKind::InvalidLanguageTag(error) => Some(error),
+            RdfXmlErrorKind::InvalidIri { error, .. } => Some(error),
+            RdfXmlErrorKind::InvalidLanguageTag { error, .. } => Some(error),
             _ => None,
         }
     }
@@ -56,44 +74,10 @@ impl From<quick_xml::Error> for RdfXmlError {
     }
 }
 
-impl From<IriParseError> for RdfXmlError {
-    fn from(error: IriParseError) -> Self {
-        Self {
-            kind: RdfXmlErrorKind::InvalidIri(error),
-        }
-    }
-}
-
-impl From<LanguageTagParseError> for RdfXmlError {
-    fn from(error: LanguageTagParseError) -> Self {
-        Self {
-            kind: RdfXmlErrorKind::InvalidLanguageTag(error),
-        }
-    }
-}
-
 impl From<io::Error> for RdfXmlError {
     fn from(error: io::Error) -> Self {
         Self {
             kind: RdfXmlErrorKind::Xml(quick_xml::Error::Io(error)),
-        }
-    }
-}
-
-impl From<String> for RdfXmlError {
-    // TODO: remove
-    fn from(error: String) -> Self {
-        Self {
-            kind: RdfXmlErrorKind::Other(error),
-        }
-    }
-}
-
-impl From<&str> for RdfXmlError {
-    // TODO: remove
-    fn from(error: &str) -> Self {
-        Self {
-            kind: RdfXmlErrorKind::Other(error.to_owned()),
         }
     }
 }
