@@ -174,6 +174,8 @@ impl<R: BufRead> LookAheadByteRead for LookAheadByteReader<R> {
                 } else {
                     self.byte_number += 1;
                 }
+            } else {
+                return Err(self.parse_error(TurtleErrorKind::PrematureEOF));
             }
         }
         if self.buffer.is_empty() {
