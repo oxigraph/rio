@@ -3,8 +3,7 @@
 //! Example: count the number of of people using the `Sophia` API:
 //! ```
 //! use rio_api::model::NamedNode;
-//! use rio_turtle::sophia::TurtleParser;
-//! use sophia_api::parser::TripleParser;
+//! use rio_turtle::NTriplesParser;
 //! use sophia_api::triple::{Triple, stream::TripleSource};
 //! use sophia_api::term::term_eq;
 //! use sophia_api::ns::rdf;
@@ -18,8 +17,8 @@
 //!
 //! let schema_person = NamedNode { iri: "http://schema.org/Person" };
 //! let mut count = 0;
-//! TurtleParser::default()
-//!     .parse(file.as_ref())
+//! NTriplesParser::new(file.as_ref())
+//!     .unwrap()
 //!     .filter_triples(|t| term_eq(t.p(), &rdf::type_) && term_eq(t.o(), &schema_person))
 //!     .for_each_triple(|_| { count += 1; })
 //!     .unwrap();
@@ -29,27 +28,9 @@
 //! [Sophia]: https://crates.io/crates/sophia
 //! [N-Triples]: https://www.w3.org/TR/n-triples/
 
-use crate::{NTriplesParser as RioNTParser, TurtleError};
-use rio_api::sophia::StrictRioSource;
-use sophia_api::parser::TripleParser;
-use std::io::BufRead;
+use crate::NTriplesParser;
 
-/// An implementation of [`sophia_api::parser::TripleParser`]
-/// around [the n-triples parser].
-///
-/// [`sophia_api::parser::TripleParser`]: https://docs.rs/sophia_api/latest/sophia_api/parser/trait.TripleParser.html
-/// [the n-triples parser]: ../../struct.NTriplesParser.html
-#[derive(Copy, Clone, Debug, Default)]
-pub struct NTriplesParser {}
-
-impl<B: BufRead> TripleParser<B> for NTriplesParser {
-    type Source = StrictRioSource<RioNTParser<B>, TurtleError>;
-    fn parse(&self, data: B) -> Self::Source {
-        StrictRioSource::from(RioNTParser::new(data))
-    }
-}
-
-sophia_api::def_mod_functions_for_bufread_parser!(NTriplesParser, TripleParser);
+rio_api::impl_triple_source!(NTriplesParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests
@@ -73,9 +54,9 @@ mod test {
             _:b1 <http://example.org/ns/name> "Alice".
         "#;
 
-        let p = NTriplesParser {};
+        let p = NTriplesParser::new(ntriples.as_ref())?;
 
-        let g: Vec<[TestTerm<String>; 3]> = p.parse_str(&ntriples).collect_triples()?;
+        let g: Vec<[TestTerm<String>; 3]> = p.collect_triples()?;
         assert_eq!(g.len(), 3);
         assert!(g
             .triples_matching(

@@ -3,8 +3,7 @@
 //! Example: count the number of of people using the `Sophia` API:
 //! ```
 //! use rio_api::model::NamedNode;
-//! use rio_turtle::sophia::TurtleParser;
-//! use sophia_api::parser::TripleParser;
+//! use rio_turtle::TurtleParser;
 //! use sophia_api::triple::{Triple, stream::TripleSource};
 //! use sophia_api::term::term_eq;
 //! use sophia_api::ns::rdf;
@@ -18,8 +17,8 @@
 //!
 //! let schema_person = NamedNode { iri: "http://schema.org/Person" };
 //! let mut count = 0;
-//! TurtleParser::default()
-//!     .parse(file.as_ref())
+//! TurtleParser::new(file.as_ref(), "x-no-base:///")
+//!     .unwrap()
 //!     .filter_triples(|t| term_eq(t.p(), &rdf::type_) && term_eq(t.o(), &schema_person))
 //!     .for_each_triple(|_| { count += 1; })
 //!     .unwrap();
@@ -29,32 +28,9 @@
 //! [Sophia]: https://crates.io/crates/sophia
 //! [Turtle]: https://www.w3.org/TR/turtle/
 
-use crate::{TurtleError, TurtleParser as RioTurtleParser};
+use crate::{TurtleError, TurtleParser};
 use rio_api::parser::ParseError;
-use rio_api::sophia::StrictRioSource;
-use sophia_api::parser::{Location, TripleParser, WithLocation};
-use std::io::BufRead;
-
-/// An implementation of [`sophia_api::parser::TripleParser`]
-/// around [the turtle parser].
-///
-/// [`sophia_api::parser::TripleParser`]: https://docs.rs/sophia_api/latest/sophia_api/parser/trait.TripleParser.html
-/// [the turtle parser]: ../../struct.TurtleParser.html
-#[derive(Clone, Debug, Default)]
-pub struct TurtleParser {
-    pub base: Option<String>,
-}
-
-impl<B: BufRead> TripleParser<B> for TurtleParser {
-    type Source = StrictRioSource<RioTurtleParser<B>, TurtleError>;
-    fn parse(&self, data: B) -> Self::Source {
-        let base: &str = match &self.base {
-            Some(base) => &base,
-            None => "x-no-base:///",
-        };
-        StrictRioSource::from(RioTurtleParser::new(data, base))
-    }
-}
+use sophia_api::parser::{Location, WithLocation};
 
 impl WithLocation for TurtleError {
     fn location(&self) -> Location {
@@ -65,7 +41,7 @@ impl WithLocation for TurtleError {
     }
 }
 
-sophia_api::def_mod_functions_for_bufread_parser!(TurtleParser, TripleParser);
+rio_api::impl_triple_source!(TurtleParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests
@@ -83,17 +59,15 @@ mod test {
 
     #[test]
     fn test_simple_turtle_string() -> Result<(), Box<dyn std::error::Error>> {
-        let turtle = r#"
+        let turtle = br#"
             @prefix : <http://example.org/ns/> .
 
             <#me> :knows [ a :Person ; :name "Alice" ].
         "#;
 
-        let p = TurtleParser {
-            base: Some("http://localhost/ex".to_string()),
-        };
+        let p = TurtleParser::new(turtle.as_ref(), "http://localhost/ex")?;
 
-        let g: Vec<[TestTerm<String>; 3]> = p.parse_str(&turtle).collect_triples()?;
+        let g: Vec<[TestTerm<String>; 3]> = p.collect_triples()?;
         assert_eq!(g.len(), 3);
         assert!(g
             .triples_matching(

@@ -5,7 +5,7 @@
 //! Example: count the number of of people using the `Sophia` API:
 //! ```
 //! use rio_api::model::NamedNode;
-//! use rio_xml::sophia::RdfXmlParser;
+//! use rio_xml::RdfXmlParser;
 //! use sophia_api::parser::TripleParser;
 //! use sophia_api::triple::{Triple, stream::TripleSource};
 //! use sophia_api::term::term_eq;
@@ -22,8 +22,8 @@
 //!
 //! let schema_person = NamedNode { iri: "http://schema.org/Person" };
 //! let mut count = 0;
-//! RdfXmlParser::default()
-//!     .parse(file.as_ref())
+//! RdfXmlParser::new(file.as_ref(), "x-no-base:///")
+//!     .unwrap()
 //!     .filter_triples(|t| term_eq(t.p(), &rdf::type_) && term_eq(t.o(), &schema_person))
 //!     .for_each_triple(|_| { count += 1; })
 //!     .unwrap();
@@ -33,33 +33,9 @@
 //! [Sophia]: https://crates.io/crates/sophia
 //! [RDF/XML]: https://www.w3.org/TR/rdf-syntax-grammar/
 
-use crate::{RdfXmlError, RdfXmlParser as RioRdfXmlParser};
-use rio_api::sophia::*;
-use sophia_api::parser::TripleParser;
-use std::io::BufRead;
+use crate::RdfXmlParser;
 
-/// An implementation of [`sophia_api::parser::TripleParser`]
-/// around [the RDF/XML parser].
-///
-/// [`sophia_api::parser::TripleParser`]: https://docs.rs/sophia_api/latest/sophia_api/parser/trait.TripleParser.html
-/// [the RDF/XML parser]: ../../struct.RdfXmlParser.html
-#[derive(Clone, Debug, Default)]
-pub struct RdfXmlParser {
-    pub base: Option<String>,
-}
-
-impl<B: BufRead> TripleParser<B> for RdfXmlParser {
-    type Source = StrictRioSource<RioRdfXmlParser<B>, RdfXmlError>;
-    fn parse(&self, data: B) -> Self::Source {
-        let base: &str = match &self.base {
-            Some(base) => &base,
-            None => "x-no-base:///",
-        };
-        StrictRioSource::from(RioRdfXmlParser::new(data, base))
-    }
-}
-
-sophia_api::def_mod_functions_for_bufread_parser!(RdfXmlParser, TripleParser);
+rio_api::impl_triple_source!(RdfXmlParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests
@@ -90,11 +66,9 @@ mod test {
         </rdf:RDF>
         "#;
 
-        let p = RdfXmlParser {
-            base: Some("http://localhost/ex".into()),
-        };
+        let p = RdfXmlParser::new(xml.as_ref(), "http://localhost/ex")?;
 
-        let g: Vec<[TestTerm<String>; 3]> = p.parse_str(&xml).collect_triples()?;
+        let g: Vec<[TestTerm<String>; 3]> = p.collect_triples()?;
         assert_eq!(g.len(), 3);
         assert!(g
             .triples_matching(

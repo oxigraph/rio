@@ -4,7 +4,7 @@
 //! Example: count the number of of people using the `Sophia` API:
 //! ```
 //! use rio_api::model::NamedNode;
-//! use rio_turtle::sophia::NQuadsParser;
+//! use rio_turtle::NQuadsParser;
 //! use sophia_api::parser::QuadParser;
 //! use sophia_api::quad::{Quad, stream::QuadSource};
 //! use sophia_api::term::term_eq;
@@ -19,8 +19,8 @@
 //!
 //! let schema_person = NamedNode { iri: "http://schema.org/Person" };
 //! let mut count = 0;
-//! NQuadsParser::default()
-//!     .parse(file.as_ref())
+//! NQuadsParser::new(file.as_ref())
+//!     .unwrap()
 //!     .filter_quads(|q| term_eq(q.p(), &rdf::type_) && term_eq(q.o(), &schema_person))
 //!     .for_each_quad(|_| { count += 1; })
 //!     .unwrap();
@@ -30,27 +30,9 @@
 //! [Sophia]: https://crates.io/crates/sophia
 //! [N-Quads]: https://www.w3.org/TR/n-quads/
 
-use crate::{NQuadsParser as RioNQParser, TurtleError};
-use rio_api::sophia::StrictRioSource;
-use sophia_api::parser::QuadParser;
-use std::io::BufRead;
+use crate::NQuadsParser;
 
-/// An implementation of [`sophia_api::parser::QuadParser`]
-/// around [the n-quads parser].
-///
-/// [`sophia_api::parser::QuadParser`]: https://docs.rs/sophia_api/latest/sophia_api/parser/trait.QuadParser.html
-/// [the n-quads parser]: ../../struct.NQuadsParser.html
-#[derive(Copy, Clone, Debug, Default)]
-pub struct NQuadsParser {}
-
-impl<B: BufRead> QuadParser<B> for NQuadsParser {
-    type Source = StrictRioSource<RioNQParser<B>, TurtleError>;
-    fn parse(&self, data: B) -> Self::Source {
-        StrictRioSource::from(RioNQParser::new(data))
-    }
-}
-
-sophia_api::def_mod_functions_for_bufread_parser!(NQuadsParser, QuadParser);
+rio_api::impl_quad_source!(NQuadsParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests
@@ -74,10 +56,9 @@ mod test {
             _:b1 <http://example.org/ns/name> "Alice" <tag:g1>.
         "#;
 
-        let p = NQuadsParser {};
+        let p = NQuadsParser::new(nquads.as_ref())?;
 
-        let d: Vec<([TestTerm<String>; 3], Option<TestTerm<String>>)> =
-            p.parse_str(&nquads).collect_quads()?;
+        let d: Vec<([TestTerm<String>; 3], Option<TestTerm<String>>)> = p.collect_quads()?;
         assert_eq!(d.len(), 3);
         assert!(d
             .quads_matching(
