@@ -1,32 +1,4 @@
-//! [Sophia] adapter for [Turtle].
-//!
-//! Example: count the number of of people using the `Sophia` API:
-//! ```
-//! use rio_api::model::NamedNode;
-//! use rio_turtle::TurtleParser;
-//! use sophia_api::triple::{Triple, stream::TripleSource};
-//! use sophia_api::term::term_eq;
-//! use sophia_api::ns::rdf;
-//!
-//! let file = b"@prefix schema: <http://schema.org/> .
-//! <http://example.com/foo> a schema:Person ;
-//!     schema:name  \"Foo\" .
-//! <http://example.com/bar> a schema:Person ;
-//!     schema:name  \"Bar\" .
-//! ";
-//!
-//! let schema_person = NamedNode { iri: "http://schema.org/Person" };
-//! let mut count = 0;
-//! TurtleParser::new(file.as_ref(), "x-no-base:///")
-//!     .unwrap()
-//!     .filter_triples(|t| term_eq(t.p(), &rdf::type_) && term_eq(t.o(), &schema_person))
-//!     .for_each_triple(|_| { count += 1; })
-//!     .unwrap();
-//! assert_eq!(2, count)
-//! ```
-//!
-//! [Sophia]: https://crates.io/crates/sophia
-//! [Turtle]: https://www.w3.org/TR/turtle/
+//! Sophia adapter for Turtle.
 
 use crate::{TurtleError, TurtleParser};
 use rio_api::parser::ParseError;
@@ -36,20 +8,20 @@ impl WithLocation for TurtleError {
     fn location(&self) -> Location {
         match self.textual_position() {
             None => Location::Unknown,
-            Some(pos) => Location::from_lico(pos.line_number() + 1, pos.byte_number() + 1),
+            Some(pos) => Location::from_lico(
+                (pos.line_number() + 1) as usize,
+                (pos.byte_number() + 1) as usize,
+            ),
         }
     }
 }
 
 impl_triple_source!(TurtleParser);
 
-// ---------------------------------------------------------------------------------
-//                                      tests
-// ---------------------------------------------------------------------------------
-
 #[cfg(test)]
 mod test {
     use super::*;
+    use oxiri::Iri;
     use rio_api::model::{Literal, NamedNode};
     use sophia_api::graph::Graph;
     use sophia_api::ns::rdf;
@@ -65,7 +37,10 @@ mod test {
             <#me> :knows [ a :Person ; :name "Alice" ].
         "#;
 
-        let p = TurtleParser::new(turtle.as_ref(), "http://localhost/ex")?;
+        let p = TurtleParser::new(
+            turtle.as_ref(),
+            Some(Iri::parse("http://localhost/ex".to_owned())?),
+        );
 
         let g: Vec<[TestTerm<String>; 3]> = p.collect_triples()?;
         assert_eq!(g.len(), 3);

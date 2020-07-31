@@ -1,6 +1,8 @@
 //! This crate provides basic interfaces and data structures for building RDF parsers.
 //!
 //! It is currently used by the [`rio_turtle`](https://docs.rs/rio_turtle/) and [`rio_xml`](https://docs.rs/rio_xml/) crates.
+//!
+//! If the `sophia` feature is enabled, the types defined in [`model`](model/index.html) implement the appropriate trait from [Sophia]( https://crates.io/crates/sophia_api).
 #![deny(
     future_incompatible,
     nonstandard_style,
@@ -20,16 +22,5 @@ pub mod parser;
 #[cfg(feature = "generalized")]
 mod generalized;
 
-#[cfg(feature = "sophia")]
-/// [Sophia] adapters for Rio parsers.
-///
-/// This module is available if feature `sophia` is enabled.
-///
-/// It ensures that the types defined in [`model`]
-/// implement the appropriate trait from [Sophia].
-///
-/// [Sophia]: https://crates.io/crates/sophia
-/// [`model`]: ../model/index.html
-mod sophia {
-    mod model;
-}
+#[cfg(feature = "sophia_api")]
+mod sophia;

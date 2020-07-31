@@ -1,49 +1,13 @@
-//! [Sophia] adapter for [generalized] [TriG]
-//!
-//! Using it requires to enable the `generalized` feature.
-//!
-//! Example: count the number of of people using the `Sophia` API:
-//! ```
-//! use rio_api::model::NamedNode;
-//! use rio_turtle::GTriGParser;
-//! use sophia_api::parser::QuadParser;
-//! use sophia_api::quad::{Quad, stream::QuadSource};
-//! use sophia_api::term::term_eq;
-//! use sophia_api::ns::rdf;
-//!
-//! let file = b"@prefix schema: <http://schema.org/> .
-//! <my_graph> {
-//!     <foo> a schema:Person ;
-//!         schema:name  ?name .
-//!     <bar> a schema:Person ;
-//!         schema:name  ?name .
-//! }";
-//!
-//! let schema_person = NamedNode { iri: "http://schema.org/Person" };
-//! let mut count = 0;
-//! GTriGParser::new(file.as_ref(), "http://example.com/")
-//!     .unwrap()
-//!     .filter_quads(|q| term_eq(q.p(), &rdf::type_) && term_eq(q.o(), &schema_person))
-//!     .for_each_quad(|_| { count += 1; })
-//!     .unwrap();
-//! assert_eq!(2, count)
-//! ```
-//!
-//! [Sophia]: https://crates.io/crates/sophia
-//! [generalized]: https://docs.rs/sophia/latest/sophia/#generalized-vs-strict-rdf-model
-//! [TriG]: https://www.w3.org/TR/trig/
+//! Sophia adapter for generalized TriG.
 
 use crate::GTriGParser;
 
 impl_quad_source_generalized!(GTriGParser);
 
-// ---------------------------------------------------------------------------------
-//                                      tests
-// ---------------------------------------------------------------------------------
-
 #[cfg(test)]
 mod test {
     use super::*;
+    use oxiri::Iri;
     use rio_api::model::{NamedNode, Variable};
     use sophia_api::dataset::Dataset;
     use sophia_api::ns::rdf;
@@ -64,7 +28,10 @@ mod test {
             }
         "#;
 
-        let p = GTriGParser::new(gtrig.as_ref(), "http://localhost/ex")?;
+        let p = GTriGParser::new(
+            gtrig.as_ref(),
+            Some(Iri::parse("http://localhost/ex".to_owned())?),
+        );
 
         let d: Vec<([TestTerm<String>; 3], Option<TestTerm<String>>)> = p.collect_quads()?;
         assert_eq!(d.len(), 3);

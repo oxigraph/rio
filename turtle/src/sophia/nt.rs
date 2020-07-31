@@ -1,40 +1,8 @@
-//! [Sophia] adapter for [N-Triples].
-//!
-//! Example: count the number of of people using the `Sophia` API:
-//! ```
-//! use rio_api::model::NamedNode;
-//! use rio_turtle::NTriplesParser;
-//! use sophia_api::triple::{Triple, stream::TripleSource};
-//! use sophia_api::term::term_eq;
-//! use sophia_api::ns::rdf;
-//!
-//! let file = b"
-//! <http://example.com/foo> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://schema.org/Person>.
-//! <http://example.com/foo> <http://schema.org/name>  \"Foo\".
-//! <http://example.com/bar> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://schema.org/Person> .
-//! <http://example.com/bar> <http://schema.org/name>  \"Bar\".
-//! ";
-//!
-//! let schema_person = NamedNode { iri: "http://schema.org/Person" };
-//! let mut count = 0;
-//! NTriplesParser::new(file.as_ref())
-//!     .unwrap()
-//!     .filter_triples(|t| term_eq(t.p(), &rdf::type_) && term_eq(t.o(), &schema_person))
-//!     .for_each_triple(|_| { count += 1; })
-//!     .unwrap();
-//! assert_eq!(2, count)
-//! ```
-//!
-//! [Sophia]: https://crates.io/crates/sophia
-//! [N-Triples]: https://www.w3.org/TR/n-triples/
+//! Sophia adapter for N-Triples.
 
 use crate::NTriplesParser;
 
 impl_triple_source!(NTriplesParser);
-
-// ---------------------------------------------------------------------------------
-//                                      tests
-// ---------------------------------------------------------------------------------
 
 #[cfg(test)]
 mod test {
@@ -54,7 +22,7 @@ mod test {
             _:b1 <http://example.org/ns/name> "Alice".
         "#;
 
-        let p = NTriplesParser::new(ntriples.as_ref())?;
+        let p = NTriplesParser::new(ntriples.as_ref());
 
         let g: Vec<[TestTerm<String>; 3]> = p.collect_triples()?;
         assert_eq!(g.len(), 3);

@@ -35,6 +35,8 @@
 //! let _xml = formatter.finish()?;
 //! # std::io::Result::Ok(())
 //! ```
+//!
+//! [Sophia](https://crates.io/crates/sophia_api) adapters for Rio parsers are provided if the `sophia` feature is enabled.
 #![deny(
     future_incompatible,
     nonstandard_style,
@@ -57,5 +59,5 @@ pub use error::RdfXmlError;
 pub use formatter::RdfXmlFormatter;
 pub use parser::RdfXmlParser;
 
-#[cfg(feature = "sophia")]
+#[cfg(feature = "sophia_api")]
 mod sophia;

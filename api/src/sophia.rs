@@ -10,10 +10,12 @@ impl<'a> TTerm for NamedNode<'a> {
     fn kind(&self) -> TermKind {
         TermKind::Iri
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         self.iri.into()
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -32,10 +34,12 @@ impl<'a> TTerm for BlankNode<'a> {
     fn kind(&self) -> TermKind {
         TermKind::BlankNode
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         self.id.into()
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -56,21 +60,25 @@ impl<'a> TTerm for Literal<'a> {
         }
         .into()
     }
+
     #[inline]
     fn datatype(&self) -> Option<SimpleIri<'_>> {
         match self {
             Literal::Simple { .. } => Some(xsd::string),
+            Literal::LanguageTaggedString { .. } => Some(rdf::langString),
             Literal::Typed { datatype, .. } => Some(datatype.into()),
-            _ => Some(rdf::langString),
         }
     }
+
     #[inline]
     fn language(&self) -> Option<&str> {
-        match self {
-            Literal::LanguageTaggedString { language, .. } => Some(language),
-            _ => None,
+        if let Literal::LanguageTaggedString { language, .. } = self {
+            Some(language)
+        } else {
+            None
         }
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -85,6 +93,7 @@ impl<'a> TTerm for NamedOrBlankNode<'a> {
             NamedOrBlankNode::BlankNode(_) => TermKind::BlankNode,
         }
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         match self {
@@ -92,6 +101,7 @@ impl<'a> TTerm for NamedOrBlankNode<'a> {
             NamedOrBlankNode::BlankNode(n) => n.value_raw(),
         }
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -107,6 +117,7 @@ impl<'a> TTerm for Term<'a> {
             Term::Literal(_) => TermKind::Literal,
         }
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         match self {
@@ -115,6 +126,7 @@ impl<'a> TTerm for Term<'a> {
             Term::Literal(l) => l.value_raw(),
         }
     }
+
     #[inline]
     fn datatype(&self) -> Option<SimpleIri<'_>> {
         match self {
@@ -122,6 +134,7 @@ impl<'a> TTerm for Term<'a> {
             _ => None,
         }
     }
+
     #[inline]
     fn language(&self) -> Option<&str> {
         match self {
@@ -129,6 +142,7 @@ impl<'a> TTerm for Term<'a> {
             _ => None,
         }
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -141,10 +155,12 @@ impl<'a> TTerm for Variable<'a> {
     fn kind(&self) -> TermKind {
         TermKind::Variable
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         self.name.into()
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -162,6 +178,7 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
             GeneralizedTerm::Variable(_) => TermKind::Variable,
         }
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         match self {
@@ -171,6 +188,7 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
             GeneralizedTerm::Variable(v) => v.value_raw(),
         }
     }
+
     #[inline]
     fn datatype(&self) -> Option<SimpleIri<'_>> {
         match self {
@@ -178,6 +196,7 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
             _ => None,
         }
     }
+
     #[inline]
     fn language(&self) -> Option<&str> {
         match self {
@@ -185,6 +204,7 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
             _ => None,
         }
     }
+
     #[inline]
     fn as_dyn(&self) -> &dyn TTerm {
         self
@@ -197,15 +217,19 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
 #[cfg(feature = "generalized")]
 impl<'a> SophiaQuad for GeneralizedQuad<'a> {
     type Term = GeneralizedTerm<'a>;
+
     fn s(&self) -> &Self::Term {
         &self.subject
     }
+
     fn p(&self) -> &Self::Term {
         &self.predicate
     }
+
     fn o(&self) -> &Self::Term {
         &self.object
     }
+
     fn g(&self) -> Option<&Self::Term> {
         self.graph_name.as_ref()
     }
