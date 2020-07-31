@@ -13,6 +13,11 @@
 		<#language_normalization_xml>
 	) .
 
+<#no_end_line_jump>
+	rdf:type rdft:TestNTriplesPositiveSyntax ;
+	mf:name "No line jump at the end of the file" ;
+	mf:action <no_end_line_jump.nt> .
+
 <#blank_node_with_linebreak>
 	rdf:type rdft:TestTurtleEval ;
 	mf:name "blank node with linebreak" ;

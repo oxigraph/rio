@@ -70,10 +70,11 @@ pub trait LookAheadByteRead {
 
     fn consume_line_end(&mut self) -> Result<(), TurtleError> {
         loop {
-            if let Some(b'\n') | None = self.current() {
-                return self.consume();
+            match self.current() {
+                None => return Ok(()),
+                Some(b'\n') => return self.consume(),
+                _ => self.consume()?,
             }
-            self.consume()?;
         }
     }
 }
