@@ -19,3 +19,17 @@ pub mod parser;
 
 #[cfg(feature = "generalized")]
 mod generalized;
+
+#[cfg(feature = "sophia")]
+/// [Sophia] adapters for Rio parsers.
+///
+/// This module is available if feature `sophia` is enabled.
+///
+/// It ensures that the types defined in [`model`]
+/// implement the appropriate trait from [Sophia].
+///
+/// [Sophia]: https://crates.io/crates/sophia
+/// [`model`]: ../model/index.html
+mod sophia {
+    mod model;
+}

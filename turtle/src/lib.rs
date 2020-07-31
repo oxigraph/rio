@@ -62,3 +62,11 @@ pub use turtle::TurtleParser;
 
 #[cfg(feature = "generalized")]
 pub use gtrig::GTriGParser;
+
+/// [Sophia] adapters for Rio parsers.
+///
+/// This module is available if feature `sophia` is enabled.
+///
+/// [Sophia]: https://crates.io/crates/sophia
+#[cfg(feature = "sophia")]
+mod sophia;

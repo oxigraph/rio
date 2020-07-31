@@ -11,6 +11,13 @@ Common data structures for RDF formats parsers and serializers
 """
 edition = "2018"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
 generalized = []
+sophia = ["sophia_api"]
+
+[dependencies]
+sophia_api = { version = "0.6.1", optional = true }
