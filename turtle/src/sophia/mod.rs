@@ -1,17 +1,16 @@
-//! Implementation of sophia TripleSource / QuadSource for rio parsers
+//! Utility macros and types for exposing Sophia's TripleSource / QuadSource.
 
 use sophia_api::quad::stream::*;
 use std::error::Error;
 
-#[macro_export]
 /// Implement Sophia's `TripleSource` for a Rio `TriplesParser`.
 macro_rules! impl_triple_source {
     ($parser:ident) => {
         mod as_sophia_triple_source {
             use super::*;
+            use crate::sophia::RioStreamError;
             use rio_api::model::Term;
             use rio_api::parser::TriplesParser;
-            use rio_api::sophia::RioStreamError;
             use sophia_api::triple::stream::*;
             use sophia_api::triple::streaming_mode::*;
             use std::error::Error;
@@ -51,15 +50,14 @@ macro_rules! impl_triple_source {
     };
 }
 
-#[macro_export]
 /// Implement Sophia's `QuadSource` for a Rio `QuadsParser`.
 macro_rules! impl_quad_source {
     ($parser:ident) => {
         mod as_sophia_quad_source {
             use super::*;
+            use crate::sophia::RioStreamError;
             use rio_api::model::Term;
             use rio_api::parser::QuadsParser;
-            use rio_api::sophia::RioStreamError;
             use sophia_api::quad::stream::*;
             use sophia_api::quad::streaming_mode::*;
             use std::error::Error;
@@ -99,15 +97,14 @@ macro_rules! impl_quad_source {
 }
 
 #[cfg(feature = "generalized")]
-#[macro_export]
 /// Implement Sophia's `QuadSource` for a Rio `GeneralizedQuadsParser`.
 macro_rules! impl_quad_source_generalized {
     ($parser:ident) => {
         mod as_sophia_quad_source {
             use super::*;
-            use rio_api::model::{GeneralizedQuad, Term};
+            use crate::sophia::RioStreamError;
+            use rio_api::model::GeneralizedQuad;
             use rio_api::parser::GeneralizedQuadsParser;
-            use rio_api::sophia::RioStreamError;
             use sophia_api::quad::stream::*;
             use sophia_api::quad::streaming_mode::*;
             use std::error::Error;
@@ -143,7 +140,7 @@ macro_rules! impl_quad_source_generalized {
 // A wrapper around Sophia's `StreamError`
 // fullfilling Rio's expectation that the error type of `triple_handler`/`quad_handler`
 // implement From<TurtleError> (or whatever Rio-specific error returned by the parser).
-pub struct RioStreamError<E1, E2>(StreamError<E1, E2>)
+struct RioStreamError<E1, E2>(StreamError<E1, E2>)
 where
     E1: Error + 'static,
     E2: Error + 'static;
@@ -180,3 +177,10 @@ where
         other.0
     }
 }
+
+#[cfg(feature = "generalized")]
+mod gtrig;
+mod nq;
+mod nt;
+mod trig;
+mod turtle;

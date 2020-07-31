@@ -30,7 +30,7 @@
 
 use crate::NTriplesParser;
 
-rio_api::impl_triple_source!(NTriplesParser);
+impl_triple_source!(NTriplesParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests

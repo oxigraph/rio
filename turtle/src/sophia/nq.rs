@@ -32,7 +32,7 @@
 
 use crate::NQuadsParser;
 
-rio_api::impl_quad_source!(NQuadsParser);
+impl_quad_source!(NQuadsParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests

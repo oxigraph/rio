@@ -35,7 +35,7 @@
 
 use crate::GTriGParser;
 
-rio_api::impl_quad_source_generalized!(GTriGParser);
+impl_quad_source_generalized!(GTriGParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests

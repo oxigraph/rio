@@ -32,7 +32,7 @@
 
 use crate::TriGParser;
 
-rio_api::impl_quad_source!(TriGParser);
+impl_quad_source!(TriGParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests

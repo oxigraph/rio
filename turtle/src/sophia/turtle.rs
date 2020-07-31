@@ -41,7 +41,7 @@ impl WithLocation for TurtleError {
     }
 }
 
-rio_api::impl_triple_source!(TurtleParser);
+impl_triple_source!(TurtleParser);
 
 // ---------------------------------------------------------------------------------
 //                                      tests

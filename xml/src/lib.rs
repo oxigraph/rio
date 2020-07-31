@@ -53,4 +53,4 @@ pub use formatter::RdfXmlFormatter;
 pub use parser::RdfXmlParser;
 
 #[cfg(feature = "sophia")]
-pub mod sophia;
+mod sophia;

@@ -66,11 +66,4 @@ pub use gtrig::GTriGParser;
 ///
 /// [Sophia]: https://crates.io/crates/sophia
 #[cfg(feature = "sophia")]
-mod sophia {
-    #[cfg(feature = "generalized")]
-    mod gtrig;
-    mod nq;
-    mod nt;
-    mod trig;
-    mod turtle;
-}
+mod sophia;

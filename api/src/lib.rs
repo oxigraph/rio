@@ -27,13 +27,8 @@ mod generalized;
 /// It ensures that the types defined in [`model`]
 /// implement the appropriate trait from [Sophia].
 ///
-/// It also provides building blocks to expose Rio parsers
-/// as Sophia parsers.
-///
 /// [Sophia]: https://crates.io/crates/sophia
 /// [`model`]: ../model/index.html
-pub mod sophia {
+mod sophia {
     mod model;
-    mod parser;
-    pub use parser::*;
 }
