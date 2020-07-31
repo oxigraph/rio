@@ -165,7 +165,7 @@ enum RdfXmlState {
         base_iri: Option<Iri<String>>,
         language: Option<LanguageTag<String>>,
         subject: OwnedNamedOrBlankNode,
-        li_counter: usize,
+        li_counter: u64,
     },
     PropertyElt {
         //Resource, Literal or Empty property element
@@ -1004,7 +1004,7 @@ fn is_name(name: &str) -> bool {
 #[derive(Default)]
 pub struct BlankNodeIdGenerator {
     //TODO: avoid collisions
-    counter: usize,
+    counter: u64,
 }
 
 impl BlankNodeIdGenerator {
@@ -1013,12 +1013,12 @@ impl BlankNodeIdGenerator {
             b'r', b'i', b'o', b'g', b'0', b'0', b'0', b'0', b'0', b'0', b'0', b'0',
         ];
         self.counter += 1;
-        write_usize_to_slice(self.counter, &mut id[4..]);
+        write_u64_to_slice(self.counter, &mut id[4..]);
         BlankNodeId { id }
     }
 }
 
-fn write_usize_to_slice(mut v: usize, s: &mut [u8]) {
+fn write_u64_to_slice(mut v: u64, s: &mut [u8]) {
     for i in (0..s.len()).rev() {
         s[i] = b'0' + (v % 10) as u8;
         v /= 10;

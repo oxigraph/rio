@@ -181,13 +181,13 @@ pub trait ParseError: Error {
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub struct LineBytePosition {
-    line_number: usize,
-    byte_number: usize,
+    line_number: u64,
+    byte_number: u64,
 }
 
 impl LineBytePosition {
     /// Creates a new position where `line_number` and `byte_number` are both starting from 1
-    pub fn new(line_number: usize, byte_number: usize) -> Self {
+    pub fn new(line_number: u64, byte_number: u64) -> Self {
         Self {
             line_number,
             byte_number,
@@ -195,12 +195,12 @@ impl LineBytePosition {
     }
 
     /// The line number where the error occurred starting from 0
-    pub fn line_number(&self) -> usize {
+    pub fn line_number(&self) -> u64 {
         self.line_number
     }
 
     /// The byte number where the error occurred starting from 0
-    pub fn byte_number(&self) -> usize {
+    pub fn byte_number(&self) -> u64 {
         self.byte_number
     }
 }
