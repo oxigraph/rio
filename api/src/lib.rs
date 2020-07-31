@@ -11,6 +11,7 @@
     unsafe_code,
     unused_qualifications
 )]
+#![doc(test(attr(deny(warnings))))]
 
 pub mod formatter;
 pub mod model;

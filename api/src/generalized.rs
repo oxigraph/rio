@@ -46,7 +46,7 @@ pub mod model {
     /// * [literals](https://www.w3.org/TR/rdf11-concepts/#dfn-literal) and
     /// * [variable](https://www.w3.org/TR/sparql11-query/#QSynVariables).
     ///
-    /// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+    /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
     ///
     /// Using it requires to enable the `generalized` feature.
     #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
@@ -106,13 +106,13 @@ pub mod model {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(inner),
                 GeneralizedTerm::BlankNode(_) => Err(StrictRdfError {
-                    message: "Blank node can not be used as predicate",
+                    message: "Blank node cannot be used as predicate",
                 }),
                 GeneralizedTerm::Literal(_) => Err(StrictRdfError {
-                    message: "Literal can not be used as predicate",
+                    message: "Literal cannot be used as predicate",
                 }),
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
-                    message: "Variable can not be converted to Term",
+                    message: "Variable cannot be converted to Term",
                 }),
             }
         }
@@ -125,10 +125,10 @@ pub mod model {
                 GeneralizedTerm::NamedNode(inner) => Ok(NamedOrBlankNode::NamedNode(inner)),
                 GeneralizedTerm::BlankNode(inner) => Ok(NamedOrBlankNode::BlankNode(inner)),
                 GeneralizedTerm::Literal(_) => Err(StrictRdfError {
-                    message: "Literal can not be used a subject",
+                    message: "Literal cannot be used a subject",
                 }),
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
-                    message: "Variable can not be converted to Term",
+                    message: "Variable cannot be converted to Term",
                 }),
             }
         }
@@ -142,7 +142,7 @@ pub mod model {
                 GeneralizedTerm::BlankNode(inner) => Ok(Term::BlankNode(inner)),
                 GeneralizedTerm::Literal(inner) => Ok(Term::Literal(inner)),
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
-                    message: "Variable can not be converted to Term",
+                    message: "Variable cannot be converted to Term",
                 }),
             }
         }
@@ -231,7 +231,7 @@ pub mod model {
         fn try_from(other: GeneralizedQuad<'a>) -> Result<Triple<'a>, StrictRdfError> {
             match other.graph_name {
                 Some(_) => Err(StrictRdfError {
-                    message: "Quad in named graph can not be converted to Triple",
+                    message: "Quad in named graph cannot be converted to Triple",
                 }),
                 None => Ok(Triple {
                     subject: other.subject.try_into()?,
@@ -257,7 +257,7 @@ pub mod model {
 
     //
 
-    /// An error raised when generalized RDF can not be converted to strict RDF.
+    /// An error raised when generalized RDF cannot be converted to strict RDF.
     #[derive(Debug, Clone, Copy)]
     pub struct StrictRdfError {
         message: &'static str,
@@ -285,7 +285,7 @@ pub mod parser {
 
         /// Parses the complete file and calls `on_quad` each time a new quad is read.
         ///
-        /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
+        /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
         fn parse_all<E: From<Self::Error>>(
             &mut self,
             on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
@@ -301,7 +301,7 @@ pub mod parser {
         ///
         /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
         ///
-        /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
+        /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
         fn parse_step<E: From<Self::Error>>(
             &mut self,
             on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,

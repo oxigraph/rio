@@ -39,7 +39,7 @@ pub trait LookAheadByteRead {
     /// Returns if the current buffer starts with a given byte string. Does not work cross line boundaries
     fn starts_with(&mut self, prefix: &[u8]) -> bool;
 
-    /// Returns if the current buffer starts with a given byte string in a ASCII case insensitive manner.
+    /// Returns if the current buffer starts with a given byte string in an ASCII case insensitive manner.
     /// Does not work cross line boundaries
     fn starts_with_ignore_ascii_case(&mut self, prefix: &[u8]) -> bool;
 
@@ -79,7 +79,7 @@ pub trait LookAheadByteRead {
     }
 }
 
-/// Reads the file in a streaming way
+/// Reads the file in streaming
 pub struct LookAheadByteReader<R: Read> {
     inner: R,
     buffer: VecDeque<u8>,

@@ -11,12 +11,13 @@
 //!
 //! let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 //! let mut count = 0;
-//! RdfXmlParser::new(BufReader::new(File::open("foo.rdf").unwrap()), Some(Iri::parse("file:foo.rdf".to_owned())).parse_all(&mut |t| {
+//! RdfXmlParser::new(BufReader::new(File::open("foo.rdf")?), Some(Iri::parse("file:foo.rdf".to_owned()).unwrap())).parse_all(&mut |t| {
 //!     if t.predicate == rdf_type {
 //!         count += 1;
 //!     }
 //!     Ok(()) as Result<(), RdfXmlError>
-//! }).unwrap();
+//! })?;
+//! # Result::<_,RdfXmlError>::Ok(())
 //! ```
 //!
 //! Write some triples in RDF XML into a `Vec` buffer:
@@ -25,13 +26,14 @@
 //! use rio_api::formatter::TriplesFormatter;
 //! use rio_api::model::{NamedNode, Triple};
 //!
-//! let mut formatter = RdfXmlFormatter::new(Vec::default()).unwrap();
+//! let mut formatter = RdfXmlFormatter::new(Vec::default())?;
 //! formatter.format(&Triple {
 //!     subject: NamedNode { iri: "http://example.com/foo" }.into(),
 //!     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 //!     object: NamedNode { iri: "http://schema.org/Person" }.into()
-//! }).unwrap();
-//! let xml = formatter.finish().unwrap();
+//! })?;
+//! let _xml = formatter.finish()?;
+//! # std::io::Result::Ok(())
 //! ```
 #![deny(
     future_incompatible,
@@ -43,6 +45,7 @@
     unsafe_code,
     unused_qualifications
 )]
+#![doc(test(attr(deny(warnings))))]
 
 mod error;
 mod formatter;

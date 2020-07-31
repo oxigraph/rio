@@ -95,7 +95,7 @@ pub trait QuadsParser: Sized {
 
     /// Parses the complete file and calls `on_quad` each time a new quad is read.
     ///
-    /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
+    /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
     fn parse_all<E: From<Self::Error>>(
         &mut self,
         on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
@@ -111,7 +111,7 @@ pub trait QuadsParser: Sized {
     ///
     /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
     ///
-    /// May fail on errors caused by the parser itself or by the callback function ``on_quad``.
+    /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
     fn parse_step<E: From<Self::Error>>(
         &mut self,
         on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,

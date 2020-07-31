@@ -17,13 +17,14 @@ use std::io::Write;
 /// use rio_api::formatter::TriplesFormatter;
 /// use rio_api::model::{NamedNode, Triple};
 ///
-/// let mut formatter = RdfXmlFormatter::new(Vec::default()).unwrap();
+/// let mut formatter = RdfXmlFormatter::new(Vec::default())?;
 /// formatter.format(&Triple {
 ///     subject: NamedNode { iri: "http://example.com/foo" }.into(),
 ///     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into()
-/// }).unwrap();
-/// let xml = formatter.finish().unwrap();
+/// })?;
+/// let _xml = formatter.finish()?;
+/// # std::io::Result::Ok(())
 /// ```
 pub struct RdfXmlFormatter<W: Write> {
     writer: Writer<W>,
@@ -48,7 +49,7 @@ impl<W: Write> RdfXmlFormatter<W> {
         })
     }
 
-    /// Finishes to write and returns the underlying `Write`
+    /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
         if self.current_subject.is_some() {
             self.writer

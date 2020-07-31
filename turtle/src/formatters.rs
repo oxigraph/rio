@@ -18,8 +18,9 @@ use std::io::Write;
 ///     subject: NamedNode { iri: "http://example.com/foo" }.into(),
 ///     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into()
-/// }).unwrap();
-/// let ntriples = formatter.finish();
+/// })?;
+/// let _ntriples = formatter.finish();
+/// # std::io::Result::Ok(())
 /// ```
 pub struct NTriplesFormatter<W: Write> {
     write: W,
@@ -31,7 +32,7 @@ impl<W: Write> NTriplesFormatter<W> {
         Self { write }
     }
 
-    /// Finishes to write and returns the underlying `Write`
+    /// Finishes writing and returns the underlying `Write`
     pub fn finish(self) -> W {
         self.write
     }
@@ -53,7 +54,7 @@ impl<W: Write> TriplesFormatter for NTriplesFormatter<W> {
 /// ```
 /// use rio_turtle::NQuadsFormatter;
 /// use rio_api::formatter::QuadsFormatter;
-/// use rio_api::model::{NamedNode, Triple, Quad};
+/// use rio_api::model::{NamedNode, Quad};
 ///
 /// let mut formatter = NQuadsFormatter::new(Vec::default());
 /// formatter.format(&Quad {
@@ -61,8 +62,9 @@ impl<W: Write> TriplesFormatter for NTriplesFormatter<W> {
 ///     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into(),
 ///     graph_name: Some(NamedNode { iri: "http://example.com/" }.into())
-/// }).unwrap();
-/// let nquads = formatter.finish();
+/// })?;
+/// let _nquads = formatter.finish();
+/// # std::io::Result::Ok(())
 /// ```
 pub struct NQuadsFormatter<W: Write> {
     write: W,
@@ -74,7 +76,7 @@ impl<W: Write> NQuadsFormatter<W> {
         Self { write }
     }
 
-    /// Finishes to write and returns the underlying `Write`
+    /// Finishes writing and returns the underlying `Write`
     pub fn finish(self) -> W {
         self.write
     }
@@ -103,8 +105,9 @@ impl<W: Write> QuadsFormatter for NQuadsFormatter<W> {
 ///     subject: NamedNode { iri: "http://example.com/foo" }.into(),
 ///     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into()
-/// }).unwrap();
-/// let turtle = formatter.finish().unwrap();
+/// })?;
+/// let _turtle = formatter.finish()?;
+/// # std::io::Result::Ok(())
 /// ```
 pub struct TurtleFormatter<W: Write> {
     write: W,
@@ -124,7 +127,7 @@ impl<W: Write> TurtleFormatter<W> {
         }
     }
 
-    /// Finishes to write and returns the underlying `Write`
+    /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
         if self.current_subject_type.is_some() {
             writeln!(self.write, " .")?;
@@ -186,7 +189,7 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
 /// ```
 /// use rio_turtle::TriGFormatter;
 /// use rio_api::formatter::QuadsFormatter;
-/// use rio_api::model::{NamedNode, Triple, Quad};
+/// use rio_api::model::{NamedNode, Quad};
 ///
 /// let mut formatter = TriGFormatter::new(Vec::default());
 /// formatter.format(&Quad {
@@ -194,8 +197,9 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
 ///     predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" }.into(),
 ///     object: NamedNode { iri: "http://schema.org/Person" }.into(),
 ///     graph_name: Some(NamedNode { iri: "http://example.com/" }.into())
-/// }).unwrap();
-/// let trig = formatter.finish().unwrap();
+/// })?;
+/// let _trig = formatter.finish()?;
+/// # std::io::Result::Ok(())
 /// ```
 pub struct TriGFormatter<W: Write> {
     write: W,
@@ -219,7 +223,7 @@ impl<W: Write> TriGFormatter<W> {
         }
     }
 
-    /// Finishes to write and returns the underlying `Write`
+    /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
         if self.current_subject_type.is_some() {
             writeln!(self.write, " .")?;

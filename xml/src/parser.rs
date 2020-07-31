@@ -16,13 +16,14 @@ use std::collections::HashSet;
 /// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 ///
 /// It implements the `TriplesParser` trait.
-/// It reads the file in streaming. It does not keep data in memory except a stack for handling nested XML tags
-/// and a set of all seen `rdf:ID`s to detect duplicate ids and fail according to the specification.
+/// It reads the file in streaming.
+/// It does not keep data in memory except a stack for handling nested XML tags, and a set of all
+/// seen `rdf:ID`s to detect duplicate ids and fail according to the specification.
 ///
 /// Its performances are not optimized yet and hopefully could be significantly enhanced by reducing the
 /// number of allocations and copies done by the parser.
 ///
-/// Count the number of of people using the `TriplesParser` API without proper error management:
+/// Count the number of people using the `TriplesParser` API without proper error management:
 /// ```
 /// use rio_xml::{RdfXmlParser, RdfXmlError};
 /// use rio_api::parser::TriplesParser;
@@ -45,8 +46,9 @@ use std::collections::HashSet;
 ///         count += 1;
 ///     }
 ///     Ok(()) as Result<(), RdfXmlError>
-/// }).unwrap();
-/// assert_eq!(2, count)
+/// })?;
+/// assert_eq!(2, count);
+/// # Result::<_,RdfXmlError>::Ok(())
 /// ```
 pub struct RdfXmlParser<R: BufRead> {
     reader: RdfXmlReader<R>,
@@ -55,7 +57,7 @@ pub struct RdfXmlParser<R: BufRead> {
 }
 
 impl<R: BufRead> RdfXmlParser<R> {
-    /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
+    /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         let mut reader = Reader::from_reader(reader);
         reader.expand_empty_elements(true);

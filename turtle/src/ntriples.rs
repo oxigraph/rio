@@ -16,7 +16,7 @@ use std::io::BufRead;
 /// if a line significantly longer than the previous is encountered.
 ///
 ///
-/// Count the number of of people using the `TriplesParser` API:
+/// Count the number of people using the `TriplesParser` API:
 /// ```
 /// use rio_turtle::{NTriplesParser, TurtleError};
 /// use rio_api::parser::TriplesParser;
@@ -35,8 +35,9 @@ use std::io::BufRead;
 ///         count += 1;
 ///     }
 ///     Ok(()) as Result<(), TurtleError>
-/// }).unwrap();
-/// assert_eq!(2, count)
+/// })?;
+/// assert_eq!(2, count);
+/// # Result::<_,rio_turtle::TurtleError>::Ok(())
 /// ```
 pub struct NTriplesParser<R: BufRead> {
     read: LookAheadByteReader<R>,
@@ -103,7 +104,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 /// if a line significantly longer than the previous is encountered.
 ///
 ///
-/// Count the number of of people using the `QuadsParser` API:
+/// Count the number of people using the `QuadsParser` API:
 /// ```
 /// use rio_turtle::{NQuadsParser, TurtleError};
 /// use rio_api::parser::QuadsParser;
@@ -122,8 +123,9 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 ///         count += 1;
 ///     }
 ///     Ok(()) as Result<(), TurtleError>
-/// }).unwrap();
-/// assert_eq!(2, count)
+/// })?;
+/// assert_eq!(2, count);
+/// # Result::<_,rio_turtle::TurtleError>::Ok(())
 /// ```
 pub struct NQuadsParser<R: BufRead> {
     read: LookAheadByteReader<R>,

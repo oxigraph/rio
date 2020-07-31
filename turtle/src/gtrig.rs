@@ -17,7 +17,7 @@ use std::str;
 /// Using it requires to enable the `generalized` feature.
 ///
 ///
-/// Count the number of of people using the `QuadsParser` API:
+/// Count the number of people using the `QuadsParser` API:
 /// ```
 /// use rio_turtle::{GTriGParser, TurtleError};
 /// use rio_api::parser::GeneralizedQuadsParser;
@@ -34,13 +34,14 @@ use std::str;
 /// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
-/// GTriGParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
+/// GTriGParser::new(file.as_ref(), None).parse_all(&mut |t| {
 ///     if t.predicate == rdf_type.into() && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
 ///     Ok(()) as Result<(), TurtleError>
-/// }).unwrap();
-/// assert_eq!(2, count)
+/// })?;
+/// assert_eq!(2, count);
+/// # Result::<_,rio_turtle::TurtleError>::Ok(())
 /// ```
 pub struct GTriGParser<R: BufRead> {
     read: LookAheadByteReader<R>,
@@ -53,7 +54,7 @@ pub struct GTriGParser<R: BufRead> {
 }
 
 impl<R: BufRead> GTriGParser<R> {
-    /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
+    /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         Self {
             read: LookAheadByteReader::new(reader),
@@ -588,9 +589,9 @@ pub fn parse_generalized_iriref(
     }
 }
 
-pub(crate) fn parse_variable_name<'a>(
+pub(crate) fn parse_variable_name(
     read: &mut impl LookAheadByteRead,
-    buffer: &'a mut String,
+    buffer: &mut String,
 ) -> Result<(), TurtleError> {
     let c = read.required_current()?;
     if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9') {

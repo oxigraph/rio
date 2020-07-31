@@ -5,9 +5,9 @@ pub use crate::generalized::model::*;
 use std::fmt;
 use std::fmt::Write;
 
-/// A RDF [IRI](https://www.w3.org/TR/rdf11-concepts/#dfn-iri).
+/// An RDF [IRI](https://www.w3.org/TR/rdf11-concepts/#dfn-iri).
 ///
-/// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+/// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 ///
 /// ```
 /// use rio_api::model::NamedNode;
@@ -29,10 +29,10 @@ impl<'a> fmt::Display for NamedNode<'a> {
     }
 }
 
-/// A RDF [blank node](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node).
+/// An RDF [blank node](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node).
 ///
 ///
-/// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+/// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 ///
 /// ```
 /// use rio_api::model::BlankNode;
@@ -54,9 +54,9 @@ impl<'a> fmt::Display for BlankNode<'a> {
     }
 }
 
-/// A RDF [literal](https://www.w3.org/TR/rdf11-concepts/#dfn-literal).
+/// An RDF [literal](https://www.w3.org/TR/rdf11-concepts/#dfn-literal).
 ///
-/// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+/// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 ///
 /// The language tags should be lowercased  [as suggested by the RDF specification](https://www.w3.org/TR/rdf11-concepts/#dfn-language-tagged-string).
 ///
@@ -128,7 +128,7 @@ impl<'a> fmt::Display for Literal<'a> {
 
 /// The union of [IRIs](https://www.w3.org/TR/rdf11-concepts/#dfn-iri) and [blank nodes](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node).
 ///
-/// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+/// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum NamedOrBlankNode<'a> {
     NamedNode(NamedNode<'a>),
@@ -156,11 +156,11 @@ impl<'a> From<BlankNode<'a>> for NamedOrBlankNode<'a> {
     }
 }
 
-/// A RDF [term](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-term).
+/// An RDF [term](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-term).
 ///
 /// It is the union of [IRIs](https://www.w3.org/TR/rdf11-concepts/#dfn-iri), [blank nodes](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node) and [literals](https://www.w3.org/TR/rdf11-concepts/#dfn-literal).
 ///
-/// The default string formatter is returning a N-Triples, Turtle and SPARQL compatible representation.
+/// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
@@ -278,7 +278,7 @@ fn escape<'a>(s: &'a str) -> impl Iterator<Item = char> + 'a {
     s.chars().flat_map(EscapeRDF::new)
 }
 
-/// Customized version of EscapeDefault of the Rust standard library
+/// A customized version of EscapeDefault of the Rust standard library
 struct EscapeRDF {
     state: EscapeRdfState,
 }

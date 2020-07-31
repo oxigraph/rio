@@ -15,7 +15,7 @@ use std::str;
 /// It implements the `TriplesParser` trait.
 ///
 ///
-/// Count the number of of people using the `TriplesParser` API:
+/// Count the number of people using the `TriplesParser` API:
 /// ```
 /// use rio_turtle::{TurtleParser, TurtleError};
 /// use rio_api::parser::TriplesParser;
@@ -30,13 +30,14 @@ use std::str;
 /// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
-/// TurtleParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
+/// TurtleParser::new(file.as_ref(), None).parse_all(&mut |t| {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
 ///     Ok(()) as Result<(), TurtleError>
-/// }).unwrap();
-/// assert_eq!(2, count)
+/// })?;
+/// assert_eq!(2, count);
+/// # Result::<_,rio_turtle::TurtleError>::Ok(())
 /// ```
 pub struct TurtleParser<R: BufRead> {
     read: LookAheadByteReader<R>,
@@ -51,7 +52,7 @@ pub struct TurtleParser<R: BufRead> {
 }
 
 impl<R: BufRead> TurtleParser<R> {
-    /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
+    /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         Self {
             read: LookAheadByteReader::new(reader),
@@ -87,7 +88,7 @@ impl<R: BufRead> TriplesParser for TurtleParser<R> {
 /// It implements the `QuadsParser` trait.
 ///
 ///
-/// Count the number of of people using the `QuadsParser` API:
+/// Count the number of people using the `QuadsParser` API:
 /// ```
 /// use rio_turtle::{TriGParser, TurtleError};
 /// use rio_api::parser::QuadsParser;
@@ -104,13 +105,14 @@ impl<R: BufRead> TriplesParser for TurtleParser<R> {
 /// let rdf_type = NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" };
 /// let schema_person = NamedNode { iri: "http://schema.org/Person" };
 /// let mut count = 0;
-/// TriGParser::new(file.as_ref(), "").unwrap().parse_all(&mut |t| {
+/// TriGParser::new(file.as_ref(), None).parse_all(&mut |t| {
 ///     if t.predicate == rdf_type && t.object == schema_person.into() {
 ///         count += 1;
 ///     }
 ///     Ok(()) as Result<(), TurtleError>
-/// }).unwrap();
-/// assert_eq!(2, count)
+/// })?;
+/// assert_eq!(2, count);
+/// # Result::<_, TurtleError>::Ok(())
 /// ```
 pub struct TriGParser<R: BufRead> {
     inner: TurtleParser<R>,
@@ -118,7 +120,7 @@ pub struct TriGParser<R: BufRead> {
 }
 
 impl<R: BufRead> TriGParser<R> {
-    /// Builds the parser from a `BufRead` implementation and a base IRI for relative IRI resolution.
+    /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         Self {
             inner: TurtleParser::new(reader, base_iri),
