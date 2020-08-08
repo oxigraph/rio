@@ -11,7 +11,7 @@ pub trait TriplesParser: Sized {
 
     /// Parses the complete file and calls `on_triple` each time a new triple is read.
     ///
-    /// May fail on errors caused by the parser itself or by the callback function ``on_triple``.
+    /// May fail on errors caused by the parser itself or by the callback function `on_triple`.
     fn parse_all<E: From<Self::Error>>(
         &mut self,
         on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
@@ -27,7 +27,7 @@ pub trait TriplesParser: Sized {
     ///
     /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
     ///
-    /// It may fail on errors caused by the parser itself or by the callback function ``on_triple``.
+    /// It may fail on errors caused by the parser itself or by the callback function `on_triple`.
     fn parse_step<E: From<Self::Error>>(
         &mut self,
         on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
@@ -95,7 +95,7 @@ pub trait QuadsParser: Sized {
 
     /// Parses the complete file and calls `on_quad` each time a new quad is read.
     ///
-    /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
+    /// May fails on errors caused by the parser itself or by the callback function `on_quad`.
     fn parse_all<E: From<Self::Error>>(
         &mut self,
         on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
@@ -111,7 +111,7 @@ pub trait QuadsParser: Sized {
     ///
     /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
     ///
-    /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
+    /// May fails on errors caused by the parser itself or by the callback function `on_quad`.
     fn parse_step<E: From<Self::Error>>(
         &mut self,
         on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,

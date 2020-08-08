@@ -1,5 +1,5 @@
 //! This module contains extensions for generalized RDF.
-//! Its elements are re-exported by ``model`` and ``parser``, respectively.
+//! Its elements are re-exported by `model` and `parser`, respectively.
 
 /// Data structures for generalized [RDF 1.1 Concepts](https://www.w3.org/TR/rdf11-concepts/),
 /// allowing variables, and any kind of node in any Triple/Quad position.
@@ -285,7 +285,7 @@ pub mod parser {
 
         /// Parses the complete file and calls `on_quad` each time a new quad is read.
         ///
-        /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
+        /// May fails on errors caused by the parser itself or by the callback function `on_quad`.
         fn parse_all<E: From<Self::Error>>(
             &mut self,
             on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
@@ -301,7 +301,7 @@ pub mod parser {
         ///
         /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
         ///
-        /// May fails on errors caused by the parser itself or by the callback function ``on_quad``.
+        /// May fails on errors caused by the parser itself or by the callback function `on_quad`.
         fn parse_step<E: From<Self::Error>>(
             &mut self,
             on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
