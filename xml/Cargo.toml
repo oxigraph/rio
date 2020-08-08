@@ -1,6 +1,6 @@
 [package]
 name = "rio_xml"
-version = "0.4.2"
+version = "0.5.0"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
@@ -21,7 +21,7 @@ sophia = ["rio_api/sophia", "sophia_api"]
 [dependencies]
 oxilangtag = "0.1"
 oxiri = "0.1"
-rio_api = "0.4"
+rio_api = "0.5"
 quick-xml = "0.18"
 sophia_api = { version = "0.6.1", optional = true }
 

@@ -1,7 +1,20 @@
 # Changelog
 
-## Master
-- Removes `language_tag` and `iri` from `rio_api`. These modules are now the crates [`oxiri`](https://github.com/oxigraph/oxiri) and [`oxilangtag`](https://github.com/oxigraph/oxilangtag).
+## [0.5.0] - 2020-08-08
+
+### Added
+- Model structures and parsers now implement [Sophia](https://crates.io/crates/sophia_api) traits. This is disabled by default and hidden behind the `sophia` feature.
+- `Into<std::io::Error>` is now implemented by `TurtleError` and `RdfXmlError` for easy conversions.
+
+### Removed
+- Removes `language_tag` and `iri` from `rio_api`. These modules are now the crates [`oxiri`](https://crates.io/crates/oxiri) and [`oxilangtag`](https://crates.io/crates/oxilangtag).
+
+### Changed
+- `base_iri` parameter of parser constructors is now taking values of type `Option<Iri<String>>` instead of `&str`.
+- Parser constructors are now returning `Self` and not `Result<Self>`.
+- RDF/XML serializers now use `std::io::Error` error type instead of `rio_xml::RdfXmlError` because only I/O related errors might be returned.
+- RDF/XML serializer now tries to extract predicate prefixes.
+- Use `u64` instead of `usize` to report file positions in order to support parsing big files on 32 bits systems.
 
 ## [0.4.2] - 2020-04-04
 - Normalizes all language tags to lowercase in the `rio_turtle` and `rio_xml` crates.
