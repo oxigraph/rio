@@ -12,9 +12,9 @@ edition = "2018"
 publish = false
 
 [dependencies]
-rio_api = "0.5"
-rio_turtle = "0.5"
-rio_xml = "0.5"
+rio_api = { version = "0.5", path="../api" }
+rio_turtle = { version = "0.5", path="../turtle" }
+rio_xml = { version = "0.5", path="../xml" }
 chrono = "0.4"
 oxiri = "0.1"
 permutohedron = "0.2"
