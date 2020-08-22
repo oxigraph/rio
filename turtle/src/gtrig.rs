@@ -745,8 +745,6 @@ impl From<TermType> for OwnedTermKind {
     }
 }
 
-//
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -972,6 +970,7 @@ mod test {
                     value: n.name.to_string(),
                     extra: String::new(),
                 },
+                _ => unimplemented!(),
             }
         }
     }

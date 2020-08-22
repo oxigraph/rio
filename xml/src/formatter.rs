@@ -132,6 +132,12 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
                     Some(value)
                 }
             },
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "RDF* is not supported by RDF/XML",
+                ))
+            }
         };
         if let Some(content) = content {
             self.writer

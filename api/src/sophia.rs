@@ -116,6 +116,8 @@ impl<'a> TTerm for Term<'a> {
             Term::NamedNode(_) => TermKind::Iri,
             Term::BlankNode(_) => TermKind::BlankNode,
             Term::Literal(_) => TermKind::Literal,
+            #[cfg(feature = "star")]
+            Term::Triple(_) => panic!("Sophia does not support RDF* yet"),
         }
     }
 
@@ -125,6 +127,8 @@ impl<'a> TTerm for Term<'a> {
             Term::NamedNode(n) => n.value_raw(),
             Term::BlankNode(n) => n.value_raw(),
             Term::Literal(l) => l.value_raw(),
+            #[cfg(feature = "star")]
+            Term::Triple(_) => panic!("Sophia does not support RDF* yet"),
         }
     }
 
@@ -177,6 +181,8 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
             GeneralizedTerm::BlankNode(_) => TermKind::BlankNode,
             GeneralizedTerm::Literal(_) => TermKind::Literal,
             GeneralizedTerm::Variable(_) => TermKind::Variable,
+            #[cfg(feature = "star")]
+            GeneralizedTerm::Triple(_) => panic!("Sophia does not support RDF* yet"),
         }
     }
 
@@ -187,6 +193,8 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
             GeneralizedTerm::BlankNode(n) => n.value_raw(),
             GeneralizedTerm::Literal(l) => l.value_raw(),
             GeneralizedTerm::Variable(v) => v.value_raw(),
+            #[cfg(feature = "star")]
+            GeneralizedTerm::Triple(_) => panic!("Sophia does not support RDF* yet"),
         }
     }
 

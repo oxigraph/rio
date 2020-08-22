@@ -56,6 +56,8 @@ pub mod model {
         BlankNode(BlankNode<'a>),
         Literal(Literal<'a>),
         Variable(Variable<'a>),
+        #[cfg(feature = "star")]
+        Triple(&'a Triple<'a>),
     }
 
     impl<'a> From<NamedNode<'a>> for GeneralizedTerm<'a> {
@@ -103,6 +105,8 @@ pub mod model {
                 Term::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
                 Term::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
                 Term::Literal(inner) => GeneralizedTerm::Literal(inner),
+                #[cfg(feature = "star")]
+                Term::Triple(inner) => GeneralizedTerm::Triple(inner),
             }
         }
     }
@@ -123,6 +127,10 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
+                #[cfg(feature = "star")]
+                GeneralizedTerm::Triple(_) => Err(StrictRdfError {
+                    message: "Triple cannot be used as predicate",
+                }),
             }
         }
     }
@@ -141,6 +149,10 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
+                #[cfg(feature = "star")]
+                GeneralizedTerm::Triple(_) => Err(StrictRdfError {
+                    message: "Triple cannot be converted to Term",
+                }),
             }
         }
     }
@@ -157,6 +169,8 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
+                #[cfg(feature = "star")]
+                GeneralizedTerm::Triple(inner) => Ok(Term::Triple(inner)),
             }
         }
     }
@@ -169,6 +183,8 @@ pub mod model {
                 GeneralizedTerm::BlankNode(node) => node.fmt(f),
                 GeneralizedTerm::Literal(literal) => literal.fmt(f),
                 GeneralizedTerm::Variable(variable) => variable.fmt(f),
+                #[cfg(feature = "star")]
+                GeneralizedTerm::Triple(triple) => triple.fmt(f),
             }
         }
     }

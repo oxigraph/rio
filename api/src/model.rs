@@ -165,6 +165,8 @@ pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
     Literal(Literal<'a>),
+    #[cfg(feature = "star")]
+    Triple(&'a Triple<'a>),
 }
 
 impl<'a> fmt::Display for Term<'a> {
@@ -174,6 +176,8 @@ impl<'a> fmt::Display for Term<'a> {
             Term::NamedNode(node) => node.fmt(f),
             Term::BlankNode(node) => node.fmt(f),
             Term::Literal(literal) => literal.fmt(f),
+            #[cfg(feature = "star")]
+            Term::Triple(triple) => triple.fmt(f),
         }
     }
 }

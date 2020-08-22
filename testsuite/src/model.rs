@@ -173,6 +173,7 @@ impl From<Term<'_>> for OwnedTerm {
             Term::NamedNode(n) => OwnedTerm::NamedNode(n.into()),
             Term::BlankNode(n) => OwnedTerm::BlankNode(n.into()),
             Term::Literal(n) => OwnedTerm::Literal(n.into()),
+            Term::Triple(_) => unimplemented!(),
         }
     }
 }

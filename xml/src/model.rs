@@ -134,16 +134,6 @@ enum OwnedTerm {
     Literal(OwnedLiteral),
 }
 
-impl From<Term<'_>> for OwnedTerm {
-    fn from(t: Term<'_>) -> Self {
-        match t {
-            Term::NamedNode(n) => OwnedTerm::NamedNode(n.into()),
-            Term::BlankNode(n) => OwnedTerm::BlankNode(n.into()),
-            Term::Literal(n) => OwnedTerm::Literal(n.into()),
-        }
-    }
-}
-
 impl<'a> From<&'a OwnedTerm> for Term<'a> {
     fn from(t: &'a OwnedTerm) -> Self {
         match t {
