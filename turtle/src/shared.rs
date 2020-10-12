@@ -234,15 +234,12 @@ fn convert_hexa_byte(c: u8) -> Option<u8> {
 
 // [157s] 	PN_CHARS_BASE 	::= 	[A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
 pub fn is_possible_pn_chars_base_ascii(c: u8) -> bool {
-    match c {
-        b'A'..=b'Z' | b'a'..=b'z' => true,
-        _ => false,
-    }
+    matches!(c, b'A'..=b'Z' | b'a'..=b'z')
 }
 
 // [157s] 	PN_CHARS_BASE 	::= 	[A-Z] | [a-z] | [#x00C0-#x00D6] | [#x00D8-#x00F6] | [#x00F8-#x02FF] | [#x0370-#x037D] | [#x037F-#x1FFF] | [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] | [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
 pub fn is_possible_pn_chars_base_unicode(c: char) -> bool {
-    match c {
+    matches!(c,
         'A'..='Z'
         | 'a'..='z'
         | '\u{00C0}'..='\u{00D6}'
@@ -256,9 +253,7 @@ pub fn is_possible_pn_chars_base_unicode(c: char) -> bool {
         | '\u{3001}'..='\u{D7FF}'
         | '\u{F900}'..='\u{FDCF}'
         | '\u{FDF0}'..='\u{FFFD}'
-        | '\u{10000}'..='\u{EFFFF}' => true,
-        _ => false,
-    }
+        | '\u{10000}'..='\u{EFFFF}')
 }
 
 // [158s] 	PN_CHARS_U 	::= 	PN_CHARS_BASE | '_' | ':'
@@ -273,20 +268,14 @@ pub fn is_possible_pn_chars_u_unicode(c: char) -> bool {
 
 // [160s] 	PN_CHARS 	::= 	PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
 pub fn is_possible_pn_chars_ascii(c: u8) -> bool {
-    match c {
-        c if is_possible_pn_chars_u_ascii(c) => true,
-        b'-' | b'0'..=b'9' | 0x00B7 => true,
-        _ => false,
-    }
+    is_possible_pn_chars_u_ascii(c) || matches!(c, b'-' | b'0'..=b'9' | 0x00B7)
 }
 
 // [160s] 	PN_CHARS 	::= 	PN_CHARS_U | '-' | [0-9] | #x00B7 | [#x0300-#x036F] | [#x203F-#x2040]
 pub fn is_possible_pn_chars_unicode(c: char) -> bool {
-    match c {
-        c if is_possible_pn_chars_u_unicode(c) => true,
-        '-' | '0'..='9' | '\u{00B7}' | '\u{0300}'..='\u{036F}' | '\u{203F}'..='\u{2040}' => true,
-        _ => false,
-    }
+    is_possible_pn_chars_u_unicode(c)
+        || matches!(c, 
+        '-' | '0'..='9' | '\u{00B7}' | '\u{0300}'..='\u{036F}' | '\u{203F}'..='\u{2040}')
 }
 
 /// Algorithm from https://encoding.spec.whatwg.org/#utf-8-decoder
