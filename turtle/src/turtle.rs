@@ -705,8 +705,8 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn emit_triple<'a, R: BufRead, E: From<TurtleError>>(
-    parser: &'a TurtleParser<R>,
+fn emit_triple<R: BufRead, E: From<TurtleError>>(
+    parser: &TurtleParser<R>,
     object_type: TermType,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {

@@ -276,7 +276,7 @@ impl<'a> fmt::Display for Quad<'a> {
     }
 }
 
-fn escape<'a>(s: &'a str) -> impl Iterator<Item = char> + 'a {
+fn escape(s: &str) -> impl Iterator<Item = char> + '_ {
     s.chars().flat_map(EscapeRDF::new)
 }
 

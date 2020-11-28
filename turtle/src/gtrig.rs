@@ -594,7 +594,7 @@ pub(crate) fn parse_variable_name(
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     let c = read.required_current()?;
-    if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9') {
+    if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || (b'0'..=b'9').contains(&c)) {
         buffer.push(char::from(c))
     } else {
         let c = read_utf8_char(read)?;
@@ -609,7 +609,7 @@ pub(crate) fn parse_variable_name(
         read.consume()?;
         if let Some(c) = read.current() {
             if c <= MAX_ASCII
-                && (is_possible_pn_chars_u_ascii(c) || b'0' <= c && c <= b'9' || c == 0xb7)
+                && (is_possible_pn_chars_u_ascii(c) || (b'0'..=b'9').contains(&c) || c == 0xb7)
             {
                 buffer.push(char::from(c))
             } else {
