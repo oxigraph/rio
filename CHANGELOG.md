@@ -1,5 +1,13 @@
 # Changelog
 
+
+## [0.5.1] - 2021-01-01
+
+### Changed
+- Upgrades `quick_xml` dependency to 0.20
+- Improves code style
+
+
 ## [0.5.0] - 2020-08-08
 
 ### Added
