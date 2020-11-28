@@ -420,22 +420,24 @@ impl<R: BufRead> RdfXmlReader<R> {
         };
 
         let expected_production = match self.state.last() {
-    Some(RdfXmlState::Doc { .. }) => RdfXmlNextProduction::RDF,
-    Some(RdfXmlState::RDF { .. }) => RdfXmlNextProduction::NodeElt,
-    Some(RdfXmlState::NodeElt { subject, .. }) => RdfXmlNextProduction::PropertyElt {
-        subject: subject.clone(),
-    },
-    Some(RdfXmlState::PropertyElt { .. }) => RdfXmlNextProduction::NodeElt,
-    Some(RdfXmlState::ParseTypeCollectionPropertyElt { .. }) => {
-        RdfXmlNextProduction::NodeElt
-    }
-    Some(RdfXmlState::ParseTypeLiteralPropertyElt { .. }) => {
-        panic!("ParseTypeLiteralPropertyElt production children should never be considered as a RDF/XML content")
-    }
-    None => {
-        return Err(RdfXmlError::msg("No state in the stack: the XML is not balanced").into());
-    }
-};
+            Some(RdfXmlState::Doc { .. }) => RdfXmlNextProduction::RDF,
+            Some(RdfXmlState::RDF { .. }) => RdfXmlNextProduction::NodeElt,
+            Some(RdfXmlState::NodeElt { subject, .. }) => RdfXmlNextProduction::PropertyElt {
+                subject: subject.clone(),
+            },
+            Some(RdfXmlState::PropertyElt { .. }) => RdfXmlNextProduction::NodeElt,
+            Some(RdfXmlState::ParseTypeCollectionPropertyElt { .. }) => {
+                RdfXmlNextProduction::NodeElt
+            }
+            Some(RdfXmlState::ParseTypeLiteralPropertyElt { .. }) => {
+                panic!("ParseTypeLiteralPropertyElt production children should never be considered as a RDF/XML content")
+            }
+            None => {
+                return Err(
+                    RdfXmlError::msg("No state in the stack: the XML is not balanced").into(),
+                );
+            }
+        };
 
         let new_state = match expected_production {
             RdfXmlNextProduction::RDF => {

@@ -1,6 +1,6 @@
 //! Data structures for [RDF 1.1 Concepts](https://www.w3.org/TR/rdf11-concepts/) like IRI, literal or triples.
 //!
-//! If the `sophia` feature is enabled, the types defined in [`model`](model/index.html) implement the appropriate trait from [Sophia]( https://crates.io/crates/sophia_api).
+//! If the `sophia` feature is enabled, the types defined in [`model`](super::model) implement the appropriate trait from [Sophia]( https://crates.io/crates/sophia_api).
 
 #[cfg(feature = "generalized")]
 pub use crate::generalized::model::*;

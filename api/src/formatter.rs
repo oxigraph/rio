@@ -3,7 +3,7 @@
 use crate::model::{Quad, Triple};
 use std::error::Error;
 
-/// A formatter for [`Triple`](../model/struct.Triple.html).
+/// A formatter for [`Triple`](super::model::Triple).
 pub trait TriplesFormatter {
     type Error: Error;
 
@@ -11,7 +11,7 @@ pub trait TriplesFormatter {
     fn format(&mut self, triple: &Triple<'_>) -> Result<(), Self::Error>;
 }
 
-/// A formatter for [`Quad`](../model/struct.Quad.html).
+/// A formatter for [`Quad`](super::model::Quad).
 pub trait QuadsFormatter {
     type Error: Error;
 

@@ -277,7 +277,7 @@ pub mod parser {
     use super::model::GeneralizedQuad;
     use std::error::Error;
 
-    /// A parser returning generalized [`Quad`](../model/struct.Quad.html).
+    /// A parser returning generalized [`Quad`](super::model::Quad).
     ///
     /// Using it requires to enable the `generalized` feature.
     pub trait GeneralizedQuadsParser {
@@ -299,7 +299,7 @@ pub mod parser {
         /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
         /// (A "small chunk" could be a line for an N-Quads parser.)
         ///
-        /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+        /// This method should be called as long as [`is_end`](GeneralizedQuadsParser::is_end) returns false.
         ///
         /// May fails on errors caused by the parser itself or by the callback function `on_quad`.
         fn parse_step<E: From<Self::Error>>(
@@ -312,7 +312,7 @@ pub mod parser {
 
         /// Converts the parser into a `Result<T, E>` iterator.
         ///
-        /// `convert_quad` is a function converting Rio [`GeneralizedQuad`](../gmodel/struct.GeneralizedQuad.html)s to `T`.
+        /// `convert_quad` is a function converting Rio [`GeneralizedQuad`]s to `T`.
         fn into_iter<T, E, F>(
             self,
             convert_quad: F,
@@ -330,7 +330,7 @@ pub mod parser {
         }
     }
 
-    /// Created with the method [`into_iter`](trait.GeneralizedQuadsParser.html#method.into_iter).
+    /// Created with the method [`into_iter`](GeneralizedQuadsParser::into_iter()).
     ///
     /// Using it requires to enable the `generalized` feature.
     pub struct GeneralizedQuadsParserIterator<

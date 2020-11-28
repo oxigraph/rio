@@ -5,7 +5,7 @@ pub use crate::generalized::parser::*;
 use crate::model::{Quad, Triple};
 use std::error::Error;
 
-/// A parser returning [`Triple`](../model/struct.Triple.html).
+/// A parser returning [`Triple`](super::model::Triple).
 pub trait TriplesParser: Sized {
     type Error: Error;
 
@@ -25,7 +25,7 @@ pub trait TriplesParser: Sized {
     /// Parses a small chunk of the file and calls `on_triple` each time a new triple is read.
     /// (A "small chunk" could be a line for an N-Triples parser.)
     ///
-    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+    /// This method should be called as long as [`is_end`](TriplesParser::is_end) returns false.
     ///
     /// It may fail on errors caused by the parser itself or by the callback function `on_triple`.
     fn parse_step<E: From<Self::Error>>(
@@ -38,7 +38,7 @@ pub trait TriplesParser: Sized {
 
     /// Converts the parser into a `Result<T, E>` iterator.
     ///
-    /// `convert_triple` is a function converting Rio [`Triple`](../model/struct.Triple.html) to `T`.
+    /// `convert_triple` is a function converting Rio [`Triple`](super::model::Triple) to `T`.
     fn into_iter<T, E: From<Self::Error>, F: FnMut(Triple<'_>) -> Result<T, E>>(
         self,
         convert_triple: F,
@@ -51,7 +51,7 @@ pub trait TriplesParser: Sized {
     }
 }
 
-/// Created with the method [`into_iter`](trait.TriplesParser.html#method.into_iter).
+/// Created with the method [`into_iter`](TriplesParser::into_iter()).
 pub struct TriplesParserIterator<
     T,
     E: From<P::Error>,
@@ -89,7 +89,7 @@ impl<T, E: From<P::Error>, F: FnMut(Triple<'_>) -> Result<T, E>, P: TriplesParse
     }
 }
 
-/// A parser returning [`Quad`](../model/struct.Quad.html).
+/// A parser returning [`Quad`](super::model::Quad).
 pub trait QuadsParser: Sized {
     type Error: Error;
 
@@ -109,7 +109,7 @@ pub trait QuadsParser: Sized {
     /// Parses a small chunk of the file and calls `on_quad` each time a new quad is read.
     /// (A "small chunk" could be a line for an N-Quads parser.)
     ///
-    /// This method should be called as long as [`is_end`](#tymethod.is_end) returns false.
+    /// This method should be called as long as [`is_end`](QuadsParser::is_end) returns false.
     ///
     /// May fails on errors caused by the parser itself or by the callback function `on_quad`.
     fn parse_step<E: From<Self::Error>>(
@@ -122,7 +122,7 @@ pub trait QuadsParser: Sized {
 
     /// Converts the parser into a `Result<T, E>` iterator.
     ///
-    /// `convert_triple` is a function converting Rio [`Triple`](../model/struct.Triple.html) to `T`.
+    /// `convert_triple` is a function converting Rio [`Triple`](super::model::Triple) to `T`.
     fn into_iter<T, E: From<Self::Error>, F: FnMut(Quad<'_>) -> Result<T, E>>(
         self,
         convert_quad: F,
@@ -135,7 +135,7 @@ pub trait QuadsParser: Sized {
     }
 }
 
-/// Created with the method [`into_iter`](trait.QuadsParser.html#method.into_iter).
+/// Created with the method [`into_iter`](QuadsParser::into_iter()).
 pub struct QuadsParserIterator<
     T,
     E: From<P::Error>,
