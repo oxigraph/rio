@@ -30,6 +30,9 @@
 		<#bad-char-in-uri>
 		<#bad-datatype>
 		<#bad-dot-after-subject>
+		<#bad-dot-in-collection>
+		<#bad-eof-after-quotes>
+		<#bad-eof-at-string-start>
 		<#bad-eof-in-blank>
 		<#bad-eof-in-escape>
 		<#bad-eof-in-lang-suffix>
@@ -38,11 +41,14 @@
 		<#bad-eof-in-object-list2>
 		<#bad-eof-in-object-list>
 		<#bad-eof-in-predicate-list>
+		<#bad-eof-in-long-string>
 		<#bad-eof-in-string>
 		<#bad-eof-in-triple-quote>
 		<#bad-eof-in-uri>
+		<#bad-eof-in-uri-scheme>
 		<#bad-escape>
 		<#bad-ext-namedblank-op>
+		<#bad-graph-blank-label>
 		<#bad-hex-digit>
 		# I do not understand why this file is bad <#bad-id-clash>
 		<#bad-lang>
@@ -54,10 +60,13 @@
 		<#bad-misspelled-prefix>
 		<#bad-namespace>
 		<#bad-ns>
+		<#bad-null-byte>
 		<#bad-num>
 		<#bad-object2>
 		<#bad-object>
+		<#bad-pn-escape>
 		<#bad-prefix>
+		<#bad-quote-in-uri>
 		<#bad-semicolon-after-subject>
 		<#bad-string>
 		<#bad-subject>
@@ -69,8 +78,6 @@
 		<#bad-uri-scheme.nt>
 		<#bad-uri-scheme-start.nt>
 		<#bad-uri-truncated.nt>
-		<#test-escapes>
-		<#test-escapes.nt>
 	) .
 
 <#bad-00>
@@ -188,6 +195,21 @@
 	mf:name "bad-dot-after-subject" ;
 	mf:action <bad-dot-after-subject.ttl> .
 
+<#bad-dot-in-collection>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-dot-in-collection" ;
+	mf:action <bad-dot-in-collection.ttl> .
+
+<#bad-eof-after-quotes>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-eof-after-quotes" ;
+	mf:action <bad-eof-after-quotes.ttl> .
+
+<#bad-eof-at-string-start>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-eof-at-string-start" ;
+	mf:action <bad-eof-at-string-start.ttl> .
+
 <#bad-eof-in-blank>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad-eof-in-blank" ;
@@ -228,6 +250,11 @@
 	mf:name "bad-eof-in-predicate-list" ;
 	mf:action <bad-eof-in-predicate-list.ttl> .
 
+<#bad-eof-in-long-string>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-eof-in-long-string" ;
+	mf:action <bad-eof-in-long-string.ttl> .
+
 <#bad-eof-in-string>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad-eof-in-string" ;
@@ -243,6 +270,11 @@
 	mf:name "bad-eof-in-uri" ;
 	mf:action <bad-eof-in-uri.ttl> .
 
+<#bad-eof-in-uri-scheme>
+	rdf:type rdft:TestNTriplesNegativeSyntax ;
+	mf:name "bad-eof-in-uri-scheme" ;
+	mf:action <bad-eof-in-uri-scheme.nt> .
+
 <#bad-escape>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad-escape" ;
@@ -252,6 +284,11 @@
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad-ext-namedblank-op" ;
 	mf:action <bad-ext-namedblank-op.ttl> .
+
+<#bad-graph-blank-label>
+	rdf:type rdft:TestTrigNegativeSyntax ;
+	mf:name "bad-graph-blank-label" ;
+	mf:action <bad-graph-blank-label.trig> .
 
 <#bad-hex-digit>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
@@ -308,6 +345,11 @@
 	mf:name "bad-ns" ;
 	mf:action <bad-ns.ttl> .
 
+<#bad-null-byte>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-null-byte" ;
+	mf:action <bad-null-byte.ttl> .
+
 <#bad-num>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad-num" ;
@@ -323,10 +365,20 @@
 	mf:name "bad-object" ;
 	mf:action <bad-object.ttl> .
 
+<#bad-pn-escape>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-pn-escape" ;
+	mf:action <bad-pn-escape.ttl> .
+
 <#bad-prefix>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad-prefix" ;
 	mf:action <bad-prefix.ttl> .
+
+<#bad-quote-in-uri>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "bad-quote-in-uri" ;
+	mf:action <bad-quote-in-uri.ttl> .
 
 <#bad-semicolon-after-subject>
 	rdf:type rdft:TestTurtleNegativeSyntax ;
@@ -383,12 +435,3 @@
 	mf:name "bad-uri-truncated" ;
 	mf:action <bad-uri-truncated.nt> .
 
-<#test-escapes>
-	rdf:type rdft:TestTurtleNegativeSyntax ;
-	mf:name "test-escapes" ;
-	mf:action <test-escapes.ttl> .
-
-<#test-escapes.nt>
-	rdf:type rdft:TestNTriplesNegativeSyntax ;
-	mf:name "test-escapes" ;
-	mf:action <test-escapes.ttl> .

@@ -16,7 +16,7 @@
 		<#test-30>
 		<#test-a-without-whitespace>
 		<#test-backspace>
-		# we prefer to raise an error <#test-bad-utf8>
+		<#test-base-nopath>
 		<#test-base-query>
 		<#test-blank-cont>
 		<#test-blank-in-list>
@@ -107,11 +107,11 @@
 	mf:action <test-backspace.ttl> ;
 	mf:result <test-backspace.nt> .
 
-<#test-bad-utf8>
+<#test-base-nopath>
 	rdf:type rdft:TestTurtleEval ;
-	mf:name "test-bad-utf8" ;
-	mf:action <test-bad-utf8.ttl> ;
-	mf:result <test-bad-utf8.nt> .
+	mf:name "test-base-nopath" ;
+	mf:action <test-base-nopath.ttl> ;
+	mf:result <test-base-nopath.nt> .
 
 <#test-base-query>
 	rdf:type rdft:TestTurtleEval ;
@@ -184,6 +184,12 @@
 	mf:name "test-eof-at-page-end" ;
 	mf:action <test-eof-at-page-end.ttl> ;
 	mf:result <test-eof-at-page-end.nt> .
+
+<#test-escapes>
+	rdf:type rdft:TestTurtleEval ;
+	mf:name "test-escapes" ;
+	mf:action <test-escapes.ttl> ;
+	mf:result <test-escapes.nt> .
 
 <#test-ext-namedblank-iri>
 	rdf:type rdft:TestTurtleEval ;
@@ -316,3 +322,4 @@
 	mf:name "UTF-8" ;
 	mf:action <UTF-8.ttl> ;
 	mf:result <UTF-8.nt> .
+

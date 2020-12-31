@@ -1,1 +1,1 @@
-Testsuite from [Serd](https://drobilla.net/software/serd) project. 
+Testsuite from [Serd](https://drobilla.net/software/serd) project.
