@@ -86,20 +86,47 @@ impl<'a> TTerm for Literal<'a> {
     }
 }
 
-impl<'a> TTerm for NamedOrBlankNode<'a> {
+impl<'a> TTerm for Subject<'a> {
     #[inline]
     fn kind(&self) -> TermKind {
         match self {
-            NamedOrBlankNode::NamedNode(_) => TermKind::Iri,
-            NamedOrBlankNode::BlankNode(_) => TermKind::BlankNode,
+            Subject::NamedNode(_) => TermKind::Iri,
+            Subject::BlankNode(_) => TermKind::BlankNode,
+            #[cfg(feature = "star")]
+            Subject::Triple(_) => panic!("Sophia does not support RDF* yet"),
         }
     }
 
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         match self {
-            NamedOrBlankNode::NamedNode(n) => n.value_raw(),
-            NamedOrBlankNode::BlankNode(n) => n.value_raw(),
+            Subject::NamedNode(n) => n.value_raw(),
+            Subject::BlankNode(n) => n.value_raw(),
+            #[cfg(feature = "star")]
+            Subject::Triple(_) => panic!("Sophia does not support RDF* yet"),
+        }
+    }
+
+    #[inline]
+    fn as_dyn(&self) -> &dyn TTerm {
+        self
+    }
+}
+
+impl<'a> TTerm for GraphName<'a> {
+    #[inline]
+    fn kind(&self) -> TermKind {
+        match self {
+            GraphName::NamedNode(_) => TermKind::Iri,
+            GraphName::BlankNode(_) => TermKind::BlankNode,
+        }
+    }
+
+    #[inline]
+    fn value_raw(&self) -> RawValue<'_> {
+        match self {
+            GraphName::NamedNode(n) => n.value_raw(),
+            GraphName::BlankNode(n) => n.value_raw(),
         }
     }
 

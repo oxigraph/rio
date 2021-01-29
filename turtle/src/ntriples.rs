@@ -201,7 +201,7 @@ fn parse_triple_line<'a>(
             skip_until_eol(read)?;
             return Ok(None);
         }
-        _ => parse_named_or_blank_node(read, subject_buf)?,
+        _ => parse_subject(read, subject_buf)?,
     };
     skip_whitespace(read)?;
 
@@ -242,7 +242,7 @@ fn parse_quad_line<'a>(
             skip_until_eol(read)?;
             return Ok(None);
         }
-        _ => parse_named_or_blank_node(read, subject_buf)?,
+        _ => parse_subject(read, subject_buf)?,
     };
     skip_whitespace(read)?;
 
@@ -253,7 +253,7 @@ fn parse_quad_line<'a>(
     skip_whitespace(read)?;
 
     let graph_name = match read.current() {
-        Some(b'<') | Some(b'_') => Some(parse_named_or_blank_node(read, graph_name_buf)?),
+        Some(b'<') | Some(b'_') => Some(parse_graph_name(read, graph_name_buf)?),
         _ => None,
     };
     skip_whitespace(read)?;
@@ -288,10 +288,21 @@ fn parse_term<'a>(
     }
 }
 
-fn parse_named_or_blank_node<'a>(
+fn parse_subject<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
-) -> Result<NamedOrBlankNode<'a>, TurtleError> {
+) -> Result<Subject<'a>, TurtleError> {
+    match read.required_current()? {
+        b'<' => Ok(parse_iriref(read, buffer)?.into()),
+        b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
+        _ => read.unexpected_char_error(),
+    }
+}
+
+fn parse_graph_name<'a>(
+    read: &mut impl LookAheadByteRead,
+    buffer: &'a mut String,
+) -> Result<GraphName<'a>, TurtleError> {
     match read.required_current()? {
         b'<' => Ok(parse_iriref(read, buffer)?.into()),
         b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),

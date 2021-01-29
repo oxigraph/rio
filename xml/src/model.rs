@@ -92,38 +92,42 @@ impl<'a> From<&'a OwnedLiteral> for Literal<'a> {
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
-pub enum OwnedNamedOrBlankNode {
+pub enum OwnedSubject {
     NamedNode(OwnedNamedNode),
     BlankNode(OwnedBlankNode),
 }
 
-impl From<NamedOrBlankNode<'_>> for OwnedNamedOrBlankNode {
-    fn from(t: NamedOrBlankNode<'_>) -> Self {
+impl std::convert::TryFrom<Subject<'_>> for OwnedSubject {
+    type Error = crate::RdfXmlError;
+    fn try_from(t: Subject<'_>) -> Result<Self, Self::Error> {
         match t {
-            NamedOrBlankNode::NamedNode(n) => OwnedNamedOrBlankNode::NamedNode(n.into()),
-            NamedOrBlankNode::BlankNode(n) => OwnedNamedOrBlankNode::BlankNode(n.into()),
+            Subject::NamedNode(n) => Ok(OwnedSubject::NamedNode(n.into())),
+            Subject::BlankNode(n) => Ok(OwnedSubject::BlankNode(n.into())),
+            _ => Err(crate::RdfXmlError::msg(
+                "RDF/XML only supports named or blank subject",
+            )),
         }
     }
 }
 
-impl<'a> From<&'a OwnedNamedOrBlankNode> for NamedOrBlankNode<'a> {
-    fn from(t: &'a OwnedNamedOrBlankNode) -> Self {
+impl<'a> From<&'a OwnedSubject> for Subject<'a> {
+    fn from(t: &'a OwnedSubject) -> Self {
         match t {
-            OwnedNamedOrBlankNode::NamedNode(n) => NamedOrBlankNode::NamedNode(n.into()),
-            OwnedNamedOrBlankNode::BlankNode(n) => NamedOrBlankNode::BlankNode(n.into()),
+            OwnedSubject::NamedNode(n) => Subject::NamedNode(n.into()),
+            OwnedSubject::BlankNode(n) => Subject::BlankNode(n.into()),
         }
     }
 }
 
-impl From<OwnedNamedNode> for OwnedNamedOrBlankNode {
+impl From<OwnedNamedNode> for OwnedSubject {
     fn from(node: OwnedNamedNode) -> Self {
-        OwnedNamedOrBlankNode::NamedNode(node)
+        OwnedSubject::NamedNode(node)
     }
 }
 
-impl From<OwnedBlankNode> for OwnedNamedOrBlankNode {
+impl From<OwnedBlankNode> for OwnedSubject {
     fn from(node: OwnedBlankNode) -> Self {
-        OwnedNamedOrBlankNode::BlankNode(node)
+        OwnedSubject::BlankNode(node)
     }
 }
 
@@ -162,11 +166,11 @@ impl From<OwnedLiteral> for OwnedTerm {
     }
 }
 
-impl From<OwnedNamedOrBlankNode> for OwnedTerm {
-    fn from(resource: OwnedNamedOrBlankNode) -> Self {
+impl From<OwnedSubject> for OwnedTerm {
+    fn from(resource: OwnedSubject) -> Self {
         match resource {
-            OwnedNamedOrBlankNode::NamedNode(node) => OwnedTerm::NamedNode(node),
-            OwnedNamedOrBlankNode::BlankNode(node) => OwnedTerm::BlankNode(node),
+            OwnedSubject::NamedNode(node) => OwnedTerm::NamedNode(node),
+            OwnedSubject::BlankNode(node) => OwnedTerm::BlankNode(node),
         }
     }
 }

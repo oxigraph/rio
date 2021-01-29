@@ -45,7 +45,7 @@ pub struct TurtleParser<R: BufRead> {
     namespaces: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
     subject_buf_stack: StringBufferStack,
-    subject_type_stack: Vec<NamedOrBlankNodeType>,
+    subject_type_stack: Vec<SubjectType>,
     predicate_buf_stack: StringBufferStack,
     object_annotation_buf: String, // datatype or language tag
     temp_buf: String,
@@ -302,7 +302,7 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
             .push()
             .push_str(&parser.graph_name_buf);
         parser.graph_name_buf.clear();
-        parser.inner.subject_type_stack.push(front_type);
+        parser.inner.subject_type_stack.push(front_type.into());
         parse_predicate_object_list(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))?;
         parser.inner.subject_type_stack.pop();
         parser.inner.subject_buf_stack.pop();
@@ -379,16 +379,17 @@ fn parse_label_or_subject(
     base_iri: &Option<Iri<String>>,
     namespaces: &HashMap<String, String>,
     bnode_id_generator: &mut BlankNodeIdGenerator,
-) -> Result<NamedOrBlankNodeType, TurtleError> {
+) -> Result<GraphNameType, TurtleError> {
     //[7g] 	labelOrSubject 	::= 	iri | BlankNode
+    // (split in two for the case of TriG*)
     Ok(match read.current() {
         Some(b'_') | Some(b'[') => {
             parse_blank_node(read, buffer, bnode_id_generator)?;
-            NamedOrBlankNodeType::BlankNode
+            GraphNameType::BlankNode
         }
         _ => {
             parse_iri(read, buffer, temp_buffer, base_iri, namespaces)?;
-            NamedOrBlankNodeType::NamedNode
+            GraphNameType::NamedNode
         }
     })
 }
@@ -591,9 +592,7 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
         Some(b'_') | Some(b'[') => {
-            parser
-                .subject_type_stack
-                .push(NamedOrBlankNodeType::BlankNode);
+            parser.subject_type_stack.push(SubjectType::BlankNode);
             parse_blank_node(
                 &mut parser.read,
                 parser.subject_buf_stack.push(),
@@ -602,9 +601,7 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
         }
         Some(b'(') => parse_collection(parser, on_triple)?,
         _ => {
-            parser
-                .subject_type_stack
-                .push(NamedOrBlankNodeType::NamedNode);
+            parser.subject_type_stack.push(SubjectType::NamedNode);
             parse_iri(
                 &mut parser.read,
                 parser.subject_buf_stack.push(),
@@ -764,9 +761,7 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
         .subject_buf_stack
         .push()
         .push_str(parser.bnode_id_generator.generate().as_ref());
-    parser
-        .subject_type_stack
-        .push(NamedOrBlankNodeType::BlankNode);
+    parser.subject_type_stack.push(SubjectType::BlankNode);
 
     loop {
         parse_predicate_object_list(parser, on_triple)?;
@@ -787,9 +782,7 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
 
-    parser
-        .subject_type_stack
-        .push(NamedOrBlankNodeType::BlankNode);
+    parser.subject_type_stack.push(SubjectType::BlankNode);
     parser.predicate_buf_stack.push().push_str(RDF_FIRST);
 
     let mut root: Option<BlankNodeId> = None;
@@ -816,9 +809,7 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
                 None => {
                     parser.subject_buf_stack.push().push_str(RDF_NIL);
                     parser.subject_type_stack.pop();
-                    parser
-                        .subject_type_stack
-                        .push(NamedOrBlankNodeType::NamedNode);
+                    parser.subject_type_stack.push(SubjectType::NamedNode);
                 }
             }
             parser.predicate_buf_stack.pop();
@@ -1361,16 +1352,40 @@ pub(crate) fn is_followed_by_space_and_closing_bracket(
 }
 
 #[derive(Clone, Copy)]
-enum NamedOrBlankNodeType {
+enum SubjectType {
     NamedNode,
     BlankNode,
 }
 
-impl NamedOrBlankNodeType {
-    fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
+impl SubjectType {
+    fn with_value<'a>(&self, value: &'a str) -> Subject<'a> {
         match self {
-            NamedOrBlankNodeType::NamedNode => NamedNode { iri: value }.into(),
-            NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
+            SubjectType::NamedNode => NamedNode { iri: value }.into(),
+            SubjectType::BlankNode => BlankNode { id: value }.into(),
+        }
+    }
+}
+
+impl From<GraphNameType> for SubjectType {
+    fn from(other: GraphNameType) -> SubjectType {
+        match other {
+            GraphNameType::BlankNode => SubjectType::BlankNode,
+            GraphNameType::NamedNode => SubjectType::NamedNode,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum GraphNameType {
+    NamedNode,
+    BlankNode,
+}
+
+impl GraphNameType {
+    fn with_value<'a>(&self, value: &'a str) -> GraphName<'a> {
+        match self {
+            GraphNameType::NamedNode => NamedNode { iri: value }.into(),
+            GraphNameType::BlankNode => BlankNode { id: value }.into(),
         }
     }
 }
@@ -1404,18 +1419,18 @@ impl TermType {
     }
 }
 
-impl From<NamedOrBlankNodeType> for TermType {
-    fn from(t: NamedOrBlankNodeType) -> Self {
+impl From<SubjectType> for TermType {
+    fn from(t: SubjectType) -> Self {
         match t {
-            NamedOrBlankNodeType::NamedNode => TermType::NamedNode,
-            NamedOrBlankNodeType::BlankNode => TermType::BlankNode,
+            SubjectType::NamedNode => TermType::NamedNode,
+            SubjectType::BlankNode => TermType::BlankNode,
         }
     }
 }
 
 fn on_triple_in_graph<'a, E>(
     on_quad: &'a mut impl FnMut(Quad<'_>) -> Result<(), E>,
-    graph_name: Option<NamedOrBlankNode<'a>>,
+    graph_name: Option<GraphName<'a>>,
 ) -> impl FnMut(Triple<'_>) -> Result<(), E> + 'a {
     move |t: Triple<'_>| {
         on_quad(Quad {

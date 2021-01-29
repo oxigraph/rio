@@ -12,7 +12,7 @@ edition = "2018"
 publish = false
 
 [dependencies]
-rio_api = { version = "0.5", path="../api", features=["star"] }
+rio_api = { version = "0.5", path="../api" }
 rio_turtle = { version = "0.5", path="../turtle" }
 rio_xml = { version = "0.5", path="../xml" }
 chrono = "0.4"
@@ -23,8 +23,9 @@ permutohedron = "0.2"
 criterion = "0.3"
 
 [features]
-default = ["generalized"]
+default = []
 generalized = ["rio_api/generalized", "rio_turtle/generalized"]
+star = ["rio_api/star", "rio_turtle/star" ]
 
 [[bench]]
 name = "w3c_testsuite"

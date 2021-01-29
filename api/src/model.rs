@@ -122,36 +122,49 @@ impl<'a> fmt::Display for Literal<'a> {
     }
 }
 
-/// The union of [IRIs](https://www.w3.org/TR/rdf11-concepts/#dfn-iri) and [blank nodes](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node).
+/// A restriction of [Term] that can be used in the subject position.
 ///
 /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
-pub enum NamedOrBlankNode<'a> {
+#[non_exhaustive]
+pub enum Subject<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
+    #[cfg(feature = "star")]
+    Triple(&'a Triple<'a>),
 }
 
-impl<'a> fmt::Display for NamedOrBlankNode<'a> {
+impl<'a> fmt::Display for Subject<'a> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NamedOrBlankNode::NamedNode(node) => node.fmt(f),
-            NamedOrBlankNode::BlankNode(node) => node.fmt(f),
+            Subject::NamedNode(node) => node.fmt(f),
+            Subject::BlankNode(node) => node.fmt(f),
+            #[cfg(feature = "star")]
+            Subject::Triple(triple) => write!(f, "<< {} >>", triple),
         }
     }
 }
 
-impl<'a> From<NamedNode<'a>> for NamedOrBlankNode<'a> {
+impl<'a> From<NamedNode<'a>> for Subject<'a> {
     #[inline]
     fn from(node: NamedNode<'a>) -> Self {
-        NamedOrBlankNode::NamedNode(node)
+        Subject::NamedNode(node)
     }
 }
 
-impl<'a> From<BlankNode<'a>> for NamedOrBlankNode<'a> {
+impl<'a> From<BlankNode<'a>> for Subject<'a> {
     #[inline]
     fn from(node: BlankNode<'a>) -> Self {
-        NamedOrBlankNode::BlankNode(node)
+        Subject::BlankNode(node)
+    }
+}
+
+#[cfg(feature = "star")]
+impl<'a> From<&'a Triple<'a>> for Subject<'a> {
+    #[inline]
+    fn from(triple: &'a Triple<'a>) -> Self {
+        Subject::Triple(triple)
     }
 }
 
@@ -161,6 +174,7 @@ impl<'a> From<BlankNode<'a>> for NamedOrBlankNode<'a> {
 ///
 /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
+#[non_exhaustive]
 pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
@@ -177,7 +191,7 @@ impl<'a> fmt::Display for Term<'a> {
             Term::BlankNode(node) => node.fmt(f),
             Term::Literal(literal) => literal.fmt(f),
             #[cfg(feature = "star")]
-            Term::Triple(triple) => triple.fmt(f),
+            Term::Triple(triple) => write!(f, "<< {} >>", triple),
         }
     }
 }
@@ -203,12 +217,24 @@ impl<'a> From<Literal<'a>> for Term<'a> {
     }
 }
 
-impl<'a> From<NamedOrBlankNode<'a>> for Term<'a> {
+impl<'a> From<Subject<'a>> for Term<'a> {
     #[inline]
-    fn from(resource: NamedOrBlankNode<'a>) -> Self {
+    fn from(resource: Subject<'a>) -> Self {
         match resource {
-            NamedOrBlankNode::NamedNode(node) => Term::NamedNode(node),
-            NamedOrBlankNode::BlankNode(node) => Term::BlankNode(node),
+            Subject::NamedNode(node) => Term::NamedNode(node),
+            Subject::BlankNode(node) => Term::BlankNode(node),
+            #[cfg(feature = "star")]
+            Subject::Triple(triple) => Term::Triple(triple),
+        }
+    }
+}
+
+impl<'a> From<GraphName<'a>> for Term<'a> {
+    #[inline]
+    fn from(resource: GraphName<'a>) -> Self {
+        match resource {
+            GraphName::NamedNode(node) => Term::NamedNode(node),
+            GraphName::BlankNode(node) => Term::BlankNode(node),
         }
     }
 }
@@ -230,9 +256,9 @@ impl<'a> From<NamedOrBlankNode<'a>> for Term<'a> {
 ///     }.to_string()
 /// )
 /// ```
-#[derive(Eq, PartialEq, Debug, Clone, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub struct Triple<'a> {
-    pub subject: NamedOrBlankNode<'a>,
+    pub subject: Subject<'a>,
     pub predicate: NamedNode<'a>,
     pub object: Term<'a>,
 }
@@ -241,6 +267,36 @@ impl<'a> fmt::Display for Triple<'a> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {} {} .", self.subject, self.predicate, self.object)
+    }
+}
+
+/// A restriction of [Term] that can be used in the graph name position.
+///
+/// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
+pub enum GraphName<'a> {
+    NamedNode(NamedNode<'a>),
+    BlankNode(BlankNode<'a>),
+}
+
+impl<'a> fmt::Display for GraphName<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GraphName::NamedNode(node) => node.fmt(f),
+            GraphName::BlankNode(node) => node.fmt(f),
+        }
+    }
+}
+
+impl<'a> From<NamedNode<'a>> for GraphName<'a> {
+    fn from(node: NamedNode<'a>) -> Self {
+        GraphName::NamedNode(node)
+    }
+}
+
+impl<'a> From<BlankNode<'a>> for GraphName<'a> {
+    fn from(node: BlankNode<'a>) -> Self {
+        GraphName::BlankNode(node)
     }
 }
 
@@ -262,12 +318,12 @@ impl<'a> fmt::Display for Triple<'a> {
 ///     }.to_string()
 /// )
 /// ```
-#[derive(Eq, PartialEq, Debug, Clone, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub struct Quad<'a> {
-    pub subject: NamedOrBlankNode<'a>,
+    pub subject: Subject<'a>,
     pub predicate: NamedNode<'a>,
     pub object: Term<'a>,
-    pub graph_name: Option<NamedOrBlankNode<'a>>,
+    pub graph_name: Option<GraphName<'a>>,
 }
 
 impl<'a> fmt::Display for Quad<'a> {
