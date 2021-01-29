@@ -51,6 +51,7 @@ pub mod model {
     ///
     /// Using it requires to enable the `generalized` feature.
     #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
+    #[non_exhaustive]
     pub enum GeneralizedTerm<'a> {
         NamedNode(NamedNode<'a>),
         BlankNode(BlankNode<'a>),
@@ -88,12 +89,24 @@ pub mod model {
         }
     }
 
-    impl<'a> From<NamedOrBlankNode<'a>> for GeneralizedTerm<'a> {
+    impl<'a> From<Subject<'a>> for GeneralizedTerm<'a> {
         #[inline]
-        fn from(other: NamedOrBlankNode<'a>) -> GeneralizedTerm<'a> {
+        fn from(other: Subject<'a>) -> GeneralizedTerm<'a> {
             match other {
-                NamedOrBlankNode::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
-                NamedOrBlankNode::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
+                Subject::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
+                Subject::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
+                #[cfg(feature = "star")]
+                Subject::Triple(inner) => GeneralizedTerm::Triple(inner),
+            }
+        }
+    }
+
+    impl<'a> From<GraphName<'a>> for GeneralizedTerm<'a> {
+        #[inline]
+        fn from(other: GraphName<'a>) -> GeneralizedTerm<'a> {
+            match other {
+                GraphName::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
+                GraphName::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
             }
         }
     }
@@ -135,14 +148,14 @@ pub mod model {
         }
     }
 
-    impl<'a> TryFrom<GeneralizedTerm<'a>> for NamedOrBlankNode<'a> {
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for Subject<'a> {
         type Error = StrictRdfError;
 
         #[inline]
-        fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedOrBlankNode<'a>, StrictRdfError> {
+        fn try_from(other: GeneralizedTerm<'a>) -> Result<Subject<'a>, StrictRdfError> {
             match other {
-                GeneralizedTerm::NamedNode(inner) => Ok(NamedOrBlankNode::NamedNode(inner)),
-                GeneralizedTerm::BlankNode(inner) => Ok(NamedOrBlankNode::BlankNode(inner)),
+                GeneralizedTerm::NamedNode(inner) => Ok(Subject::NamedNode(inner)),
+                GeneralizedTerm::BlankNode(inner) => Ok(Subject::BlankNode(inner)),
                 GeneralizedTerm::Literal(_) => Err(StrictRdfError {
                     message: "Literal cannot be used a subject",
                 }),
@@ -150,8 +163,28 @@ pub mod model {
                     message: "Variable cannot be converted to Term",
                 }),
                 #[cfg(feature = "star")]
+                GeneralizedTerm::Triple(triple) => Ok(Subject::Triple(triple)),
+            }
+        }
+    }
+
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for GraphName<'a> {
+        type Error = StrictRdfError;
+
+        #[inline]
+        fn try_from(other: GeneralizedTerm<'a>) -> Result<GraphName<'a>, StrictRdfError> {
+            match other {
+                GeneralizedTerm::NamedNode(inner) => Ok(GraphName::NamedNode(inner)),
+                GeneralizedTerm::BlankNode(inner) => Ok(GraphName::BlankNode(inner)),
+                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
+                    message: "Literal cannot be used a graph name",
+                }),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable cannot be converted to Term",
+                }),
+                #[cfg(feature = "star")]
                 GeneralizedTerm::Triple(_) => Err(StrictRdfError {
-                    message: "Triple cannot be converted to Term",
+                    message: "Triple cannot be used as a graph name",
                 }),
             }
         }
@@ -278,7 +311,7 @@ pub mod model {
     impl<'a> fmt::Display for GeneralizedQuad<'a> {
         #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            if let Some(graph_name) = self.graph_name {
+            if let Some(graph_name) = &self.graph_name {
                 write!(f, "GRAPH {} {{ ", graph_name)?;
             }
             write!(f, "{} {} {} .", self.subject, self.predicate, self.object)?;

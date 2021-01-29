@@ -8,7 +8,7 @@ use std::hash::Hasher;
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
 struct SubjectPredicate<'a> {
-    subject: &'a OwnedNamedOrBlankNode,
+    subject: &'a OwnedSubject,
     predicate: &'a OwnedNamedNode,
 }
 
@@ -32,7 +32,7 @@ fn subject_predicates_for_object<'a>(
 
 fn predicate_objects_for_subject<'a>(
     dataset: &'a OwnedDataset,
-    subject: &'a OwnedNamedOrBlankNode,
+    subject: &'a OwnedSubject,
 ) -> impl Iterator<Item = PredicateObject<'a>> + 'a {
     dataset
         .triples_for_subject(subject)
@@ -53,7 +53,7 @@ fn hash_blank_nodes<'a>(
         let mut hasher = DefaultHasher::new();
 
         {
-            let subject = OwnedNamedOrBlankNode::from(bnode.clone());
+            let subject = OwnedSubject::from(bnode.clone());
             let mut po_set: BTreeSet<PredicateObject<'_>> = BTreeSet::default();
             for po in predicate_objects_for_subject(dataset, &subject) {
                 match &po.object {
@@ -73,7 +73,7 @@ fn hash_blank_nodes<'a>(
             let mut sp_set: BTreeSet<SubjectPredicate<'_>> = BTreeSet::default();
             for sp in subject_predicates_for_object(dataset, &object) {
                 match &sp.subject {
-                    OwnedNamedOrBlankNode::BlankNode(_) => (),
+                    OwnedSubject::BlankNode(_) => (),
                     _ => {
                         sp_set.insert(sp);
                     }
@@ -169,7 +169,7 @@ fn check_is_contained<'a>(
     b: &OwnedDataset,
 ) -> bool {
     for t_a in a.iter() {
-        let subject = if let OwnedNamedOrBlankNode::BlankNode(s_a) = &t_a.subject {
+        let subject = if let OwnedSubject::BlankNode(s_a) = &t_a.subject {
             a_to_b_mapping[s_a].clone().into()
         } else {
             t_a.subject.clone()
@@ -180,7 +180,7 @@ fn check_is_contained<'a>(
         } else {
             t_a.object.clone()
         };
-        let graph_name = if let Some(OwnedNamedOrBlankNode::BlankNode(g_a)) = &t_a.graph_name {
+        let graph_name = if let Some(OwnedGraphName::BlankNode(g_a)) = &t_a.graph_name {
             Some(a_to_b_mapping[g_a].clone().into())
         } else {
             t_a.graph_name.clone()
@@ -201,13 +201,13 @@ fn check_is_contained<'a>(
 fn dataset_blank_nodes(dataset: &OwnedDataset) -> HashSet<&OwnedBlankNode> {
     let mut blank_nodes = HashSet::default();
     for t in dataset.iter() {
-        if let OwnedNamedOrBlankNode::BlankNode(subject) = &t.subject {
+        if let OwnedSubject::BlankNode(subject) = &t.subject {
             blank_nodes.insert(subject);
         }
         if let OwnedTerm::BlankNode(object) = &t.object {
             blank_nodes.insert(object);
         }
-        if let Some(OwnedNamedOrBlankNode::BlankNode(graph_name)) = &t.graph_name {
+        if let Some(OwnedGraphName::BlankNode(graph_name)) = &t.graph_name {
             blank_nodes.insert(graph_name);
         }
     }

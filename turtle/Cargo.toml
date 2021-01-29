@@ -18,6 +18,7 @@ all-features = true
 default = []
 generalized = ["rio_api/generalized"]
 sophia = ["rio_api/sophia", "sophia_api"]
+star = ["rio_api/star"]
 
 [dependencies]
 oxilangtag = "0.1"

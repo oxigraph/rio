@@ -112,7 +112,7 @@ impl<W: Write> QuadsFormatter for NQuadsFormatter<W> {
 pub struct TurtleFormatter<W: Write> {
     write: W,
     current_subject: String,
-    current_subject_type: Option<NamedOrBlankNodeType>,
+    current_subject_type: Option<SubjectType>,
     current_predicate: String,
 }
 
@@ -165,14 +165,20 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
 
         self.current_subject.clear();
         match triple.subject {
-            NamedOrBlankNode::NamedNode(n) => {
+            Subject::NamedNode(n) => {
                 self.current_subject.push_str(n.iri);
-                self.current_subject_type = Some(NamedOrBlankNodeType::NamedNode);
+                self.current_subject_type = Some(SubjectType::NamedNode);
             }
-            NamedOrBlankNode::BlankNode(n) => {
+            Subject::BlankNode(n) => {
                 self.current_subject.push_str(n.id);
-                self.current_subject_type = Some(NamedOrBlankNodeType::BlankNode);
+                self.current_subject_type = Some(SubjectType::BlankNode);
             }
+            #[cfg(feature = "star")]
+            Subject::Triple(_) => {
+                // can't factorize embedded triple as subject for the moment
+                self.current_subject_type = None;
+            }
+            _ => return Err(io::Error::from(io::ErrorKind::InvalidData)),
         }
         self.current_predicate.clear();
         self.current_predicate.push_str(triple.predicate.iri);
@@ -204,9 +210,9 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
 pub struct TriGFormatter<W: Write> {
     write: W,
     current_graph_name: String,
-    current_graph_name_type: Option<Option<NamedOrBlankNodeType>>,
+    current_graph_name_type: Option<Option<GraphNameType>>,
     current_subject: String,
-    current_subject_type: Option<NamedOrBlankNodeType>,
+    current_subject_type: Option<SubjectType>,
     current_predicate: String,
 }
 
@@ -301,26 +307,32 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
 
         self.current_graph_name.clear();
         match quad.graph_name {
-            Some(NamedOrBlankNode::NamedNode(n)) => {
+            Some(GraphName::NamedNode(n)) => {
                 self.current_graph_name.push_str(n.iri);
-                self.current_graph_name_type = Some(Some(NamedOrBlankNodeType::NamedNode));
+                self.current_graph_name_type = Some(Some(GraphNameType::NamedNode));
             }
-            Some(NamedOrBlankNode::BlankNode(n)) => {
+            Some(GraphName::BlankNode(n)) => {
                 self.current_graph_name.push_str(n.id);
-                self.current_graph_name_type = Some(Some(NamedOrBlankNodeType::BlankNode));
+                self.current_graph_name_type = Some(Some(GraphNameType::BlankNode));
             }
             None => self.current_graph_name_type = Some(None),
         }
         self.current_subject.clear();
-        match quad.subject {
-            NamedOrBlankNode::NamedNode(n) => {
+        match &quad.subject {
+            Subject::NamedNode(n) => {
                 self.current_subject.push_str(n.iri);
-                self.current_subject_type = Some(NamedOrBlankNodeType::NamedNode);
+                self.current_subject_type = Some(SubjectType::NamedNode);
             }
-            NamedOrBlankNode::BlankNode(n) => {
+            Subject::BlankNode(n) => {
                 self.current_subject.push_str(n.id);
-                self.current_subject_type = Some(NamedOrBlankNodeType::BlankNode);
+                self.current_subject_type = Some(SubjectType::BlankNode);
             }
+            #[cfg(feature = "star")]
+            Subject::Triple(_) => {
+                // can't factorize embedded triple as subject for the moment
+                self.current_subject_type = None;
+            }
+            _ => return Err(io::Error::from(io::ErrorKind::InvalidData)),
         }
         self.current_predicate.clear();
         self.current_predicate.push_str(quad.predicate.iri);
@@ -330,16 +342,31 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
 }
 
 #[derive(Copy, Clone)]
-enum NamedOrBlankNodeType {
+enum SubjectType {
     NamedNode,
     BlankNode,
 }
 
-impl NamedOrBlankNodeType {
-    fn with_value<'a>(&self, value: &'a str) -> NamedOrBlankNode<'a> {
+impl SubjectType {
+    fn with_value<'a>(&self, value: &'a str) -> Subject<'a> {
         match self {
-            NamedOrBlankNodeType::NamedNode => NamedNode { iri: value }.into(),
-            NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
+            SubjectType::NamedNode => NamedNode { iri: value }.into(),
+            SubjectType::BlankNode => BlankNode { id: value }.into(),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum GraphNameType {
+    NamedNode,
+    BlankNode,
+}
+
+impl GraphNameType {
+    fn with_value<'a>(&self, value: &'a str) -> GraphName<'a> {
+        match self {
+            GraphNameType::NamedNode => NamedNode { iri: value }.into(),
+            GraphNameType::BlankNode => BlankNode { id: value }.into(),
         }
     }
 }

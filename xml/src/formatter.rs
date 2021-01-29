@@ -1,9 +1,10 @@
-use crate::model::OwnedNamedOrBlankNode;
+use crate::model::OwnedSubject;
 use crate::utils::*;
 use quick_xml::events::*;
 use quick_xml::Writer;
 use rio_api::formatter::TriplesFormatter;
 use rio_api::model::*;
+use std::convert::TryInto;
 use std::io;
 use std::io::Write;
 
@@ -28,7 +29,7 @@ use std::io::Write;
 /// ```
 pub struct RdfXmlFormatter<W: Write> {
     writer: Writer<W>,
-    current_subject: Option<OwnedNamedOrBlankNode>,
+    current_subject: Option<OwnedSubject>,
 }
 
 impl<W: Write> RdfXmlFormatter<W> {
@@ -92,11 +93,13 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
 
             let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
             match triple.subject {
-                NamedOrBlankNode::NamedNode(n) => {
-                    description_open.push_attribute(("rdf:about", n.iri))
-                }
-                NamedOrBlankNode::BlankNode(n) => {
-                    description_open.push_attribute(("rdf:nodeID", n.id))
+                Subject::NamedNode(n) => description_open.push_attribute(("rdf:about", n.iri)),
+                Subject::BlankNode(n) => description_open.push_attribute(("rdf:nodeID", n.id)),
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "RDF/XML only supports named or blank subject",
+                    ))
                 }
             }
             self.writer
@@ -135,7 +138,7 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    "RDF* is not supported by RDF/XML",
+                    "RDF/XML only supports named, blank or literal object",
                 ))
             }
         };
@@ -154,8 +157,7 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
                 .write_event(Event::Empty(property_open))
                 .map_err(map_err)?;
         }
-
-        self.current_subject = Some(triple.subject.into());
+        self.current_subject = Some(triple.subject.try_into()?);
         Ok(())
     }
 }
@@ -184,11 +186,36 @@ fn split_iri(iri: &str) -> (&str, &str) {
     }
 }
 
-#[test]
-fn test_split_iri() {
-    assert_eq!(
-        split_iri("http://schema.org/Person"),
-        ("http://schema.org/", "Person")
-    );
-    assert_eq!(split_iri("http://schema.org/"), ("http://schema.org/", ""));
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_split_iri() {
+        assert_eq!(
+            split_iri("http://schema.org/Person"),
+            ("http://schema.org/", "Person")
+        );
+        assert_eq!(split_iri("http://schema.org/"), ("http://schema.org/", ""));
+    }
+
+    #[cfg(feature = "rio_api/star")]
+    #[test]
+    fn formmatting_rdf_star_fails_cleanly() {
+        use rio_api::formatter::TriplesFormatter;
+        let iri = NamedNode { iri: "tag:iri" };
+        let triple = Triple {
+            subject: Triple {
+                subject: iri.into(),
+                predicate: iri,
+                object: iri.into(),
+            }
+            .into(),
+            predicate: iri,
+            object: iri.into(),
+        };
+        let mut fmt = RdfXmlFormatter::new(std::io::sink()).unwrap();
+        let res = fmt.format(&triple).and_then(|_| fmt.finish());
+        assert!(res.is_err());
+    }
 }

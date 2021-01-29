@@ -4,10 +4,12 @@ use crate::model::OwnedDataset;
 use crate::report::{TestOutcome, TestResult};
 use chrono::Utc;
 use oxiri::Iri;
+#[cfg(feature = "generalized")]
 use rio_api::model::*;
 use rio_api::parser::*;
 use rio_turtle::*;
 use rio_xml::RdfXmlParser;
+#[cfg(feature = "generalized")]
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt;

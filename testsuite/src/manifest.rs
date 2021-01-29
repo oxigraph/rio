@@ -52,31 +52,31 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
     fn next(&mut self) -> Option<Result<Test, Box<dyn Error>>> {
         match self.tests_to_do.pop() {
             Some(OwnedTerm::NamedNode(test_node)) => {
-                let test_subject = OwnedNamedOrBlankNode::from(test_node.clone());
+                let test_subject = OwnedSubject::from(test_node.clone());
                 let kind = match self
                     .graph
-                    .object_for_subject_predicate(&test_subject, rdf::TYPE)
+                    .object_for_subject_predicate(&test_subject, &rdf::TYPE)
                 {
                     Some(OwnedTerm::NamedNode(c)) => c.clone(),
                     _ => return Some(Err(Box::new(TestManifestError::InvalidTestType(test_node)))),
                 };
                 let name = match self
                     .graph
-                    .object_for_subject_predicate(&test_subject, mf::NAME)
+                    .object_for_subject_predicate(&test_subject, &mf::NAME)
                 {
                     Some(OwnedTerm::Literal(c)) => Some(literal_value(c).to_owned()),
                     _ => None,
                 };
                 let comment = match self
                     .graph
-                    .object_for_subject_predicate(&test_subject, rdfs::COMMENT)
+                    .object_for_subject_predicate(&test_subject, &rdfs::COMMENT)
                 {
                     Some(OwnedTerm::Literal(c)) => Some(literal_value(c).to_owned()),
                     _ => None,
                 };
                 let action = match self
                     .graph
-                    .object_for_subject_predicate(&test_subject, mf::ACTION)
+                    .object_for_subject_predicate(&test_subject, &mf::ACTION)
                 {
                     Some(OwnedTerm::NamedNode(n)) => n.iri.clone(),
                     _ => {
@@ -87,7 +87,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                 };
                 let result = match self
                     .graph
-                    .object_for_subject_predicate(&test_subject, mf::RESULT)
+                    .object_for_subject_predicate(&test_subject, &mf::RESULT)
                 {
                     Some(OwnedTerm::NamedNode(n)) => Some(n.iri.clone()),
                     Some(_) => {
@@ -111,7 +111,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                 match self.manifests_to_do.pop() {
                     Some(url) => {
                         let manifest = OwnedNamedNode { iri: url.clone() };
-                        let manifest_subject = OwnedNamedOrBlankNode::from(manifest.clone());
+                        let manifest_subject = OwnedSubject::from(manifest.clone());
                         match (self.file_reader)(&url) {
                             Ok(g) => g.into_iter().for_each(|g| self.graph.insert(g)),
                             Err(e) => return Some(Err(e)),
@@ -120,7 +120,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                         // New manifests
                         match self
                             .graph
-                            .object_for_subject_predicate(&manifest_subject, mf::INCLUDE)
+                            .object_for_subject_predicate(&manifest_subject, &mf::INCLUDE)
                         {
                             Some(OwnedTerm::BlankNode(list)) => {
                                 self.manifests_to_do.extend(
@@ -142,7 +142,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                         // New tests
                         match self
                             .graph
-                            .object_for_subject_predicate(&manifest_subject, mf::ENTRIES)
+                            .object_for_subject_predicate(&manifest_subject, &mf::ENTRIES)
                         {
                             Some(OwnedTerm::BlankNode(list)) => {
                                 self.tests_to_do.extend(RdfListIterator::iter(
@@ -201,11 +201,11 @@ impl Error for TestManifestError {}
 
 pub struct RdfListIterator<'a> {
     graph: &'a OwnedDataset,
-    current_node: Option<OwnedNamedOrBlankNode>,
+    current_node: Option<OwnedSubject>,
 }
 
 impl<'a> RdfListIterator<'a> {
-    fn iter(graph: &'a OwnedDataset, root: OwnedNamedOrBlankNode) -> RdfListIterator<'a> {
+    fn iter(graph: &'a OwnedDataset, root: OwnedSubject) -> RdfListIterator<'a> {
         RdfListIterator {
             graph,
             current_node: Some(root),
@@ -221,15 +221,17 @@ impl<'a> Iterator for RdfListIterator<'a> {
             Some(current) => {
                 let result = self
                     .graph
-                    .object_for_subject_predicate(&current, rdf::FIRST)
+                    .object_for_subject_predicate(&current, &rdf::FIRST)
                     .cloned();
-                self.current_node =
-                    match self.graph.object_for_subject_predicate(&current, rdf::REST) {
-                        Some(OwnedTerm::NamedNode(ref n)) if NamedNode::from(n) == rdf::NIL => None,
-                        Some(OwnedTerm::NamedNode(n)) => Some(n.clone().into()),
-                        Some(OwnedTerm::BlankNode(n)) => Some(n.clone().into()),
-                        _ => None,
-                    };
+                self.current_node = match self
+                    .graph
+                    .object_for_subject_predicate(&current, &rdf::REST)
+                {
+                    Some(OwnedTerm::NamedNode(ref n)) if NamedNode::from(n) == rdf::NIL => None,
+                    Some(OwnedTerm::NamedNode(n)) => Some(n.clone().into()),
+                    Some(OwnedTerm::BlankNode(n)) => Some(n.clone().into()),
+                    _ => None,
+                };
                 result
             }
             None => None,
