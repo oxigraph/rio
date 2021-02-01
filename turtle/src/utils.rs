@@ -21,6 +21,12 @@ pub trait LookAheadByteRead {
         self.ahead(1)
     }
 
+    /// Returns the next byte if it exists or fail if it does not
+    fn required_next(&mut self) -> Result<u8, TurtleError> {
+        self.ahead(1)?
+            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEof))
+    }
+
     /// Returns a future byte if it exists
     fn ahead(&mut self, count: usize) -> Result<Option<u8>, TurtleError>;
 
@@ -210,12 +216,25 @@ pub struct StringBufferStack {
 }
 
 impl StringBufferStack {
+    pub fn with_capacity(cap: usize) -> Self {
+        StringBufferStack {
+            inner: Vec::with_capacity(cap),
+            len: 0,
+        }
+    }
     pub fn push(&mut self) -> &mut String {
         self.len += 1;
         if self.len > self.inner.len() {
             self.inner.push(String::default())
         }
         &mut self.inner[self.len - 1]
+    }
+
+    pub fn push2(&mut self) -> (&mut String, &mut String) {
+        self.push();
+        self.push();
+        let (a1, a2) = self.inner.split_at_mut(self.len - 1);
+        (&mut a1[a1.len() - 1], &mut a2[0])
     }
 
     pub fn pop(&mut self) {
@@ -229,6 +248,11 @@ impl StringBufferStack {
 
     pub fn before_last(&self) -> &str {
         &self.inner[self.len - 2]
+    }
+
+    pub fn clear(&mut self) {
+        self.inner.clear();
+        self.len = 0;
     }
 }
 

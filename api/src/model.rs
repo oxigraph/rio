@@ -141,7 +141,11 @@ impl<'a> fmt::Display for Subject<'a> {
             Subject::NamedNode(node) => node.fmt(f),
             Subject::BlankNode(node) => node.fmt(f),
             #[cfg(feature = "star")]
-            Subject::Triple(triple) => write!(f, "<< {} >>", triple),
+            Subject::Triple(triple) => write!(
+                f,
+                "<< {} {} {} >>",
+                triple.subject, triple.predicate, triple.object
+            ),
         }
     }
 }
@@ -191,7 +195,11 @@ impl<'a> fmt::Display for Term<'a> {
             Term::BlankNode(node) => node.fmt(f),
             Term::Literal(literal) => literal.fmt(f),
             #[cfg(feature = "star")]
-            Term::Triple(triple) => write!(f, "<< {} >>", triple),
+            Term::Triple(triple) => write!(
+                f,
+                "<< {} {} {} >>",
+                triple.subject, triple.predicate, triple.object
+            ),
         }
     }
 }

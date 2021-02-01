@@ -767,10 +767,6 @@ impl<R: BufRead> RdfXmlReader<R> {
                 object: NamedNode::from(&iri).into(),
             })?;
         }
-        #[cfg(feature = "rio_common/star")]
-        if let Subject::Triple(_) = &subject {
-            return Err(RdfXmlError::msg("RDF/XML does not support RDF*").into());
-        }
         Ok(RdfXmlState::NodeElt {
             base_iri,
             language,
