@@ -46,6 +46,7 @@ mod error;
 mod formatters;
 mod ntriples;
 mod shared;
+mod triple_allocator;
 mod turtle;
 mod utils;
 

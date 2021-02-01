@@ -2,6 +2,7 @@
 
 use crate::error::*;
 use crate::shared::*;
+use crate::triple_allocator::TripleAllocator;
 use crate::utils::*;
 use rio_api::model::*;
 use rio_api::parser::*;
@@ -41,20 +42,14 @@ use std::io::BufRead;
 /// ```
 pub struct NTriplesParser<R: BufRead> {
     read: LookAheadByteReader<R>,
-    subject_buf: String,
-    predicate_buf: String,
-    object_buf: String,
-    object_annotation_buf: String, // datatype or language tag
+    triple_alloc: TripleAllocator,
 }
 
 impl<R: BufRead> NTriplesParser<R> {
     pub fn new(reader: R) -> Self {
         Self {
             read: LookAheadByteReader::new(reader),
-            subject_buf: String::default(),
-            predicate_buf: String::default(),
-            object_buf: String::default(),
-            object_annotation_buf: String::default(),
+            triple_alloc: TripleAllocator::new(),
         }
     }
 }
@@ -66,28 +61,24 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
         &mut self,
         on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
-        let result = match parse_triple_line(
-            &mut self.read,
-            &mut self.subject_buf,
-            &mut self.predicate_buf,
-            &mut self.object_buf,
-            &mut self.object_annotation_buf,
-        ) {
-            Ok(Some(triple)) => on_triple(triple),
-            Ok(None) => Ok(()),
+        match parse_triple_line(&mut self.read, &mut self.triple_alloc) {
+            Ok(true) => match on_triple(*self.triple_alloc.top()) {
+                Ok(()) => {
+                    self.triple_alloc.pop_top_triple();
+                    Ok(())
+                }
+                Err(err) => {
+                    self.triple_alloc.clear();
+                    Err(err)
+                }
+            },
+            Ok(false) => Ok(()),
             Err(error) => {
                 self.read.consume_line_end()?;
+                self.triple_alloc.clear();
                 Err(E::from(error))
             }
-        };
-
-        //We clear the buffers
-        self.subject_buf.clear();
-        self.predicate_buf.clear();
-        self.object_buf.clear();
-        self.object_annotation_buf.clear();
-
-        result
+        }
     }
 
     fn is_end(&self) -> bool {
@@ -187,28 +178,28 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
     }
 }
 
-fn parse_triple_line<'a>(
+fn parse_triple_line(
     read: &mut impl LookAheadByteRead,
-    subject_buf: &'a mut String,
-    predicate_buf: &'a mut String,
-    object_buf: &'a mut String,
-    object_annotation_buf: &'a mut String,
-) -> Result<Option<Triple<'a>>, TurtleError> {
+    triple_alloc: &mut TripleAllocator,
+) -> Result<bool, TurtleError> {
     skip_whitespace(read)?;
 
-    let subject = match read.current() {
+    match read.current() {
         None | Some(b'#') | Some(b'\r') | Some(b'\n') => {
             skip_until_eol(read)?;
-            return Ok(None);
+            return Ok(false);
         }
-        _ => parse_subject(read, subject_buf)?,
+        _ => {
+            triple_alloc.push_triple_start();
+            triple_alloc.try_push_subject(|b| parse_subject(read, b))?;
+        }
     };
     skip_whitespace(read)?;
 
-    let predicate = parse_iriref(read, predicate_buf)?;
+    triple_alloc.try_push_predicate(|b| parse_iriref(read, b))?;
     skip_whitespace(read)?;
 
-    let object = parse_term(read, object_buf, object_annotation_buf)?;
+    triple_alloc.try_push_object(|b1, b2| parse_term(read, b1, b2))?;
     skip_whitespace(read)?;
 
     read.check_is_current(b'.')?;
@@ -220,11 +211,7 @@ fn parse_triple_line<'a>(
         _ => read.unexpected_char_error()?,
     }
 
-    Ok(Some(Triple {
-        subject,
-        predicate,
-        object,
-    }))
+    Ok(true)
 }
 
 fn parse_quad_line<'a>(
