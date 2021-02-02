@@ -96,6 +96,8 @@ pub fn read_w3c_rdf_test_file(
         Ok(url.replace("http://w3c.github.io/rdf-tests/", ""))
     } else if url.starts_with("http://www.w3.org/2013/RDFXMLTests/") {
         Ok(url.replace("http://www.w3.org/2013/RDFXMLTests/", "rdf-xml/"))
+    } else if url.starts_with("https://w3c.github.io/rdf-star/") {
+        Ok(url.replace("https://w3c.github.io/rdf-star/", "../rdf-star/"))
     } else {
         Err(Box::new(TestEvaluationError::UnknownTestUrl(
             url.to_owned(),
