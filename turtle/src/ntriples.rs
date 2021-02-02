@@ -184,23 +184,15 @@ fn parse_triple_line(
 ) -> Result<bool, TurtleError> {
     skip_whitespace(read)?;
 
-    match read.current() {
-        None | Some(b'#') | Some(b'\r') | Some(b'\n') => {
-            skip_until_eol(read)?;
-            return Ok(false);
-        }
-        _ => {
-            triple_alloc.push_triple_start();
-            triple_alloc.try_push_subject(|b| parse_subject(read, b))?;
-        }
-    };
-    skip_whitespace(read)?;
+    if matches!(
+        read.current(),
+        None | Some(b'#') | Some(b'\r') | Some(b'\n')
+    ) {
+        skip_until_eol(read)?;
+        return Ok(false);
+    }
 
-    triple_alloc.try_push_predicate(|b| parse_iriref(read, b))?;
-    skip_whitespace(read)?;
-
-    triple_alloc.try_push_object(|b1, b2| parse_term(read, b1, b2))?;
-    skip_whitespace(read)?;
+    parse_triple(read, triple_alloc)?;
 
     read.check_is_current(b'.')?;
     read.consume()?;
@@ -212,6 +204,30 @@ fn parse_triple_line(
     }
 
     Ok(true)
+}
+
+fn parse_triple(
+    read: &mut impl LookAheadByteRead,
+    triple_alloc: &mut TripleAllocator,
+) -> Result<(), TurtleError> {
+    triple_alloc.push_triple_start();
+
+    #[cfg(not(feature = "star"))]
+    triple_alloc.try_push_subject(|b| parse_subject(read, b))?;
+    #[cfg(feature = "star")]
+    parse_subject_star(read, triple_alloc)?;
+    skip_whitespace(read)?;
+
+    triple_alloc.try_push_predicate(|b| parse_iriref(read, b))?;
+    skip_whitespace(read)?;
+
+    #[cfg(not(feature = "star"))]
+    triple_alloc.try_push_object(|b1, b2| parse_term(read, b1, b2))?;
+    #[cfg(feature = "star")]
+    parse_object_star(read, triple_alloc)?;
+    skip_whitespace(read)?;
+
+    Ok(())
 }
 
 fn parse_quad_line<'a>(
@@ -284,6 +300,69 @@ fn parse_subject<'a>(
         b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
         _ => read.unexpected_char_error(),
     }
+}
+
+#[cfg(feature = "star")]
+fn parse_subject_star(
+    read: &mut impl LookAheadByteRead,
+    triple_alloc: &mut TripleAllocator,
+) -> Result<(), TurtleError> {
+    match read.required_current()? {
+        b'<' => match read.required_next()? {
+            b'<' => {
+                parse_embedded_triple(read, triple_alloc)?;
+                triple_alloc.push_subject_triple();
+                Ok(())
+            }
+            _ => triple_alloc.try_push_subject(|b| parse_iriref(read, b).map(Subject::from)),
+        },
+        b'_' => {
+            triple_alloc.try_push_subject(|b| parse_blank_node_label(read, b).map(Subject::from))
+        }
+        _ => read.unexpected_char_error(),
+    }
+}
+
+#[cfg(feature = "star")]
+fn parse_object_star(
+    read: &mut impl LookAheadByteRead,
+    triple_alloc: &mut TripleAllocator,
+) -> Result<(), TurtleError> {
+    match read.required_current()? {
+        b'<' => match read.required_next()? {
+            b'<' => {
+                parse_embedded_triple(read, triple_alloc)?;
+                triple_alloc.push_object_triple();
+                Ok(())
+            }
+            _ => triple_alloc.try_push_object(|b, _| parse_iriref(read, b).map(Term::from)),
+        },
+        b'_' => {
+            triple_alloc.try_push_object(|b, _| parse_blank_node_label(read, b).map(Term::from))
+        }
+        b'"' => triple_alloc.try_push_object(|b1, b2| parse_literal(read, b1, b2).map(Term::from)),
+        _ => read.unexpected_char_error(),
+    }
+}
+
+#[cfg(feature = "star")]
+fn parse_embedded_triple(
+    read: &mut impl LookAheadByteRead,
+    triple_alloc: &mut TripleAllocator,
+) -> Result<(), TurtleError> {
+    debug_assert_eq!(read.current(), Some(b'<'));
+    debug_assert_eq!(read.next()?, Some(b'<'));
+    read.consume_many(2)?;
+
+    skip_whitespace(read)?;
+
+    parse_triple(read, triple_alloc)?;
+
+    read.check_is_current(b'>')?;
+    read.consume()?;
+    read.check_is_current(b'>')?;
+    read.consume()?;
+    skip_whitespace(read)
 }
 
 fn parse_graph_name<'a>(

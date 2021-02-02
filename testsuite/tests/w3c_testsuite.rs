@@ -52,6 +52,12 @@ fn rdf_xml_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("http://www.w3.org/2013/RDFXMLTests/manifest.ttl".to_owned())
 }
 
+#[cfg(feature = "star")]
+#[test]
+fn ntriples_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    run_testsuite("https://w3c.github.io/rdf-star/tests/nt/syntax/manifest.ttl".to_owned())
+}
+
 #[cfg(feature = "generalized")]
 #[test]
 fn gtrig_w3c_testsuite() -> Result<(), Box<dyn Error>> {
