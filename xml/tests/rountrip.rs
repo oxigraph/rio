@@ -12,6 +12,10 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
     let bar = NamedNode {
         iri: "http://example.com/b%adar",
     };
+    let bad = NamedNode {
+        iri: "http://example.org/properties:p",
+    };
+
     let bnode = BlankNode { id: "foobar" };
     let simple = Literal::Simple { value: "sim\"le" };
     let language = Literal::LanguageTaggedString {
@@ -60,6 +64,11 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
             subject: bnode.into(),
             predicate: bar,
             object: bar.into(),
+        },
+        Triple {
+            subject: bnode.into(),
+            predicate: bad,
+            object: foo.into(),
         },
     ];
 

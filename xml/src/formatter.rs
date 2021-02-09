@@ -148,8 +148,9 @@ fn map_err(error: quick_xml::Error) -> io::Error {
 }
 
 fn split_iri(iri: &str) -> (&str, &str) {
-    if let Some(position_base) = iri.rfind(|c| !is_name_char(c)) {
-        if let Some(position_add) = iri[position_base..].find(is_name_start_char) {
+    if let Some(position_base) = iri.rfind(|c| !is_name_char(c) || c == ':') {
+        if let Some(position_add) = iri[position_base..].find(|c| is_name_start_char(c) && c != ':')
+        {
             (
                 &iri[..position_base + position_add],
                 &iri[position_base + position_add..],
