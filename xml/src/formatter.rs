@@ -34,19 +34,34 @@ pub struct RdfXmlFormatter<W: Write> {
 impl<W: Write> RdfXmlFormatter<W> {
     /// Builds a new formatter from a `Write` implementation and starts writing
     pub fn new(write: W) -> Result<Self, io::Error> {
-        let mut writer = Writer::new(write);
-        writer
+        Self {
+            writer: Writer::new(write),
+            current_subject: None,
+        }
+        .write_start()
+    }
+
+    /// Builds a new formatter from a `Write` implementation and starts writing.
+    ///
+    /// The output is indented with `indentation_size` spaces.
+    pub fn new_with_indentation(write: W, indentation_size: usize) -> Result<Self, io::Error> {
+        Self {
+            writer: Writer::new_with_indent(write, b' ', indentation_size),
+            current_subject: None,
+        }
+        .write_start()
+    }
+
+    fn write_start(mut self) -> Result<Self, io::Error> {
+        self.writer
             .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
             .map_err(map_err)?;
         let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
         rdf_open.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
-        writer
+        self.writer
             .write_event(Event::Start(rdf_open))
             .map_err(map_err)?;
-        Ok(Self {
-            writer,
-            current_subject: None,
-        })
+        Ok(self)
     }
 
     /// Finishes writing and returns the underlying `Write`
