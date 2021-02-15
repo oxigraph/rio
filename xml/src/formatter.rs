@@ -44,7 +44,7 @@ impl<W: Write> RdfXmlFormatter<W> {
     /// Builds a new formatter from a `Write` implementation and starts writing.
     ///
     /// The output is indented with `indentation_size` spaces.
-    pub fn new_with_indentation(write: W, indentation_size: usize) -> Result<Self, io::Error> {
+    pub fn with_indentation(write: W, indentation_size: usize) -> Result<Self, io::Error> {
         Self {
             writer: Writer::new_with_indent(write, b' ', indentation_size),
             current_subject: None,
