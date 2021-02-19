@@ -1,6 +1,6 @@
 [package]
 name = "rio_api"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"

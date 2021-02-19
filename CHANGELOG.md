@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.2] - 2022-02-19
+
+### Added
+- `RdfXmlSerializer::with_indentation` to format RDF/XML with indentation
+
+### Changed
+- Fixes a bug in RDF/XML formatting where ":" was used in local names
+- Upgrades `quick_xml` dependency to 0.21
+
 
 ## [0.5.1] - 2021-01-01
 
