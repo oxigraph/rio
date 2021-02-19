@@ -33,6 +33,7 @@ mod test {
             Some(Iri::parse("http://localhost/ex".to_owned())?),
         );
 
+        #[allow(clippy::type_complexity)]
         let d: Vec<([TestTerm<String>; 3], Option<TestTerm<String>>)> = p.collect_quads()?;
         assert_eq!(d.len(), 3);
         assert!(d

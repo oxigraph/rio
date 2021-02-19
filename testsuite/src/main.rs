@@ -6,14 +6,15 @@ use std::env;
 use std::error::Error;
 use std::path::Path;
 
+type ParseFunction = fn(&str, &Path) -> Result<OwnedDataset, Box<dyn Error>>;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
         eprintln!("Expecting two arguments: <w3c_rdf_tests_base_path> <manifest_url>");
         return;
     }
-    let mut parse_func: fn(&str, &Path) -> Result<OwnedDataset, Box<dyn Error>> =
-        parse_w3c_rdf_test_file;
+    let mut parse_func: ParseFunction = parse_w3c_rdf_test_file;
     let mut manifest_url = match args[2].as_ref() {
         "ntriples" | "nt" => "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl",
         "nquads" | "nq" => "http://w3c.github.io/rdf-tests/nquads/manifest.ttl",

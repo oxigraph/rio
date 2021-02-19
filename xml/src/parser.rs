@@ -660,6 +660,7 @@ impl<R: BufRead> RdfXmlReader<R> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_node_elt<E: From<RdfXmlError>>(
         &mut self,
         iri: OwnedNamedNode,

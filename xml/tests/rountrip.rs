@@ -5,6 +5,7 @@ use rio_xml::{RdfXmlError, RdfXmlFormatter, RdfXmlParser};
 use std::io::Cursor;
 
 #[test]
+#[allow(clippy::blacklisted_name)]
 fn simple_roundtrip() -> Result<(), RdfXmlError> {
     let foo = NamedNode {
         iri: "http://example.com/foo",

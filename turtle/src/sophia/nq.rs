@@ -24,6 +24,7 @@ mod test {
 
         let p = NQuadsParser::new(nquads.as_ref());
 
+        #[allow(clippy::type_complexity)]
         let d: Vec<([TestTerm<String>; 3], Option<TestTerm<String>>)> = p.collect_quads()?;
         assert_eq!(d.len(), 3);
         assert!(d

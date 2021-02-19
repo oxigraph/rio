@@ -110,6 +110,7 @@ fn gtrig_roundtrip() -> Result<(), TurtleError> {
     Ok(())
 }
 
+#[allow(clippy::blacklisted_name)]
 fn example_graph() -> Vec<Triple<'static>> {
     let foo = NamedNode {
         iri: "http://example.com/foo",
