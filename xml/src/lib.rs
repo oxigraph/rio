@@ -49,6 +49,7 @@
 )]
 #![doc(test(attr(deny(warnings))))]
 
+pub mod abbrev_formatter;
 mod error;
 mod formatter;
 mod model;
