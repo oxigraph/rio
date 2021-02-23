@@ -117,17 +117,28 @@ impl From<Triple<'_>> for AsRefTriple<String> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum AbbrevRdfXmlFormatterConfig<A:AsRef<str>> {
-    BNodeContraction,
-    Indentation(usize),
-    Prefix(HashMap<A,A>),
-    TypedNode,
+#[derive(Clone, Debug, Default)]
+pub struct AbbrevRdfXmlFormatterConfig {
+    pub bnode_contract: bool,
+    pub indentation: usize,
+    pub prefix: Option<HashMap<String, String>>,
+    pub typed_node: bool
+}
+
+impl AbbrevRdfXmlFormatterConfig {
+    pub fn new() -> Self {
+        AbbrevRdfXmlFormatterConfig {
+            bnode_contract: false,
+            indentation: 0,
+            prefix: None,
+            typed_node: false
+        }
+    }
 }
 
 pub struct AbbrevRdfXmlFormatter<A:AsRef<str>, W: Write> {
     writer: Writer<W>,
-    config: Vec<AbbrevRdfXmlFormatterConfig<A>>,
+    config: AbbrevRdfXmlFormatterConfig,
     current_subject: Option<AsRefNamedOrBlankNode<A>>,
 }
 
@@ -136,22 +147,10 @@ where A: AsRef<str> + Clone + PartialEq,
       W: Write,
 {
     /// Builds a new formatter from a `Write` implementation and starts writing
-    pub fn new(write: W) -> Result<Self, io::Error> {
+    pub fn new(write: W, config: AbbrevRdfXmlFormatterConfig) -> Result<Self, io::Error> {
         Self {
-            writer: Writer::new(write),
-            config: vec![],
-            current_subject: None
-        }
-        .write_start()
-    }
-
-    /// Builds a new formatter from a `Write` implementation and starts writing.
-    ///
-    /// The output is indented with `indentation_size` spaces.
-    pub fn with_indentation(write: W, indentation_size: usize) -> Result<Self, io::Error> {
-        Self {
-            writer: Writer::new_with_indent(write, b' ', indentation_size),
-            config: vec![],
+            writer: Writer::new_with_indent(write, b' ', config.indentation),
+            config,
             current_subject: None
         }
         .write_start()
@@ -163,11 +162,25 @@ where A: AsRef<str> + Clone + PartialEq,
             .map_err(map_err)?;
         let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
         rdf_open.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
+        self.write_prefix(&mut rdf_open)?;
         self.writer
             .write_event(Event::Start(rdf_open))
             .map_err(map_err)?;
         Ok(self)
     }
+
+    fn write_prefix(&mut self, rdf_open: &mut BytesStart<'_>) -> Result<(), io::Error> {
+        if let Some(prefix) = &self.config.prefix {
+            for i in prefix {
+                let ns = format!("xmlns:{}", &i.0);
+                rdf_open.push_attribute((&ns[..],
+                                         &i.1[..]));
+            }
+        }
+
+        Ok(())
+    }
+
 
     pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
         // We open a new rdf:Description if useful
