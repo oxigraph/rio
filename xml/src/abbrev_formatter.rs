@@ -121,7 +121,7 @@ impl From<Triple<'_>> for AsRefTriple<String> {
 pub struct AbbrevRdfXmlFormatterConfig {
     pub bnode_contract: bool,
     pub indentation: usize,
-    pub prefix: Option<HashMap<String, String>>,
+    pub prefix: HashMap<String, String>,
     pub typed_node: bool
 }
 
@@ -130,7 +130,7 @@ impl AbbrevRdfXmlFormatterConfig {
         AbbrevRdfXmlFormatterConfig {
             bnode_contract: false,
             indentation: 0,
-            prefix: None,
+            prefix: HashMap::new(),
             typed_node: false
         }
     }
@@ -147,7 +147,10 @@ where A: AsRef<str> + Clone + PartialEq,
       W: Write,
 {
     /// Builds a new formatter from a `Write` implementation and starts writing
-    pub fn new(write: W, config: AbbrevRdfXmlFormatterConfig) -> Result<Self, io::Error> {
+    pub fn new(write: W, mut config: AbbrevRdfXmlFormatterConfig) -> Result<Self, io::Error> {
+        config.prefix.insert("http://www.w3.org/1999/02/22-rdf-syntax-ns#".to_string(),
+                             "rdf".to_string());
+
         Self {
             writer: Writer::new_with_indent(write, b' ', config.indentation),
             config,
@@ -161,7 +164,6 @@ where A: AsRef<str> + Clone + PartialEq,
             .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
             .map_err(map_err)?;
         let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
-        rdf_open.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
         self.write_prefix(&mut rdf_open)?;
         self.writer
             .write_event(Event::Start(rdf_open))
@@ -170,12 +172,10 @@ where A: AsRef<str> + Clone + PartialEq,
     }
 
     fn write_prefix(&mut self, rdf_open: &mut BytesStart<'_>) -> Result<(), io::Error> {
-        if let Some(prefix) = &self.config.prefix {
-            for i in prefix {
-                let ns = format!("xmlns:{}", &i.0);
-                rdf_open.push_attribute((&ns[..],
-                                         &i.1[..]));
-            }
+        for i in &self.config.prefix {
+            let ns = format!("xmlns:{}", &i.1);
+            rdf_open.push_attribute((&ns[..],
+                                     &i.0[..]));
         }
 
         Ok(())
@@ -211,8 +211,20 @@ where A: AsRef<str> + Clone + PartialEq,
         } else {
             (prop_value, ("xmlns", prop_prefix))
         };
-        let mut property_open = BytesStart::borrowed_name(prop_qname.as_bytes());
-        property_open.push_attribute(prop_xmlns);
+
+        let mut property_open =
+            match &self.config.prefix.get(prop_prefix)
+        {
+                Some(prop_ns_prefix) => {
+                    BytesStart::owned_name(format!("{}:{}", prop_ns_prefix, prop_qname))
+                }
+                None => {
+                    let mut bs = BytesStart::borrowed_name(prop_qname.as_bytes());
+                    bs.push_attribute(prop_xmlns);
+                    bs
+                }
+            };
+
         let content = match &triple.object {
             AsRefTerm::NamedNode(n) => {
                 property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
