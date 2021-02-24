@@ -11,6 +11,7 @@
 		<#bad_lang>
 		<#language_normalization_ttl>
 		<#language_normalization_xml>
+		<#xml_entities>
 	) .
 
 <#no_end_line_jump>
@@ -40,3 +41,9 @@
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "bad language tag" ;
 	mf:action <bad_lang.ttl> .
+
+<#xml_entities>
+	rdf:type rdft:TestXMLEval ;
+	mf:name "custom XML entities" ;
+	mf:action <xml_entities.rdf> ;
+	mf:result <xml_entities.nt> .
