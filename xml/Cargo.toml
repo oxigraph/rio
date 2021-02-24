@@ -22,7 +22,7 @@ sophia = ["rio_api/sophia", "sophia_api"]
 oxilangtag = "0.1"
 oxiri = "0.1"
 rio_api = { version = "0.5", path="../api" }
-quick-xml = "0.21"
+quick-xml = "0.22"
 sophia_api = { version = "0.6.1", optional = true }
 
 [dev-dependencies.sophia_api]
