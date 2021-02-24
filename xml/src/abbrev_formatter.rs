@@ -101,6 +101,7 @@ impl From<Term<'_>> for AsRefTerm<String> {
     }
 }
 
+#[derive(Debug)]
 pub struct AsRefTriple<A: AsRef<str>> {
     pub subject: AsRefNamedOrBlankNode<A>,
     pub predicate: AsRefNamedNode<A>,
@@ -136,14 +137,20 @@ impl AbbrevRdfXmlFormatterConfig {
     }
 }
 
+enum Tag<'a> {
+    Namespaced(String),
+    Unnamedspaced(&'a str, &'a str)
+}
+
 pub struct AbbrevRdfXmlFormatter<A:AsRef<str>, W: Write> {
     writer: Writer<W>,
     config: AbbrevRdfXmlFormatterConfig,
-    current_subject: Option<AsRefNamedOrBlankNode<A>>,
+    current_subject: Vec<AsRefNamedOrBlankNode<A>>,
+    current_close: Vec<Vec<u8>>,
 }
 
 impl<A, W> AbbrevRdfXmlFormatter<A, W>
-where A: AsRef<str> + Clone + PartialEq,
+where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
       W: Write,
 {
     /// Builds a new formatter from a `Write` implementation and starts writing
@@ -154,7 +161,8 @@ where A: AsRef<str> + Clone + PartialEq,
         Self {
             writer: Writer::new_with_indent(write, b' ', config.indentation),
             config,
-            current_subject: None
+            current_subject: vec![],
+            current_close: vec![],
         }
         .write_start()
     }
@@ -181,15 +189,93 @@ where A: AsRef<str> + Clone + PartialEq,
         Ok(())
     }
 
+    fn tags_for_iri<'a>(&self, iri: &'a A) -> Tag<'a>
+    {
+        let (iri_prefix, iri_value) = split_iri(iri);
+        let (iri_qname, iri_xmlns) = (iri_value, iri_prefix);
+
+        if let Some(iri_ns_prefix) = &self.config.prefix.get(iri_prefix) {
+            Tag::Namespaced(format!("{}:{}", &iri_ns_prefix, &iri_qname))
+        } else {
+            Tag::Unnamedspaced(iri_qname, iri_xmlns)
+        }
+    }
+
+    fn bytes_for_iri<'a>(&self, iri: &'a A) -> BytesStart<'static> {
+        let tag = self.tags_for_iri(&iri);
+
+        match tag {
+            Tag::Namespaced(name) =>  BytesStart::owned_name(name),
+            Tag::Unnamedspaced(qname, xmlns) => {
+                let mut bs = BytesStart::owned_name(qname.as_bytes());
+                bs.push_attribute(("xmlns", xmlns));
+                bs
+            }
+        }
+    }
 
     pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        // We open a new rdf:Description if useful
-        if self.current_subject.as_ref() != Some(&triple.subject) {
-            if self.current_subject.is_some() {
+        let current_subject = self.current_subject.pop();
+        let current_close = self.current_close.pop();
+
+        //dbg!(std::str::from_utf8(&current_close.clone().unwrap()));
+        if current_subject.as_ref() != Some(&triple.subject) {
+            if current_subject.is_some() {
+                if let Some(close) = &current_close {
+                    self.writer
+                        .write_event(Event::End(BytesEnd::borrowed(&close)))
+                        .map_err(map_err)?;
+                }
+            };
+        }
+
+        if triple.predicate.iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        {
+            // Format object tag, about subject
+            if let AsRefTerm::NamedNode(nn) = &triple.object {
+
+                let mut open = self.bytes_for_iri(&nn.iri);
+                self.current_close.push(open.name().to_vec());
+                self.current_subject.push(triple.subject.clone());
+
+                match triple.subject {
+                    AsRefNamedOrBlankNode::NamedNode(ref n) => {
+                        open.push_attribute(("rdf:about", n.iri.as_ref()))
+                    }
+                    AsRefNamedOrBlankNode::BlankNode(ref n) => {
+                        open.push_attribute(("rdf:nodeID", n.id.as_ref()))
+                    }
+                }
                 self.writer
-                    .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
+                    .write_event(Event::Start(open))
                     .map_err(map_err)?;
             }
+            return Ok(());
+        }
+
+        self.format_normal(triple, current_subject, current_close)
+    }
+
+
+    fn format_normal(&mut self, triple: &AsRefTriple<A>,
+                     mut current_subject: Option<AsRefNamedOrBlankNode<A>>,
+                     mut current_close: Option<Vec<u8>>
+    ) -> Result<(), io::Error> {
+        // We open a new rdf:Description if useful
+        let mut property_open = self.bytes_for_iri(&triple.predicate.iri);
+
+
+        //dbg!(std::str::from_utf8(&current_close.clone().unwrap()));
+        if current_subject.as_ref() != Some(&triple.subject) {
+            if current_subject.is_some() {
+                if let Some(close) = &current_close {
+                    //dbg!("About to write", std::str::from_utf8(close));
+                    self.writer
+                        .write_event(Event::End(BytesEnd::borrowed(&close)))
+                        .map_err(map_err)?;
+                    current_close = None;
+                }
+            };
 
             let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
             match triple.subject {
@@ -204,26 +290,6 @@ where A: AsRef<str> + Clone + PartialEq,
                 .write_event(Event::Start(description_open))
                 .map_err(map_err)?;
         }
-
-        let (prop_prefix, prop_value) = split_iri(&triple.predicate.iri);
-        let (prop_qname, prop_xmlns) = if prop_value.is_empty() {
-            ("prop:", ("xmlns:prop", prop_prefix))
-        } else {
-            (prop_value, ("xmlns", prop_prefix))
-        };
-
-        let mut property_open =
-            match &self.config.prefix.get(prop_prefix)
-        {
-                Some(prop_ns_prefix) => {
-                    BytesStart::owned_name(format!("{}:{}", prop_ns_prefix, prop_qname))
-                }
-                None => {
-                    let mut bs = BytesStart::borrowed_name(prop_qname.as_bytes());
-                    bs.push_attribute(prop_xmlns);
-                    bs
-                }
-            };
 
         let content = match &triple.object {
             AsRefTerm::NamedNode(n) => {
@@ -253,24 +319,27 @@ where A: AsRef<str> + Clone + PartialEq,
             self.writer
                 .write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
                 .map_err(map_err)?;
-            self.writer
-                .write_event(Event::End(BytesEnd::borrowed(prop_qname.as_bytes())))
-                .map_err(map_err)?;
         } else {
             self.writer
                 .write_event(Event::Empty(property_open))
                 .map_err(map_err)?;
         }
 
-        self.current_subject = Some(triple.subject.clone());
+        self.current_subject.push(triple.subject.clone());
+        if let Some(close) = current_close {
+            self.current_close.push(close);
+        }
+        else {
+            self.current_close.push(b"rdf:Description".to_vec())
+        }
         Ok(())
     }
 
     /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
-        if self.current_subject.is_some() {
+        if let Some(close) = self.current_close.pop() {
             self.writer
-                .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
+                .write_event(Event::End(BytesEnd::borrowed(&close)))
                 .map_err(map_err)?;
         }
         self.writer
