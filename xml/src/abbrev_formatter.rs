@@ -147,6 +147,7 @@ pub struct AbbrevRdfXmlFormatter<A:AsRef<str>, W: Write> {
     config: AbbrevRdfXmlFormatterConfig,
     current_subject: Vec<AsRefNamedOrBlankNode<A>>,
     current_close: Vec<Vec<u8>>,
+    maybe_empty_open: Option<BytesStart<'static>>,
 }
 
 impl<A, W> AbbrevRdfXmlFormatter<A, W>
@@ -163,18 +164,17 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
             config,
             current_subject: vec![],
             current_close: vec![],
+            maybe_empty_open: None
         }
-        .write_start()
+        .write_declaration()
     }
 
-    fn write_start(mut self) -> Result<Self, io::Error> {
-        self.writer
-            .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
+    fn write_declaration(mut self) -> Result<Self, io::Error> {
+        self.write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
             .map_err(map_err)?;
         let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
         self.write_prefix(&mut rdf_open)?;
-        self.writer
-            .write_event(Event::Start(rdf_open))
+        self.write_event(Event::Start(rdf_open))
             .map_err(map_err)?;
         Ok(self)
     }
@@ -189,20 +189,16 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
         Ok(())
     }
 
-    fn tags_for_iri<'a>(&self, iri: &'a A) -> Tag<'a>
-    {
+    fn bytes_for_iri<'a>(&self, iri: &'a A) -> BytesStart<'static> {
         let (iri_prefix, iri_value) = split_iri(iri);
         let (iri_qname, iri_xmlns) = (iri_value, iri_prefix);
 
-        if let Some(iri_ns_prefix) = &self.config.prefix.get(iri_prefix) {
-            Tag::Namespaced(format!("{}:{}", &iri_ns_prefix, &iri_qname))
-        } else {
-            Tag::Unnamedspaced(iri_qname, iri_xmlns)
-        }
-    }
-
-    fn bytes_for_iri<'a>(&self, iri: &'a A) -> BytesStart<'static> {
-        let tag = self.tags_for_iri(&iri);
+        let tag =
+            if let Some(iri_ns_prefix) = &self.config.prefix.get(iri_prefix) {
+                Tag::Namespaced(format!("{}:{}", &iri_ns_prefix, &iri_qname))
+            } else {
+                Tag::Unnamedspaced(iri_qname, iri_xmlns)
+            };
 
         match tag {
             Tag::Namespaced(name) =>  BytesStart::owned_name(name),
@@ -214,18 +210,46 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
         }
     }
 
-    pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        let current_subject = self.current_subject.pop();
-        let current_close = self.current_close.pop();
+    fn write_close(&mut self) -> Result<(), io::Error> {
+        let close = self.current_close.pop().ok_or(
+            io::Error::new(io::ErrorKind::Other, "close when no close is available")
+        )?;
 
-        //dbg!(std::str::from_utf8(&current_close.clone().unwrap()));
-        if current_subject.as_ref() != Some(&triple.subject) {
-            if current_subject.is_some() {
-                if let Some(close) = &current_close {
-                    self.writer
-                        .write_event(Event::End(BytesEnd::borrowed(&close)))
-                        .map_err(map_err)?;
-                }
+        if let Some(empty) = self.maybe_empty_open.take() {
+            self.write_event(Event::Empty(empty)).map_err(map_err)
+        } else {
+            self.write_event(Event::End(BytesEnd::owned(close))).map_err(map_err)
+        }
+    }
+
+    fn write_start(&mut self, event: Event<'_>) -> Result<(), quick_xml::Error> {
+        match event {
+            Event::Start(bs) => {
+                self.current_close.push(bs.name().to_vec());
+                self.maybe_empty_open = Some(bs.to_owned());
+            }
+            _ => panic!("Only pass a start event to write start"),
+        }
+        Ok(())
+    }
+
+    // Write a single event here.
+    fn write_event(&mut self, event: Event<'_>) -> Result<(), quick_xml::Error> {
+        //println!("write_event:{:?}", &event);
+        if let Some(bs) = self.maybe_empty_open.take() {
+            self.writer.write_event(Event::Start(bs))?;
+        }
+        // If this is a start event, capture it, and hold it till the
+        // next event. If the next event is a cognate close, send a Empty.
+        self.writer.write_event(event)
+    }
+
+    pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        let last_subject = self.current_subject.pop();
+
+        if last_subject.as_ref() != Some(&triple.subject) {
+            if last_subject.is_some() {
+                self.write_close()?;
             };
         }
 
@@ -235,7 +259,6 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
             if let AsRefTerm::NamedNode(nn) = &triple.object {
 
                 let mut open = self.bytes_for_iri(&nn.iri);
-                self.current_close.push(open.name().to_vec());
                 self.current_subject.push(triple.subject.clone());
 
                 match triple.subject {
@@ -246,35 +269,28 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
                         open.push_attribute(("rdf:nodeID", n.id.as_ref()))
                     }
                 }
-                self.writer
-                    .write_event(Event::Start(open))
+                self.write_start(Event::Start(open))
                     .map_err(map_err)?;
             }
             return Ok(());
         }
 
-        self.format_normal(triple, current_subject, current_close)
+        self.format_normal(triple, last_subject)
     }
 
 
     fn format_normal(&mut self, triple: &AsRefTriple<A>,
-                     mut current_subject: Option<AsRefNamedOrBlankNode<A>>,
-                     mut current_close: Option<Vec<u8>>
+                     last_subject: Option<AsRefNamedOrBlankNode<A>>,
     ) -> Result<(), io::Error> {
         // We open a new rdf:Description if useful
         let mut property_open = self.bytes_for_iri(&triple.predicate.iri);
 
 
         //dbg!(std::str::from_utf8(&current_close.clone().unwrap()));
-        if current_subject.as_ref() != Some(&triple.subject) {
-            if current_subject.is_some() {
-                if let Some(close) = &current_close {
-                    //dbg!("About to write", std::str::from_utf8(close));
-                    self.writer
-                        .write_event(Event::End(BytesEnd::borrowed(&close)))
-                        .map_err(map_err)?;
-                    current_close = None;
-                }
+        if last_subject.as_ref() != Some(&triple.subject) {
+            if last_subject.is_some() {
+                //dbg!("About to write", std::str::from_utf8(close));
+                self.write_close()?;
             };
 
             let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
@@ -286,8 +302,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
                     description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
                 }
             }
-            self.writer
-                .write_event(Event::Start(description_open))
+            self.write_start(Event::Start(description_open))
                 .map_err(map_err)?;
         }
 
@@ -313,41 +328,29 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
             },
         };
         if let Some(content) = content {
-            self.writer
-                .write_event(Event::Start(property_open))
+            self.write_start(Event::Start(property_open))
                 .map_err(map_err)?;
-            self.writer
-                .write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
+            self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
                 .map_err(map_err)?;
         } else {
-            self.writer
-                .write_event(Event::Empty(property_open))
+            self.write_event(Event::Empty(property_open))
                 .map_err(map_err)?;
         }
 
         self.current_subject.push(triple.subject.clone());
-        if let Some(close) = current_close {
-            self.current_close.push(close);
-        }
-        else {
-            self.current_close.push(b"rdf:Description".to_vec())
-        }
         Ok(())
     }
 
     /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
-        if let Some(close) = self.current_close.pop() {
-            self.writer
-                .write_event(Event::End(BytesEnd::borrowed(&close)))
-                .map_err(map_err)?;
+        while !self.current_close.is_empty() {
+            self.write_close()?;
         }
-        self.writer
-            .write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
+
+        self.write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
             .map_err(map_err)?;
         Ok(self.writer.into_inner())
     }
-
 }
 
 
