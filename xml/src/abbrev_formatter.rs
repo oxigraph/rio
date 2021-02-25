@@ -245,9 +245,9 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
     }
 
     pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        let last_subject = self.current_subject.pop();
+        let last_subject = self.current_subject[..].last();
 
-        if last_subject.as_ref() != Some(&triple.subject) {
+        if last_subject != Some(&triple.subject) {
             if last_subject.is_some() {
                 self.write_close()?;
             };
@@ -275,24 +275,17 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
             return Ok(());
         }
 
-        self.format_normal(triple, last_subject)
+        self.format_normal(triple)
     }
 
 
-    fn format_normal(&mut self, triple: &AsRefTriple<A>,
-                     last_subject: Option<AsRefNamedOrBlankNode<A>>,
-    ) -> Result<(), io::Error> {
-        // We open a new rdf:Description if useful
+    fn format_normal(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
         let mut property_open = self.bytes_for_iri(&triple.predicate.iri);
 
+        let last_subject = self.current_subject[..].last();
 
         //dbg!(std::str::from_utf8(&current_close.clone().unwrap()));
-        if last_subject.as_ref() != Some(&triple.subject) {
-            if last_subject.is_some() {
-                //dbg!("About to write", std::str::from_utf8(close));
-                self.write_close()?;
-            };
-
+        if last_subject != Some(&triple.subject) {
             let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
             match triple.subject {
                 AsRefNamedOrBlankNode::NamedNode(ref n) => {
