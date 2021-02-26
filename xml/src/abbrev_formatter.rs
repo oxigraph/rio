@@ -101,7 +101,7 @@ impl From<Term<'_>> for AsRefTerm<String> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AsRefTriple<A: AsRef<str>> {
     pub subject: AsRefNamedOrBlankNode<A>,
     pub predicate: AsRefNamedNode<A>,
@@ -148,10 +148,11 @@ pub struct AbbrevRdfXmlFormatter<A:AsRef<str>, W: Write> {
     current_subject: Vec<AsRefNamedOrBlankNode<A>>,
     current_close: Vec<Vec<u8>>,
     maybe_empty_open: Option<BytesStart<'static>>,
+    bnode_cache: HashMap<AsRefBlankNode<A>, Vec<AsRefTriple<A>>>
 }
 
 impl<A, W> AbbrevRdfXmlFormatter<A, W>
-where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
+where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq,
       W: Write,
 {
     /// Builds a new formatter from a `Write` implementation and starts writing
@@ -164,7 +165,8 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
             config,
             current_subject: vec![],
             current_close: vec![],
-            maybe_empty_open: None
+            maybe_empty_open: None,
+            bnode_cache: HashMap::new()
         }
         .write_declaration()
     }
@@ -211,10 +213,12 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
     }
 
     fn write_close(&mut self) -> Result<(), io::Error> {
+        //  println!("\nwrite_close_check:");
         let close = self.current_close.pop().ok_or(
             io::Error::new(io::ErrorKind::Other, "close when no close is available")
         )?;
 
+        //  println!("\nwrite_close:");
         if let Some(empty) = self.maybe_empty_open.take() {
             self.write_event(Event::Empty(empty)).map_err(map_err)
         } else {
@@ -223,6 +227,8 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
     }
 
     fn write_start(&mut self, event: Event<'_>) -> Result<(), quick_xml::Error> {
+        //println!("\nwrite_start:");
+        self.write_complete_open()?;
         match event {
             Event::Start(bs) => {
                 self.current_close.push(bs.name().to_vec());
@@ -233,53 +239,117 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
         Ok(())
     }
 
-    // Write a single event here.
-    fn write_event(&mut self, event: Event<'_>) -> Result<(), quick_xml::Error> {
-        //println!("write_event:{:?}", &event);
+    fn write_complete_open(&mut self) -> Result<(), quick_xml::Error> {
         if let Some(bs) = self.maybe_empty_open.take() {
             self.writer.write_event(Event::Start(bs))?;
         }
+        self.maybe_empty_open = None;
+        Ok(())
+    }
+
+    // Write a single event here.
+    fn write_event(&mut self, event: Event<'_>) -> Result<(), quick_xml::Error> {
+        self.write_complete_open()?;
+        //println!("\nwrite_event:{:?}", &event);
         // If this is a start event, capture it, and hold it till the
         // next event. If the next event is a cognate close, send a Empty.
         self.writer.write_event(event)
     }
 
     pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        let last_subject = self.current_subject[..].last();
+        //println!("\nformat: {:?}", triple);
 
-        if last_subject != Some(&triple.subject) {
-            if last_subject.is_some() {
-                self.write_close()?;
-            };
+        if let AsRefTriple{
+                subject: AsRefNamedOrBlankNode::BlankNode(bnode),
+                predicate:_,
+                object:_
+            } = &triple {
+            self.cache_bnode_sub(&bnode, &triple);
+            Ok(())
         }
+        else{
+            let last_subject = self.current_subject[..].last();
 
-        if triple.predicate.iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
-        {
-            // Format object tag, about subject
-            if let AsRefTerm::NamedNode(nn) = &triple.object {
-
-                let mut open = self.bytes_for_iri(&nn.iri);
-                self.current_subject.push(triple.subject.clone());
-
-                match triple.subject {
-                    AsRefNamedOrBlankNode::NamedNode(ref n) => {
-                        open.push_attribute(("rdf:about", n.iri.as_ref()))
-                    }
-                    AsRefNamedOrBlankNode::BlankNode(ref n) => {
-                        open.push_attribute(("rdf:nodeID", n.id.as_ref()))
-                    }
-                }
-                self.write_start(Event::Start(open))
-                    .map_err(map_err)?;
+            if last_subject != Some(&triple.subject) {
+                if last_subject.is_some() {
+                    self.write_close()?;
+                };
             }
-            return Ok(());
+            self.format_others(triple)
+        }
+    }
+
+    fn format_others(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        match &triple {
+            AsRefTriple{
+                 subject:_,
+                 predicate:_,
+                 object: AsRefTerm::BlankNode(bnode),
+            } => self.format_bnode_obj(&bnode, &triple),
+
+            _ if triple.predicate.iri.as_ref()
+                == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" =>
+                self.format_typed_node(&triple),
+
+            _ => self.format_normal(&triple)
+        }
+    }
+
+    fn format_bnode_obj(&mut self, bnode: &AsRefBlankNode<A>, triple: &AsRefTriple<A>)
+                        -> Result<(), io::Error> {
+        //println!("\nformat_bnode_obj: {:?}", triple);
+        let mut property_open = self.bytes_for_iri(&triple.predicate.iri);
+        property_open.push_attribute(("rdf:parseType", "Resource"));
+        self.write_start(Event::Start(property_open))
+            .map_err(map_err)?;
+
+        for t in self.bnode_cache.remove(bnode).unwrap_or(vec![]) {
+            //println!("\nformatting_cached: {:?}", &t);
+            self.format_others(&t)?;
         }
 
-        self.format_normal(triple)
+        self.current_subject.push(triple.subject.clone());
+        Ok(())
+    }
+
+    fn cache_bnode_sub(&mut self, bnode: &AsRefBlankNode<A>, triple: &AsRefTriple<A>){
+        //println!("\nformat_bnode_sub: {:?}", &triple);
+        let v = self.bnode_cache.get_mut(bnode);
+
+        let t = triple.clone();
+        if let Some(v) = v {
+            v.push(t);
+        }
+        else {
+            self.bnode_cache.insert(bnode.clone(), vec![t]);
+        }
     }
 
 
+    fn format_typed_node(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        //println!("\nformat_typed_node: {:?}", &triple);
+        // Format object tag, about subject
+        if let AsRefTerm::NamedNode(nn) = &triple.object {
+
+            let mut open = self.bytes_for_iri(&nn.iri);
+            self.current_subject.push(triple.subject.clone());
+
+            match triple.subject {
+                AsRefNamedOrBlankNode::NamedNode(ref n) => {
+                    open.push_attribute(("rdf:about", n.iri.as_ref()))
+                }
+                AsRefNamedOrBlankNode::BlankNode(ref n) => {
+                    open.push_attribute(("rdf:nodeID", n.id.as_ref()))
+                }
+            }
+            self.write_start(Event::Start(open))
+                .map_err(map_err)?;
+        }
+        return Ok(());
+    }
+
     fn format_normal(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        //println!("format_normal: {:?}", &triple);
         let mut property_open = self.bytes_for_iri(&triple.predicate.iri);
 
         let last_subject = self.current_subject[..].last();
@@ -342,6 +412,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + PartialEq,
 
         self.write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
             .map_err(map_err)?;
+
         Ok(self.writer.into_inner())
     }
 }
