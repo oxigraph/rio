@@ -1,16 +1,28 @@
 use std::{collections::HashMap, io::{self, Write}};
+use std::fmt;
 
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
 use crate::utils::{is_name_char, is_name_start_char};
 
-
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
 pub struct AsRefNamedNode<A:AsRef<str>> {
     pub iri: A,
 }
 
+impl<A:AsRef<str>> fmt::Display for AsRefNamedNode<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let nn:NamedNode<'_> = self.into();
+        write!(f, "{}", nn)
+    }
+}
+
+impl<'a, A:AsRef<str>> From<&'a AsRefNamedNode<A>> for NamedNode<'a> {
+    fn from(arnn: &'a AsRefNamedNode<A>) -> Self {
+        NamedNode{iri: arnn.iri.as_ref()}
+    }
+}
 
 impl From<NamedNode<'_>> for AsRefNamedNode<String> {
     fn from(nn: NamedNode<'_>) -> Self {
@@ -19,9 +31,23 @@ impl From<NamedNode<'_>> for AsRefNamedNode<String> {
     }
 }
 
+
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
 pub struct AsRefBlankNode<A:AsRef<str>> {
     pub id: A,
+}
+
+impl<A:AsRef<str>> fmt::Display for AsRefBlankNode<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let nn:BlankNode<'_> = self.into();
+        write!(f, "{}", nn)
+    }
+}
+
+impl<'a, A:AsRef<str>> From<&'a AsRefBlankNode<A>> for BlankNode<'a> {
+    fn from(arbn: &'a AsRefBlankNode<A>) -> Self {
+        BlankNode{id: arbn.id.as_ref()}
+    }
 }
 
 impl From<BlankNode<'_>> for AsRefBlankNode<String> {
@@ -44,6 +70,33 @@ pub enum AsRefLiteral<A:AsRef<str>> {
         datatype: AsRefNamedNode<A>,
     },
 }
+
+impl<A:AsRef<str>> fmt::Display for AsRefLiteral<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let nn:Literal<'_> = self.into();
+        write!(f, "{}", nn)
+    }
+}
+
+impl<'a, A:AsRef<str>> From<&'a AsRefLiteral<A>> for Literal<'a> {
+    fn from(l: &'a AsRefLiteral<A>) -> Self {
+        match l {
+            AsRefLiteral::Simple { value } =>
+                Literal::Simple{value:value.as_ref()},
+            AsRefLiteral::LanguageTaggedString { value, language } =>
+                Literal::LanguageTaggedString{
+                    value: value.as_ref(),
+                    language: language.as_ref(),
+                },
+            AsRefLiteral::Typed { value, datatype } =>
+                Literal::Typed {
+                    value: value.as_ref(),
+                    datatype: datatype.into(),
+                },
+        }
+    }
+}
+
 
 impl From<Literal<'_>> for AsRefLiteral<String> {
     fn from(l: Literal<'_>) -> Self {
@@ -70,6 +123,24 @@ pub enum AsRefNamedOrBlankNode<A:AsRef<str>> {
     BlankNode(AsRefBlankNode<A>),
 }
 
+impl<A:AsRef<str>> fmt::Display for AsRefNamedOrBlankNode<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let nn:NamedOrBlankNode<'_> = self.into();
+        write!(f, "{}", nn)
+    }
+}
+
+impl<'a, A:AsRef<str>> From<&'a AsRefNamedOrBlankNode<A>> for NamedOrBlankNode<'a> {
+    fn from(anbn: &'a AsRefNamedOrBlankNode<A>) -> Self {
+        match anbn {
+            AsRefNamedOrBlankNode::NamedNode(nn) =>
+                NamedOrBlankNode::NamedNode(nn.into()),
+            AsRefNamedOrBlankNode::BlankNode(bn) =>
+                NamedOrBlankNode::BlankNode(bn.into())
+        }
+    }
+}
+
 impl From<NamedOrBlankNode<'_>> for AsRefNamedOrBlankNode<String> {
     fn from(nbn: NamedOrBlankNode<'_>) -> Self {
         match nbn {
@@ -86,6 +157,26 @@ pub enum AsRefTerm<A:AsRef<str>> {
     NamedNode(AsRefNamedNode<A>),
     BlankNode(AsRefBlankNode<A>),
     Literal(AsRefLiteral<A>),
+}
+
+impl<A:AsRef<str>> fmt::Display for AsRefTerm<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let t:Term<'_> = self.into();
+        write!(f, "{}", t)
+    }
+}
+
+impl<'a, A:AsRef<str>> From<&'a AsRefTerm<A>> for Term<'a> {
+    fn from(t: &'a AsRefTerm<A>) -> Self {
+        match t {
+            AsRefTerm::NamedNode(nn) =>
+                Term::NamedNode(nn.into()),
+            AsRefTerm::BlankNode(bn) =>
+                Term::BlankNode(bn.into()),
+            AsRefTerm::Literal(l) =>
+                Term::Literal(l.into()),
+        }
+    }
 }
 
 impl From<Term<'_>> for AsRefTerm<String> {
@@ -106,6 +197,23 @@ pub struct AsRefTriple<A: AsRef<str>> {
     pub subject: AsRefNamedOrBlankNode<A>,
     pub predicate: AsRefNamedNode<A>,
     pub object: AsRefTerm<A>
+}
+
+impl<A:AsRef<str>> fmt::Display for AsRefTriple<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let t:Triple<'_> = self.into();
+        write!(f, "{}", t)
+    }
+}
+
+impl<'a, A:AsRef<str>> From<&'a AsRefTriple<A>> for Triple<'a>{
+    fn from(t: &'a AsRefTriple<A>) -> Self {
+        Triple {
+            subject: (&t.subject).into(),
+            predicate: (&t.predicate).into(),
+            object: (&t.object).into()
+        }
+    }
 }
 
 impl From<Triple<'_>> for AsRefTriple<String> {
@@ -213,7 +321,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
     }
 
     fn write_close(&mut self) -> Result<(), io::Error> {
-        //  println!("\nwrite_close_check:");
+        //writeln!(self.writer.inner(), "\nwrite_close:");
         let close = self.current_close.pop().ok_or(
             io::Error::new(io::ErrorKind::Other, "close when no close is available")
         )?;
@@ -257,7 +365,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
     }
 
     pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        //println!("\nformat: {:?}", triple);
+        //write!(self.writer.inner(), "\nformat: {:?}", triple);
 
         if let AsRefTriple{
                 subject: AsRefNamedOrBlankNode::BlankNode(bnode),
@@ -268,19 +376,61 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
             Ok(())
         }
         else{
-            let last_subject = self.current_subject[..].last();
-
-            if last_subject != Some(&triple.subject) {
-                if last_subject.is_some() {
-                    self.write_close()?;
-                };
-            }
+            self.format_close_maybe(triple)?;
             self.format_others(triple)
         }
     }
 
+    fn format_close_maybe(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        let last_subject = self.current_subject[..].last();
+        // writeln!(self.writer.inner(), "\nclose_maybe: {:?} : {}",
+        //          last_subject, &triple.subject);
+
+        if last_subject != Some(&triple.subject) {
+                if last_subject.is_some() {
+                    self.write_close()?;
+                };
+        }
+        Ok(())
+    }
+
     fn format_others(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        //writeln!(self.writer.inner(), "\nformat_others: {}", triple);
         match &triple {
+            AsRefTriple{
+                subject:AsRefNamedOrBlankNode::BlankNode(_),
+                predicate:_,
+                object:_,
+            } if triple.predicate.iri.as_ref()
+                == "http://www.w3.org/1999/02/22-rdf-syntax-ns#first" =>
+            {
+                //write!(self.writer.inner(), "\nformat_first: {:?}", &bnode);
+                self.format_first(&triple)
+            },
+            AsRefTriple{
+                subject:AsRefNamedOrBlankNode::BlankNode(_),
+                predicate:_,
+                object:AsRefTerm::NamedNode(nn),
+            } if nn.iri.as_ref()
+                == "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil" =>
+            {
+                self.write_close()?;
+                self.write_close()?;
+                self.write_close()
+            }
+            AsRefTriple{
+                subject:AsRefNamedOrBlankNode::BlankNode(_),
+                predicate:_,
+                object:AsRefTerm::BlankNode(bnode),
+            } if triple.predicate.iri.as_ref()
+                == "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest" =>
+            {
+                //write!(self.writer.inner(), "\nformat_rest: {:?}", &bnode);
+                for t in self.bnode_cache.remove(bnode).unwrap_or(vec![]) {
+                    self.format_others(&t)?;
+                }
+                Ok(())
+            }
             AsRefTriple{
                  subject:_,
                  predicate:_,
@@ -299,12 +449,20 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
                         -> Result<(), io::Error> {
         //println!("\nformat_bnode_obj: {:?}", triple);
         let mut property_open = self.bytes_for_iri(&triple.predicate.iri);
-        property_open.push_attribute(("rdf:parseType", "Resource"));
+        match &triple.subject {
+            AsRefNamedOrBlankNode::BlankNode(_) => {
+                property_open.push_attribute(("rdf:parseType", "Collection"));
+            }
+            AsRefNamedOrBlankNode::NamedNode(_) => {
+                property_open.push_attribute(("rdf:parseType", "Resource"));
+            }
+        }
+
         self.write_start(Event::Start(property_open))
             .map_err(map_err)?;
 
         for t in self.bnode_cache.remove(bnode).unwrap_or(vec![]) {
-            //println!("\nformatting_cached: {:?}", &t);
+            //write!(self.writer.inner(), "\nformatting_cached: {:?}", &t);
             self.format_others(&t)?;
         }
 
@@ -313,7 +471,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
     }
 
     fn cache_bnode_sub(&mut self, bnode: &AsRefBlankNode<A>, triple: &AsRefTriple<A>){
-        //println!("\nformat_bnode_sub: {:?}", &triple);
+        //write!(self.writer.inner(), "\nformat_bnode_sub: {:?}", &triple);
         let v = self.bnode_cache.get_mut(bnode);
 
         let t = triple.clone();
@@ -325,6 +483,27 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
         }
     }
 
+//_:riog00000008
+//	<http://www.w3.org/1999/02/22-rdf-syntax-ns#first>
+//	<http://www.example.com/iri#C>
+
+    fn format_first(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
+        match &triple.object {
+            AsRefTerm::NamedNode(ref n) => {
+                description_open.push_attribute(("rdf:about", n.iri.as_ref()));
+                self.write_start(Event::Start(description_open))
+                    .map_err(map_err)?;
+                self.write_close()?;
+            }
+            AsRefTerm::BlankNode(ref _n) => {
+                todo!()
+            }
+            _=> todo!()
+        }
+
+        Ok(())
+    }
 
     fn format_typed_node(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
         //println!("\nformat_typed_node: {:?}", &triple);
@@ -338,8 +517,8 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
                 AsRefNamedOrBlankNode::NamedNode(ref n) => {
                     open.push_attribute(("rdf:about", n.iri.as_ref()))
                 }
-                AsRefNamedOrBlankNode::BlankNode(ref n) => {
-                    open.push_attribute(("rdf:nodeID", n.id.as_ref()))
+                AsRefNamedOrBlankNode::BlankNode(_) => {
+                    // Don't need to do anything here
                 }
             }
             self.write_start(Event::Start(open))
@@ -406,6 +585,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
 
     /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
+        //write!(self.writer.inner(), "\nformat_bnode_cache_left: {:?}", &self.bnode_cache);
         while !self.current_close.is_empty() {
             self.write_close()?;
         }
