@@ -488,19 +488,20 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + std::hash::Hash + PartialEq
 //	<http://www.example.com/iri#C>
 
     fn format_first(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
+        println!("\nformat_first:{}", triple);
         match &triple.object {
             AsRefTerm::NamedNode(ref n) => {
+                let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
                 description_open.push_attribute(("rdf:about", n.iri.as_ref()));
                 self.write_start(Event::Start(description_open))
                     .map_err(map_err)?;
                 self.write_close()?;
             }
             AsRefTerm::BlankNode(ref _n) => {
-                todo!()
+                
             }
             _=> todo!()
-        }
+        };
 
         Ok(())
     }

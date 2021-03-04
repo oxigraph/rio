@@ -50,6 +50,7 @@
 #![doc(test(attr(deny(warnings))))]
 
 pub mod abbrev_formatter;
+pub mod pretty_formatter;
 mod error;
 mod formatter;
 mod model;
