@@ -1,11 +1,10 @@
 use crate::utils::{is_name_char, is_name_start_char};
 
+use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::{self, cell::RefCell, collections::{HashMap, VecDeque}, fmt,
-          hash::{Hash,Hasher},
-          io::{self, Write}};
+use std::{self, cell::RefCell, collections::{HashMap, VecDeque}, fmt, hash::{Hash,Hasher}, io::{self, Write}};
 
 // Utilities
 fn map_err(error: quick_xml::Error) -> io::Error {
@@ -334,7 +333,7 @@ impl From<Triple<'_>> for AsRefTriple<String> {
 pub struct PrettyRdfXmlFormatterConfig {
     pub bnode_contract: bool,
     pub indentation: usize,
-    pub prefix: HashMap<String, String>,
+    pub prefix: IndexMap<String, String>,
     pub typed_node: bool
 }
 
@@ -343,7 +342,7 @@ impl PrettyRdfXmlFormatterConfig {
         PrettyRdfXmlFormatterConfig {
             bnode_contract: false,
             indentation: 4,
-            prefix: HashMap::new(),
+            prefix: IndexMap::new(),
             typed_node: false
         }
     }
@@ -397,6 +396,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + Hash + PartialEq,
     }
 
     fn write_prefix(&mut self, rdf_open: &mut BytesStart<'_>) -> Result<(), io::Error> {
+        print!("writing prefix:{:?}", &self.config.prefix);
         for i in &self.config.prefix {
             let ns = format!("xmlns:{}", &i.1);
             rdf_open.push_attribute((&ns[..],
@@ -449,7 +449,6 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + Hash + PartialEq,
 
     fn bytes_start_iri<'a>(&mut self, nn:&'a AsRefNamedNode<A>) -> BytesStart<'a> {
         let (iri_protocol_and_host, iri_qname) = nn.split_iri();
-        println!("Split iri: {} {} ", &iri_protocol_and_host, &iri_qname);
         if let Some(iri_ns_prefix) = &self.config.prefix.get(iri_protocol_and_host) {
             BytesStart::owned_name(
                 format!("{}:{}", &iri_ns_prefix, &iri_qname)
@@ -505,6 +504,7 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + Hash + PartialEq,
                 .map_err(map_err)?;
             self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
                 .map_err(map_err)?;
+            self.write_close()?;
         } else {
             self.write_event(Event::Empty(property_open))
                 .map_err(map_err)?;
@@ -550,10 +550,33 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + Hash + PartialEq,
         }
     }
 
+    fn render_bnode_obj(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error>
+    {
+        println!("hello");
+        let mut property_open = self.bytes_start_iri(&triple.predicate);
+        match &triple.subject {
+            AsRefNamedOrBlankNode::BlankNode(_) => {
+                property_open.push_attribute(("rdf:parseType", "Collection"));
+            }
+            AsRefNamedOrBlankNode::NamedNode(_) => {
+                property_open.push_attribute(("rdf:parseType", "Resource"));
+            }
+        }
+
+        self.write_start(Event::Start(property_open))
+            .map_err(map_err)?;
+
+        self.open_subject_stack.push(triple.subject.clone());
+        Ok(())
+    }
+
     fn dispatch_triple(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error>
     {
         let ss = self.render_close_maybe(&triple.subject)?;
         match triple {
+            // AsRefTriple{subject:_, predicate:_,
+            //             object: AsRefTerm::BlankNode(_)
+            // } => self.render_bnode_obj(triple),
             _ if triple.predicate.iri.as_ref()
                 == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" =>
                 self.render_typed_node(&triple),
@@ -664,8 +687,10 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + Hash + PartialEq,
 
 #[cfg(test)]
 mod test {
+    use indexmap::{IndexMap, indexmap};
+    use pretty_assertions::assert_eq;
     use std::{collections::VecDeque, io::sink};
-
+    use rio_api::parser::TriplesParser;
     use super::{AsRefBlankNode, AsRefNamedNode,
                 AsRefTriple, PrettyRdfXmlFormatter,
                 PrettyRdfXmlFormatterConfig};
@@ -678,13 +703,13 @@ mod test {
         }
     }
 
-    fn tbn_type() -> AsRefTriple<String> {
-        AsRefTriple {
-            subject: AsRefBlankNode{id:"bn".to_string()}.into(),
-            predicate: AsRefNamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".to_string()).into(),
-            object: AsRefNamedNode::new("http://example.com/o2".to_string()).into()
-        }
-    }
+    // fn tbn_type() -> AsRefTriple<String> {
+    //     AsRefTriple {
+    //         subject: AsRefBlankNode{id:"bn".to_string()}.into(),
+    //         predicate: AsRefNamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".to_string()).into(),
+    //         object: AsRefNamedNode::new("http://example.com/o2".to_string()).into()
+    //     }
+    // }
 
     fn tbnobj() -> AsRefTriple<String> {
         AsRefTriple {
@@ -732,6 +757,33 @@ mod test {
         String::from_utf8(w).unwrap()
     }
 
+    fn from_nt(nt: &str) -> String {
+        from_nt_prefix(nt, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
+    }
+
+    fn from_nt_prefix(nt: &str, prefix: IndexMap<&str, &str>) -> String {
+        let sink = vec![];
+
+        let mut config = PrettyRdfXmlFormatterConfig::new();
+        config.prefix =
+            prefix.into_iter().map(
+                |(k, v)|
+                (k.to_string(), v.to_string())
+            ).collect();
+
+        let mut f = PrettyRdfXmlFormatter::new(sink,config).unwrap();
+
+        let _: Vec<Result<_, _>>
+            = rio_turtle::NTriplesParser::new(nt.as_bytes()).into_iter(
+                |rio_triple| {
+                    let t = rio_triple.into();
+                    let f = f.format(&t);
+                    f
+                }
+            ).collect();
+        let w = f.finish().unwrap();
+        String::from_utf8(w).unwrap()
+    }
 
     #[test]
     fn test_split_iri() {
@@ -832,5 +884,83 @@ r#"<?xml version="1.0" encoding="UTF-8"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
     <o2 xmlns="http://example.com/" rdf:about="http://example.com/s"/>
 </rdf:RDF>"#);
+    }
+
+    #[test]
+    fn render_embedded() {
+        let s = from_nt_prefix(r#"
+<http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/title> "RDF/XML Syntax Specification (Revised)" .
+<http://www.w3.org/TR/rdf-syntax-grammar> <http://example.org/stuff/1.0/editor>  <http://purl.org/net/dajobe/>.
+"#,
+                               indexmap![
+                                   "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf",
+                                   "http://purl.org/dc/elements/1.1/" => "dc",
+                                   "http://example.org/stuff/1.0/" => "ex"
+                               ]
+
+        );
+
+        let e =
+r###"<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ex="http://example.org/stuff/1.0/">
+    <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar">
+        <dc:title>RDF/XML Syntax Specification (Revised)</dc:title>
+        <ex:editor rdf:resource="http://purl.org/net/dajobe/"/>
+    </rdf:Description>
+</rdf:RDF>"###;
+        //println!("\nGot:\n{}\nExpected:\n{}", &s, &e);
+
+        assert_eq!(s, e);
+    }
+
+    #[test]
+    fn render_bnode() {
+        let s = from_nt(r#"
+<http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/title> "RDF/XML Syntax Specification (Revised)" .
+_:genid1 <http://example.org/stuff/1.0/fullName> "Dave Beckett" .
+_:genid1 <http://example.org/stuff/1.0/homePage> <http://purl.org/net/dajobe/> .
+<http://www.w3.org/TR/rdf-syntax-grammar> <http://example.org/stuff/1.0/editor> _:genid1 .
+"#);
+
+        let e = r###"<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:ex="http://example.org/stuff/1.0/">
+  <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar"
+                   dc:title="RDF 1.1 XML Syntax">
+    <ex:editor rdf:parseType="Resource">
+      <ex:fullName>Dave Beckett</ex:fullName>
+      <ex:homePage rdf:resource="http://purl.org/net/dajobe/"/>
+    </ex:editor>
+  </rdf:Description>
+</rdf:RDF>"###;
+
+        //println!("\nGot:\n{}\nExpected:\n{}", &s, &e);
+        assert_eq!(s,e);
+    }
+
+
+    fn render_seq() {
+        let s = from_nt(r#"
+_:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/banana> .
+_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/apple> .
+_:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:genid2 .
+_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/pear> .
+_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:genid3 .
+_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .
+<http://example.org/basket> <http://example.org/stuff/1.0/hasFruit> _:genid1 ."#);
+
+        assert_eq!(s,
+r###"<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns:ex="http://example.org/stuff/1.0/">
+  <rdf:Description rdf:about="http://example.org/basket">
+    <ex:hasFruit rdf:parseType="Collection">
+      <rdf:Description rdf:about="http://example.org/banana"/>
+      <rdf:Description rdf:about="http://example.org/apple"/>
+      <rdf:Description rdf:about="http://example.org/pear"/>
+    </ex:hasFruit>
+  </rdf:Description>
+</rdf:RDF>"###);
     }
 }
