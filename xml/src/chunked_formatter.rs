@@ -490,11 +490,14 @@ where A: AsRef<str> + Clone {
 
 
 
-// A chunk of RDF that should that should be coherent.
-// Current invariants: each subject should appear only once (i.e. all
-// subjects are grouped in AsRefMultiTriple); if a subject appears it
-// represents all appearances of the node as a subject in the document
-// of which this is a chunk
+/// A chunk of RDF that should that should be coherent.
+/// Current invariants:
+///   - each subject should appear only once (i.e. all subjects are
+///   grouped in AsRefMultiTriple)
+///   - if a subject appears it represents all appearances of the node
+///   as a subject in the document of which this is a chunk
+///   - if BNodes appear as subjects, they appear after any
+///   apperance as an object (TODO: Not implemented yet!)
 #[derive(Debug)]
 pub struct AsRefChunk<A:AsRef<str>>(Vec<AsRefExpandedTriple<A>>);
 
@@ -527,6 +530,10 @@ where A: AsRef<str> + Clone + Debug
 
     pub fn from_raw(v:Vec<AsRefExpandedTriple<A>>) -> Self {
         AsRefChunk(v)
+    }
+
+    pub fn empty() -> Self {
+        AsRefChunk(vec![])
     }
 
     pub fn with_subject(&self, nnb:&AsRefNamedOrBlankNode<A>) -> Option<&AsRefExpandedTriple<A>> {
@@ -657,8 +664,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         }
     }
 
-    pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-
+    fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
         let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
         match triple.subject {
             AsRefNamedOrBlankNode::NamedNode(ref n) => {
@@ -712,10 +718,74 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(())
     }
 
+    fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
+        let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
+        match multi_triple.subject() {
+            AsRefNamedOrBlankNode::NamedNode(ref n) => {
+                description_open.push_attribute(("rdf:about", n.iri.as_ref()))
+            }
+            AsRefNamedOrBlankNode::BlankNode(ref n) => {
+                description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
+            }
+        }
+
+        self.write_start(Event::Start(description_open))
+            .map_err(map_err)?;
+
+        for triple in multi_triple.vec.iter() {
+            let mut property_open = self.bytes_start_iri(&triple.predicate);
+
+            let content = match &triple.object {
+                AsRefTerm::NamedNode(n) => {
+                    property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
+                    None
+                }
+                AsRefTerm::BlankNode(n) => {
+                    property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
+                    None
+                }
+                AsRefTerm::Literal(l) => match l {
+                    AsRefLiteral::Simple { value } => Some(value),
+                    AsRefLiteral::LanguageTaggedString { value, language } => {
+                        property_open.push_attribute(("xml:lang", language.as_ref()));
+                        Some(value)
+                    }
+                    AsRefLiteral::Typed { value, datatype } => {
+                        property_open.push_attribute(("rdf:datatype", datatype.iri.as_ref()));
+                        Some(value)
+                    }
+                },
+            };
+
+            if let Some(content) = content {
+                self.write_start(Event::Start(property_open))
+                    .map_err(map_err)?;
+                self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
+                    .map_err(map_err)?;
+                self.write_close()?;
+            } else {
+                self.write_event(Event::Empty(property_open))
+                    .map_err(map_err)?;
+            }
+        }
+
+        self.write_close()?;
+        Ok(())
+    }
+
+    pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+        self.format_triple(triple, &AsRefChunk::empty())
+    }
+
     pub fn format_chunk(&mut self, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
         for i in chunk.0.iter() {
             match i {
-                AsRefExpandedTriple::AsRefTriple(t) => { self.format(&t);}
+                AsRefExpandedTriple::AsRefTriple(ref t) => {
+                    self.format_triple(t, &chunk);
+                }
+                AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
+                    self.format_multi(mt, &chunk);
+                }
                 _ =>{
                     todo!()
                 }
@@ -824,8 +894,16 @@ mod test {
             ]
         );
 
-        dbg!(&chk);
+        //dbg!(&chk);
         assert_eq!(chk.0.len(), 1);
+    }
+
+    fn spec_prefix() -> IndexMap<&'static str, &'static str> {
+        indexmap![
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf",
+            "http://purl.org/dc/elements/1.1/" => "dc",
+            "http://example.org/stuff/1.0/" => "ex"
+        ]
     }
 
     fn from_nt(nt: &str) -> String {
@@ -853,12 +931,14 @@ mod test {
             ).collect();
 
         let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
-        f.format_chunk(
-            &AsRefChunk::normalize(source)
-        ).unwrap();
+        let chk = AsRefChunk::normalize(source);
+        dbg!(&chk);
+        f.format_chunk(&chk).unwrap();
 
         let w = f.finish().unwrap();
-        String::from_utf8(w).unwrap()
+        let s = String::from_utf8(w).unwrap();
+        println!("{}", s);
+        s
     }
 
     fn nt_xml_roundtrip(nt: &str, xml: &str) {
@@ -913,8 +993,31 @@ mod test {
     }
 
     #[test]
+    fn example4_single_triple() {
+        nt_xml_roundtrip_prefix(
+r###"<http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/title> "RDF1.1 XML Syntax" .
+"### ,
+r###"
+<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:ex="http://example.org/stuff/1.0/">
+
+  <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar"
+             dc:title="RDF1.1 XML Syntax"/>
+</rdf:RDF>"### ,
+            spec_prefix()
+        )
+    }
+
+    #[test]
     fn example4_multiple_property_elements(){
-        xml_roundtrip(
+        nt_xml_roundtrip_prefix(
+r###"<http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/title> "RDF1.1 XML Syntax" .
+<http://www.w3.org/TR/rdf-syntax-grammar> <http://example.org/stuff/1.0/editor> _:genid1 .
+_:genid1 <http://example.org/stuff/1.0/fullName> "Dave Beckett" .
+_:genid1 <http://example.org/stuff/1.0/homePage> <http://purl.org/net/dajobe/> ."### ,
+
 r###"
 <?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -930,7 +1033,8 @@ r###"
     </ex:editor>
   </rdf:Description>
 
-</rdf:RDF>"###
+</rdf:RDF>"### ,
+            spec_prefix()
         )
     }
 }
