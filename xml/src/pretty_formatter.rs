@@ -550,26 +550,6 @@ where A: AsRef<str> + Clone + std::fmt::Debug + Eq + Hash + PartialEq,
         }
     }
 
-    fn render_bnode_obj(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error>
-    {
-        println!("hello");
-        let mut property_open = self.bytes_start_iri(&triple.predicate);
-        match &triple.subject {
-            AsRefNamedOrBlankNode::BlankNode(_) => {
-                property_open.push_attribute(("rdf:parseType", "Collection"));
-            }
-            AsRefNamedOrBlankNode::NamedNode(_) => {
-                property_open.push_attribute(("rdf:parseType", "Resource"));
-            }
-        }
-
-        self.write_start(Event::Start(property_open))
-            .map_err(map_err)?;
-
-        self.open_subject_stack.push(triple.subject.clone());
-        Ok(())
-    }
-
     fn dispatch_triple(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error>
     {
         let ss = self.render_close_maybe(&triple.subject)?;
@@ -946,7 +926,7 @@ _:genid1 <http://example.org/stuff/1.0/homePage> <http://purl.org/net/dajobe/> .
         assert_eq!(s,e);
     }
 
-
+    #[test]
     fn render_seq() {
         let s = from_nt(r#"
 _:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/banana> .

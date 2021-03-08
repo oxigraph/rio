@@ -4,7 +4,7 @@ use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Eve
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
 use std::fmt::{Debug, Formatter};
-use std::{self, cell::RefCell, collections::{HashMap, VecDeque}, fmt,
+use std::{self, cell::RefCell, collections::HashMap, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
 use std::marker::PhantomData;
@@ -44,7 +44,7 @@ impl <A:Debug + AsRef<str>> Debug for AsRefNamedNode<A> {
         fn fmt(&self, f: &mut Formatter<'_>) -> ::core::fmt::Result {
             match *self {
                 AsRefNamedNode {
-                    iri: ref iri,
+                    ref iri,
                     position_cache: _,
                     position_base: _,
                     position_add:_
@@ -378,12 +378,18 @@ enum AcceptorReturn<A:AsRef<str>> {
 trait TripleLike<A>
     where A:AsRef<str> + Clone
 {
+    /// Can a new Triple be accepted onto this TripleLike.
     fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A>;
+
+    /// What is the subject of the triple like
     fn subject(&self) -> &AsRefNamedOrBlankNode<A>;
+
+    /// Count the number of predicate arcs coming `subject`
+    fn predicates_from(&self, subject: &AsRefNamedOrBlankNode<A>) -> usize;
 }
 
 impl<A> TripleLike<A> for AsRefTriple<A>
-    where A:AsRef<str> + Clone
+    where A:AsRef<str> + Clone + PartialEq
 {
     fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A>{
         if self.subject.as_ref() == t.subject.as_ref() {
@@ -404,6 +410,14 @@ impl<A> TripleLike<A> for AsRefTriple<A>
     fn subject(&self) -> &AsRefNamedOrBlankNode<A> {
         &self.subject
     }
+
+    fn predicates_from(&self, subject:&AsRefNamedOrBlankNode<A>) -> usize {
+        if &self.subject == subject {
+            1
+        } else {
+            0
+        }
+    }
 }
 
 
@@ -416,7 +430,7 @@ pub struct AsRefMultiTriple<A:AsRef<str>> {
 }
 
 impl<A> TripleLike<A> for AsRefMultiTriple<A>
-    where A: AsRef<str> + Clone
+where A: AsRef<str> + Clone + PartialEq
 {
     fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A> {
         if self.subject.as_ref() == t.subject.as_ref() {
@@ -430,6 +444,10 @@ impl<A> TripleLike<A> for AsRefMultiTriple<A>
     fn subject(&self) -> &AsRefNamedOrBlankNode<A> {
         &self.subject
     }
+
+    fn predicates_from(&self, subject: &AsRefNamedOrBlankNode<A>) -> usize {
+        self.vec.iter().fold(0, |acc, t| acc + t.predicates_from(subject))
+    }
 }
 
 
@@ -442,14 +460,18 @@ pub struct AsRefTripleSeq<A:AsRef<str>> {
 }
 
 impl<A> TripleLike<A> for AsRefTripleSeq<A>
-    where A: AsRef<str> + Clone
+where A: AsRef<str> + Clone
 {
-    fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A> {
+    fn accept(&mut self, _t:AsRefTriple<A>) -> AcceptorReturn<A> {
         todo!()
     }
 
     fn subject(&self) -> &AsRefNamedOrBlankNode<A> {
         &self.subject
+    }
+
+    fn predicates_from(&self, _subject: &AsRefNamedOrBlankNode<A>) -> usize {
+        todo!()
     }
 }
 
@@ -470,7 +492,7 @@ where A: AsRef<str> + Clone
 }
 
 impl<A> TripleLike<A> for AsRefExpandedTriple<A>
-where A: AsRef<str> + Clone {
+where A: AsRef<str> + Clone + PartialEq {
     fn accept(&mut self, triple: AsRefTriple<A>) -> AcceptorReturn<A> {
         match self {
             Self::AsRefMultiTriple(mt) => mt.accept(triple),
@@ -485,6 +507,10 @@ where A: AsRef<str> + Clone {
             Self::AsRefTripleSeq(seq) => seq.subject(),
             Self::AsRefTriple(t) => t.subject(),
         }
+    }
+
+    fn predicates_from(&self, _subject: &AsRefNamedOrBlankNode<A>) -> usize {
+        todo!()
     }
 }
 
@@ -503,7 +529,7 @@ pub struct AsRefChunk<A:AsRef<str>>(Vec<AsRefExpandedTriple<A>>);
 
 
 impl<A> AsRefChunk<A>
-where A: AsRef<str> + Clone + Debug
+where A: AsRef<str> + Clone + Debug + PartialEq
 {
     pub fn normalize(v:Vec<AsRefTriple<A>>) -> Self {
         let mut etv:Vec<AsRefExpandedTriple<A>> = vec![];
@@ -536,9 +562,14 @@ where A: AsRef<str> + Clone + Debug
         AsRefChunk(vec![])
     }
 
-    pub fn with_subject(&self, nnb:&AsRefNamedOrBlankNode<A>) -> Option<&AsRefExpandedTriple<A>> {
-        self.0.iter().find(|t| t.subject().as_ref() == nnb.as_ref())
+    pub fn find_subject(&self, nnb:&AsRefNamedOrBlankNode<A>) -> Option<&AsRefExpandedTriple<A>> {
+        self.0.iter().find(|et| et.subject().as_ref() == nnb.as_ref())
     }
+
+    // pub fn filter_subject(&self, nnb:&AsRefNamedOrBlankNode<A>)
+    //                       -> impl Iterator<Item=AsRefExpandedTriple<A>>{
+    //     self.0.iter().filter(|et| et.subject().as_ref() == nnb.as_ref())
+    // }
 }
 
 
@@ -680,13 +711,19 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(())
     }
 
-    fn format_property_arc(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
+    fn format_property_arc(&mut self, triple: &AsRefTriple<A>, chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
         let mut property_open = self.bytes_start_iri(&triple.predicate);
 
         let content = match &triple.object {
             AsRefTerm::NamedNode(n) => {
-                property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
-                None
+                if let Some(t) = chunk.find_subject(&n.clone().into()) {
+                    dbg!(n);
+                    todo!("need to render next node");
+                } else {
+                    // Rewrite: 2.4 Empty Property Elements
+                    property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
+                    None
+                }
             }
             AsRefTerm::BlankNode(n) => {
                 property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
@@ -719,18 +756,19 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(())
     }
 
-    fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
+    fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
         self.format_head(triple)?;
-        self.format_property_arc(triple)?;
+        self.format_property_arc(triple, chunk)?;
         self.write_close()?;
         Ok(())
     }
 
-    fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
+    fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>, chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
         self.format_head(multi_triple)?;
 
+        // Rewrite: 2.3 Multiple Property Elements
         for triple in multi_triple.vec.iter() {
-            self.format_property_arc(triple)?;
+            self.format_property_arc(triple, chunk)?;
         }
 
         self.write_close()?;
@@ -745,10 +783,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         for i in chunk.0.iter() {
             match i {
                 AsRefExpandedTriple::AsRefTriple(ref t) => {
-                    self.format_triple(t, &chunk)?;
+                    self.format_triple(t, chunk)?;
                 }
                 AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
-                    self.format_multi(mt, &chunk)?;
+                    self.format_multi(mt, chunk)?;
                 }
                 _ =>{
                     todo!()
@@ -777,57 +815,17 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 #[cfg(test)]
 mod test {
     use indexmap::{IndexMap, indexmap};
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
     use rio_api::parser::TriplesParser;
     use rio_turtle::TurtleError;
-    use crate::{RdfXmlError, RdfXmlFormatter, RdfXmlParser};
 
-    use super::{AsRefBlankNode, AsRefChunk, AsRefExpandedTriple, AsRefNamedNode, AsRefTriple, ChunkedRdfXmlFormatter, ChunkedRdfXmlFormatterConfig};
-
-    fn tbn() -> AsRefTriple<String> {
-        AsRefTriple {
-            subject: AsRefBlankNode{id:"bn".to_string()}.into(),
-            predicate: AsRefNamedNode::new("http://example.com/p1".to_string()).into(),
-            object: AsRefNamedNode::new("http://example.com/o2".to_string()).into()
-        }
-    }
-
-    // fn tbn_type() -> AsRefTriple<String> {
-    //     AsRefTriple {
-    //         subject: AsRefBlankNode{id:"bn".to_string()}.into(),
-    //         predicate: AsRefNamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".to_string()).into(),
-    //         object: AsRefNamedNode::new("http://example.com/o2".to_string()).into()
-    //     }
-    // }
-
-    fn tbnobj() -> AsRefTriple<String> {
-        AsRefTriple {
-            subject: AsRefNamedNode::new("http://example.com/s".to_string()).into(),
-            predicate: AsRefNamedNode::new("http://example.com/p1".to_string()).into(),
-            object: AsRefBlankNode::new("bn".to_string()).into()
-        }
-    }
+    use super::{AsRefChunk, AsRefNamedNode, AsRefTriple,
+                ChunkedRdfXmlFormatter, ChunkedRdfXmlFormatterConfig};
 
     fn tnn () -> AsRefTriple<String> {
         AsRefTriple {
             subject: AsRefNamedNode::new("http://example.com/s".to_string()).into(),
             predicate: AsRefNamedNode::new("http://example.com/p".to_string()).into(),
-            object: AsRefNamedNode::new("http://example.com/o".to_string()).into()
-        }
-    }
-
-    fn tnn_type() -> AsRefTriple<String> {
-        AsRefTriple {
-            subject: AsRefNamedNode::new("http://example.com/s".to_string()).into(),
-            predicate: AsRefNamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".to_string()).into(),
-            object: AsRefNamedNode::new("http://example.com/o2".to_string()).into()
-        }
-    }
-
-    fn tnn_rdf () -> AsRefTriple<String> {
-        AsRefTriple {
-            subject: AsRefNamedNode::new("http://example.com/s".to_string()).into(),
-            predicate: AsRefNamedNode::new("http://www.w3.org/1999/02/22-rdf-syntax-ns#not_real".to_string()).into(),
             object: AsRefNamedNode::new("http://example.com/o".to_string()).into()
         }
     }
@@ -870,9 +868,9 @@ mod test {
         ]
     }
 
-    fn from_nt(nt: &str) -> String {
-        from_nt_prefix(nt, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
-    }
+    // fn from_nt(nt: &str) -> String {
+    //     from_nt_prefix(nt, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
+    // }
 
     fn from_nt_prefix(nt: &str, prefix: IndexMap<&str, &str>) -> String {
         let mut source: Vec<AsRefTriple<String>> = vec![];
@@ -905,11 +903,11 @@ mod test {
         s
     }
 
-    fn nt_xml_roundtrip(nt: &str, xml: &str) {
-        assert_eq!(
-            from_nt(nt), xml
-        );
-    }
+    // fn nt_xml_roundtrip(nt: &str, xml: &str) {
+    //     assert_eq!(
+    //         from_nt(nt), xml
+    //     );
+    // }
 
     fn nt_xml_roundtrip_prefix(nt: &str, xml: &str, prefix: IndexMap<&str, &str>){
         assert_eq!(
@@ -917,44 +915,44 @@ mod test {
         );
     }
 
-    fn xml_roundtrip(xml: &str) {
-        xml_roundtrip_prefix(xml, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
-    }
+    // fn xml_roundtrip(xml: &str) {
+    //     xml_roundtrip_prefix(xml, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
+    // }
 
-    fn xml_roundtrip_prefix(xml: &str, prefix: IndexMap<&str, &str>){
-        let mut source: Vec<AsRefTriple<String>> = vec![];
-        let _: Vec<Result<(), RdfXmlError>>
-            = RdfXmlParser::new(xml.as_bytes(), None).into_iter(
-                |rio_triple| {
-                    source.push(rio_triple.into());
-                    Ok(())
-                }
-            ).collect();
+    // fn xml_roundtrip_prefix(xml: &str, prefix: IndexMap<&str, &str>){
+    //     let mut source: Vec<AsRefTriple<String>> = vec![];
+    //     let _: Vec<Result<(), RdfXmlError>>
+    //         = RdfXmlParser::new(xml.as_bytes(), None).into_iter(
+    //             |rio_triple| {
+    //                 source.push(rio_triple.into());
+    //                 Ok(())
+    //             }
+    //         ).collect();
 
 
-        let sink = vec![];
+    //     let sink = vec![];
 
-        let mut config = ChunkedRdfXmlFormatterConfig::new();
-        config.prefix =
-            prefix.into_iter().map(
-                |(k, v)|
-                (k.to_string(), v.to_string())
-            ).collect();
+    //     let mut config = ChunkedRdfXmlFormatterConfig::new();
+    //     config.prefix =
+    //         prefix.into_iter().map(
+    //             |(k, v)|
+    //             (k.to_string(), v.to_string())
+    //         ).collect();
 
-        let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
-        f.format_chunk(
-            &AsRefChunk::from_raw(
-                source.into_iter().map(|t| AsRefExpandedTriple::AsRefTriple(t)).collect()
-            )
-        ).unwrap();
+    //     let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
+    //     f.format_chunk(
+    //         &AsRefChunk::from_raw(
+    //             source.into_iter().map(|t| AsRefExpandedTriple::AsRefTriple(t)).collect()
+    //         )
+    //     ).unwrap();
 
-        let w = f.finish().unwrap();
-        let s = String::from_utf8(w).unwrap();
-        println!("{}", s);
-        assert_eq!(
-            s, xml
-        )
-    }
+    //     let w = f.finish().unwrap();
+    //     let s = String::from_utf8(w).unwrap();
+    //     println!("{}", s);
+    //     assert_eq!(
+    //         s, xml
+    //     )
+    // }
 
     #[test]
     fn example4_single_triple() {
