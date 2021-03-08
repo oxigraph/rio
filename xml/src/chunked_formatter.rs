@@ -664,9 +664,9 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         }
     }
 
-    fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
+    fn format_head<T:TripleLike<A>>(&mut self, triple_like:&T) -> Result<(), io::Error> {
         let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
-        match triple.subject {
+        match triple_like.subject() {
             AsRefNamedOrBlankNode::NamedNode(ref n) => {
                 description_open.push_attribute(("rdf:about", n.iri.as_ref()))
             }
@@ -677,7 +677,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         self.write_start(Event::Start(description_open))
             .map_err(map_err)?;
 
+        Ok(())
+    }
 
+    fn format_property_arc(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
         let mut property_open = self.bytes_start_iri(&triple.predicate);
 
         let content = match &triple.object {
@@ -713,60 +716,21 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 .map_err(map_err)?;
         }
 
-        self.write_close()?;
+        Ok(())
+    }
 
+    fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
+        self.format_head(triple)?;
+        self.format_property_arc(triple)?;
+        self.write_close()?;
         Ok(())
     }
 
     fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
-        let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
-        match multi_triple.subject() {
-            AsRefNamedOrBlankNode::NamedNode(ref n) => {
-                description_open.push_attribute(("rdf:about", n.iri.as_ref()))
-            }
-            AsRefNamedOrBlankNode::BlankNode(ref n) => {
-                description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
-            }
-        }
-
-        self.write_start(Event::Start(description_open))
-            .map_err(map_err)?;
+        self.format_head(multi_triple)?;
 
         for triple in multi_triple.vec.iter() {
-            let mut property_open = self.bytes_start_iri(&triple.predicate);
-
-            let content = match &triple.object {
-                AsRefTerm::NamedNode(n) => {
-                    property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
-                    None
-                }
-                AsRefTerm::BlankNode(n) => {
-                    property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
-                    None
-                }
-                AsRefTerm::Literal(l) => match l {
-                    AsRefLiteral::Simple { value } => Some(value),
-                    AsRefLiteral::LanguageTaggedString { value, language } => {
-                        property_open.push_attribute(("xml:lang", language.as_ref()));
-                        Some(value)
-                    }
-                    AsRefLiteral::Typed { value, datatype } => {
-                        property_open.push_attribute(("rdf:datatype", datatype.iri.as_ref()));
-                        Some(value)
-                    }
-                },
-            };
-
-            if let Some(content) = content {
-                self.write_start(Event::Start(property_open))
-                    .map_err(map_err)?;
-                self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
-                    .map_err(map_err)?;
-                self.write_close()?;
-            } else {
-                self.write_event(Event::Empty(property_open))
-                    .map_err(map_err)?;
-            }
+            self.format_property_arc(triple)?;
         }
 
         self.write_close()?;
@@ -781,10 +745,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         for i in chunk.0.iter() {
             match i {
                 AsRefExpandedTriple::AsRefTriple(ref t) => {
-                    self.format_triple(t, &chunk);
+                    self.format_triple(t, &chunk)?;
                 }
                 AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
-                    self.format_multi(mt, &chunk);
+                    self.format_multi(mt, &chunk)?;
                 }
                 _ =>{
                     todo!()
@@ -932,7 +896,7 @@ mod test {
 
         let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
         let chk = AsRefChunk::normalize(source);
-        dbg!(&chk);
+        //dbg!(&chk);
         f.format_chunk(&chk).unwrap();
 
         let w = f.finish().unwrap();
