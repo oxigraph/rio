@@ -896,8 +896,7 @@ r#"<?xml version="1.0" encoding="UTF-8"?>
                                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf",
                                    "http://purl.org/dc/elements/1.1/" => "dc",
                                    "http://example.org/stuff/1.0/" => "ex"
-                               ]
-
+                               ],
         );
 
         let e =
@@ -915,12 +914,20 @@ r###"<?xml version="1.0" encoding="UTF-8"?>
 
     #[test]
     fn render_bnode() {
-        let s = from_nt(r#"
+        let p =
+            indexmap![
+                "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf",
+                "http://purl.org/dc/elements/1.1/" => "dc",
+                "http://example.org/stuff/1.0/" => "ex"
+            ];
+
+
+        let s = from_nt_prefix(r#"
 <http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/title> "RDF/XML Syntax Specification (Revised)" .
 _:genid1 <http://example.org/stuff/1.0/fullName> "Dave Beckett" .
 _:genid1 <http://example.org/stuff/1.0/homePage> <http://purl.org/net/dajobe/> .
 <http://www.w3.org/TR/rdf-syntax-grammar> <http://example.org/stuff/1.0/editor> _:genid1 .
-"#);
+"#, p);
 
         let e = r###"<?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -935,7 +942,7 @@ _:genid1 <http://example.org/stuff/1.0/homePage> <http://purl.org/net/dajobe/> .
   </rdf:Description>
 </rdf:RDF>"###;
 
-        //println!("\nGot:\n{}\nExpected:\n{}", &s, &e);
+        println!("\nGot:\n{}\nExpected:\n{}", &s, &e);
         assert_eq!(s,e);
     }
 
