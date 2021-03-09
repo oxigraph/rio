@@ -853,7 +853,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                        formatted:&mut HashSet<AsRefExpandedTriple<A>>
     ) -> Result<(), io::Error> {
         if !formatted.contains(expanded) {
-            //formatted.insert(expanded.clone());
+            formatted.insert(expanded.clone());
             match expanded {
                 AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
                     self.format_multi(mt, chunk, formatted)?;
