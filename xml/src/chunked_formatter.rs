@@ -370,54 +370,16 @@ impl From<Triple<'_>> for AsRefTriple<String> {
     }
 }
 
-enum AcceptorReturn<A:AsRef<str>> {
-    Replace(AsRefExpandedTriple<A>),
-    Changed,
-    Unchanged,
-}
-
 trait TripleLike<A>
     where A:AsRef<str> + Clone
 {
     /// Can a new Triple be accepted onto this TripleLike.
-    fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A>;
+    fn accept(&mut self, t:AsRefTriple<A>) -> Option<AsRefTriple<A>>;
 
     /// What is the subject of the triple like
     fn subject(&self) -> &AsRefNamedOrBlankNode<A>;
 
     fn literal_objects(&self) -> Vec<&AsRefTriple<A>>;
-}
-
-impl<A> TripleLike<A> for AsRefTriple<A>
-    where A:AsRef<str> + Clone + PartialEq
-{
-    fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A>{
-        if self.subject.as_ref() == t.subject.as_ref() {
-            return AcceptorReturn::Replace(
-                AsRefExpandedTriple::AsRefMultiTriple(
-                    AsRefMultiTriple
-                    {
-                        subject: t.subject.clone(),
-                        vec: vec![self.clone(), t]
-                    }
-                )
-            )
-        } else {
-            AcceptorReturn::Unchanged
-        }
-    }
-
-    fn subject(&self) -> &AsRefNamedOrBlankNode<A> {
-        &self.subject
-    }
-
-    fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
-        if matches!(self.object, AsRefTerm::Literal(_)) {
-            vec![self]
-        } else {
-            vec![]
-        }
-    }
 }
 
 
@@ -450,12 +412,12 @@ where A: AsRef<str> + PartialEq
 impl<A> TripleLike<A> for AsRefMultiTriple<A>
 where A: AsRef<str> + Clone + PartialEq
 {
-    fn accept(&mut self, t:AsRefTriple<A>) -> AcceptorReturn<A> {
+    fn accept(&mut self, t:AsRefTriple<A>) -> Option<AsRefTriple<A>> {
         if self.subject.as_ref() == t.subject.as_ref() {
             self.vec.push(t);
-            AcceptorReturn::Changed
+            None
         } else {
-            AcceptorReturn::Unchanged
+            Some(t)
         }
     }
 
@@ -480,7 +442,7 @@ pub struct AsRefTripleSeq<A:AsRef<str>> {
 impl<A> TripleLike<A> for AsRefTripleSeq<A>
 where A: AsRef<str> + Clone
 {
-    fn accept(&mut self, _t:AsRefTriple<A>) -> AcceptorReturn<A> {
+    fn accept(&mut self, _t:AsRefTriple<A>) -> Option<AsRefTriple<A>> {
         todo!()
     }
 
@@ -515,7 +477,7 @@ where A: AsRef<str> + Clone
 
 impl<A> TripleLike<A> for AsRefExpandedTriple<A>
 where A: AsRef<str> + Clone + PartialEq {
-    fn accept(&mut self, triple: AsRefTriple<A>) -> AcceptorReturn<A> {
+    fn accept(&mut self, triple: AsRefTriple<A>) -> Option<AsRefTriple<A>> {
         match self {
             Self::AsRefMultiTriple(mt) => mt.accept(triple),
             Self::AsRefTripleSeq(seq) => seq.accept(triple),
@@ -556,18 +518,14 @@ where A: AsRef<str> + Clone + Debug + PartialEq
 {
     pub fn normalize(v:Vec<AsRefTriple<A>>) -> Self {
         let mut etv:Vec<AsRefExpandedTriple<A>> = vec![];
-        'top: for t in v {
-            for (i, et) in etv.iter_mut().enumerate() {
-                match et.accept(t.clone()) {
-                    AcceptorReturn::Replace(updated) => {
-                        etv[i] = updated;
+        'top: for mut t in v {
+            for et in etv.iter_mut() {
+                match et.accept(t) {
+                    None => {
                         continue 'top;
                     }
-                    AcceptorReturn::Changed => {
-                        continue 'top;
-                    }
-                    AcceptorReturn::Unchanged => {
-                        //Empty!
+                    Some(ret) => {
+                        t = ret;
                     }
                 }
             }
