@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::{collections::HashSet, fmt::{Debug, Formatter}};
+use std::fmt::{Debug, Formatter};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
@@ -510,7 +510,10 @@ where A: AsRef<str> + Clone + PartialEq {
 ///   - if BNodes appear as subjects, they appear after any
 ///   apperance as an object (TODO: Not implemented yet!)
 #[derive(Debug)]
-pub struct AsRefChunk<A:AsRef<str>>(Vec<AsRefExpandedTriple<A>>);
+pub struct AsRefChunk<A:AsRef<str>>(
+    // triples in reverse order for efficient popping
+    Vec<AsRefExpandedTriple<A>>
+);
 
 
 impl<A> AsRefChunk<A>
@@ -531,11 +534,12 @@ where A: AsRef<str> + Clone + Debug + PartialEq
             }
             etv.push(t.clone().into())
         }
-
+        etv.reverse();
         AsRefChunk(etv)
     }
 
-    pub fn from_raw(v:Vec<AsRefExpandedTriple<A>>) -> Self {
+    pub fn from_raw(mut v:Vec<AsRefExpandedTriple<A>>) -> Self {
+        v.reverse();
         AsRefChunk(v)
     }
 
@@ -543,8 +547,26 @@ where A: AsRef<str> + Clone + Debug + PartialEq
         AsRefChunk(vec![])
     }
 
-    pub fn find_subject<'a>(&'a self, nnb:&AsRefNamedOrBlankNode<A>) -> Option<&'a AsRefExpandedTriple<A>> {
-        self.0.iter().find(|et| et.subject().as_ref() == nnb.as_ref())
+    pub fn remove_et(&mut self, et: &AsRefExpandedTriple<A>) -> bool {
+        if let Some(pos) = self.0.iter().position(|tet| tet == et) {
+            self.0.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<AsRefExpandedTriple<A>> {
+        self.0.pop()
+    }
+
+    pub fn remove_subject(&mut self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
+        self.0.iter().position(|et| et.subject().as_ref() == iri_or_id.as_ref())
+            .map(|pos|self.0.remove(pos))
+    }
+
+    pub fn find_subject(&self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
+        self.0.iter().find(|et| et.subject().as_ref() == iri_or_id.as_ref()).cloned()
     }
 
     pub fn filter_subject<'a>(&'a self, nnb:&'a AsRefNamedOrBlankNode<A>)
@@ -676,7 +698,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     }
 
     fn format_head<'a, T:TripleLike<A>>(&mut self, triple_like:&'a T, chunk:&AsRefChunk<A>)
-                                    -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
+                                        -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
         let mut triples_rendered = vec![];
 
         let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
@@ -685,7 +707,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 description_open.push_attribute(("rdf:about", n.iri.as_ref()))
             }
             AsRefNamedOrBlankNode::BlankNode(ref n) => {
-                if chunk.find_subject(&n.clone().into()).is_none() {
+                if chunk.find_subject(&n.id).is_none() {
                     description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
                 }
             }
@@ -729,8 +751,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 
     fn format_property_arc(&mut self, triple: &AsRefTriple<A>,
                            rendered_in_head:&Vec<&AsRefTriple<A>>,
-                           chunk:&AsRefChunk<A>,
-                           formatted:&mut HashSet<AsRefExpandedTriple<A>>
+                           chunk:&mut AsRefChunk<A>,
     ) -> Result<(), io::Error> {
         if rendered_in_head.contains(&triple) {
             return Ok(())
@@ -740,7 +761,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 
         match &triple.object {
             AsRefTerm::NamedNode(n) => {
-                if let Some(_t) = chunk.find_subject(&n.clone().into()) {
+                if let Some(_t) = chunk.find_subject(&n.iri) {
                     dbg!(n);
                     todo!("need to render next node");
                 } else {
@@ -751,10 +772,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 }
             }
             AsRefTerm::BlankNode(n) => {
-                if let Some(t) = chunk.find_subject(&n.clone().into()) {
+                if let Some(t) = chunk.find_subject(&n.id) {
                     self.write_start(Event::Start(property_open))
                         .map_err(map_err)?;
-                    self.format_expanded(t, chunk, formatted)?;
+                    self.format_expanded(&t, chunk)?;
                 } else {
                     property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
                     self.write_start(Event::Start(property_open))
@@ -797,14 +818,13 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     // }
 
     fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>,
-                    chunk:&AsRefChunk<A>,
-                    formatted:&mut HashSet<AsRefExpandedTriple<A>>
+                    chunk:&mut AsRefChunk<A>,
     ) -> Result<(), io::Error> {
         let rendered_in_head = self.format_head(multi_triple, chunk)?;
 
         // Rewrite: 2.3 Multiple Property Elements
         for triple in multi_triple.vec.iter() {
-            self.format_property_arc(triple, &rendered_in_head, chunk, formatted)?;
+            self.format_property_arc(triple, &rendered_in_head, chunk)?;
         }
 
         self.write_close()?;
@@ -812,35 +832,36 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     }
 
     fn format_expanded(&mut self, expanded:&AsRefExpandedTriple<A>,
-                       chunk:&AsRefChunk<A>,
-                       formatted:&mut HashSet<AsRefExpandedTriple<A>>
+                       chunk:&mut AsRefChunk<A>,
     ) -> Result<(), io::Error> {
-        if !formatted.contains(expanded) {
-            formatted.insert(expanded.clone());
-            match expanded {
-                AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
-                    self.format_multi(mt, chunk, formatted)?;
-                }
-                _ =>{
-                    todo!()
-                }
+        match expanded {
+            AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
+                self.format_multi(mt, chunk)?;
+            }
+            _ =>{
+                todo!()
             }
         }
+        chunk.remove_et(expanded);
+
         Ok(())
     }
 
-    pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
-        self.format_chunk(&AsRefChunk::from_raw(
+    pub fn format(&mut self, triple: AsRefTriple<A>) -> Result<(), io::Error> {
+        self.format_chunk(AsRefChunk::from_raw(
             vec![triple.clone().into()]
         ))
     }
 
-    pub fn format_chunk(&mut self, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
-        let mut formatted = HashSet::new();
-        for et in chunk.0.iter() {
-            self.format_expanded(et, chunk, &mut formatted)?;
+    pub fn format_chunk(&mut self, mut chunk:AsRefChunk<A>) -> Result<(), io::Error> {
+        loop {
+            let optet = chunk.pop();
+            if let Some(et) = optet {
+                self.format_expanded(&et, &mut chunk)?;
+            } else {
+                break;
+            }
         }
-
         Ok(())
     }
 
@@ -940,9 +961,9 @@ mod test {
             ).collect();
 
         let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
-        let mut chk = AsRefChunk::normalize(source);
+        let chk = AsRefChunk::normalize(source);
         //dbg!(&chk);
-        f.format_chunk(&mut chk).unwrap();
+        f.format_chunk(chk).unwrap();
 
         let w = f.finish().unwrap();
         let s = String::from_utf8(w).unwrap();
@@ -1033,7 +1054,7 @@ r###"<?xml version="1.0" encoding="UTF-8"?>
     </rdf:Description>
 </rdf:RDF>"### ,
             spec_prefix()
-        )
+        );
     }
 
     #[test]
