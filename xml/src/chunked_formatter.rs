@@ -727,9 +727,9 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 description_open.push_attribute(("rdf:about", n.iri.as_ref()))
             }
             AsRefNamedOrBlankNode::BlankNode(ref n) => {
-                //if chunk.find_subject(&n.clone().into()).is_none() {
+                if chunk.find_subject(&n.clone().into()).is_none() {
                     description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
-                //}
+                }
             }
         }
 
@@ -780,7 +780,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 
         let mut property_open = self.bytes_start_iri(&triple.predicate);
 
-        let content = match &triple.object {
+        match &triple.object {
             AsRefTerm::NamedNode(n) => {
                 if let Some(_t) = chunk.find_subject(&n.clone().into()) {
                     dbg!(n);
@@ -788,41 +788,46 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 } else {
                     // Rewrite: 2.4 Empty Property Elements
                     property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
-                    None
+                    self.write_start(Event::Start(property_open))
+                        .map_err(map_err)?;
                 }
             }
             AsRefTerm::BlankNode(n) => {
                 if let Some(t) = chunk.find_subject(&n.clone().into()) {
+                    self.write_start(Event::Start(property_open))
+                        .map_err(map_err)?;
                     self.format_expanded(t, chunk, formatted)?;
                 } else {
                     property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
+                    self.write_start(Event::Start(property_open))
+                        .map_err(map_err)?;
                 }
-                None
             }
-            AsRefTerm::Literal(l) => match l {
-                AsRefLiteral::Simple { value } => Some(value),
-                AsRefLiteral::LanguageTaggedString { value, language } => {
-                    property_open.push_attribute(("xml:lang", language.as_ref()));
-                    Some(value)
-                }
-                AsRefLiteral::Typed { value, datatype } => {
-                    property_open.push_attribute(("rdf:datatype", datatype.iri.as_ref()));
-                    Some(value)
-                }
+            AsRefTerm::Literal(l) => {
+                let content =
+                    match l {
+                        AsRefLiteral::Simple { value } => value,
+                        AsRefLiteral::LanguageTaggedString { value, language } => {
+                            property_open.push_attribute(("xml:lang", language.as_ref()));
+                            value
+                        }
+                        AsRefLiteral::Typed { value, datatype } => {
+                            property_open.push_attribute(("rdf:datatype", datatype.iri.as_ref()));
+                            value
+                        }
+                    };
+                self.write_start(Event::Start(property_open))
+                    .map_err(map_err)?;
+                self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
+                    .map_err(map_err)?;
             },
         };
 
-        if let Some(content) = content {
-            self.write_start(Event::Start(property_open))
-                .map_err(map_err)?;
-            self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
-                .map_err(map_err)?;
-            self.write_close()?;
-        } else {
-            self.write_event(Event::Empty(property_open))
-                .map_err(map_err)?;
-        }
-
+        // self.write_start(Event::Start(property_open))
+        //         .map_err(map_err)?;
+        //     self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
+        //         .map_err(map_err)?;
+        self.write_close()?;
         Ok(())
     }
 
@@ -1059,21 +1064,15 @@ r###"<http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/
 _:genid1 <http://example.org/stuff/1.0/fullName> "Dave Beckett" .
 _:genid1 <http://example.org/stuff/1.0/homePage> <http://purl.org/net/dajobe/> ."### ,
 
-r###"
-<?xml version="1.0" encoding="UTF-8"?>
-<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-            xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:ex="http://example.org/stuff/1.0/">
-
-  <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar"
-             dc:title="RDF1.1 XML Syntax">
-    <ex:editor>
-      <rdf:Description ex:fullName="Dave Beckett">
-        <ex:homePage rdf:resource="http://purl.org/net/dajobe/" />
-      </rdf:Description>
-    </ex:editor>
-  </rdf:Description>
-
+r###"<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ex="http://example.org/stuff/1.0/">
+    <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar" dc:title="RDF1.1 XML Syntax">
+        <ex:editor>
+            <rdf:Description ex:fullName="Dave Beckett">
+                <ex:homePage rdf:resource="http://purl.org/net/dajobe/"/>
+            </rdf:Description>
+        </ex:editor>
+    </rdf:Description>
 </rdf:RDF>"### ,
             spec_prefix()
         )
