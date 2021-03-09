@@ -1,10 +1,11 @@
 use crate::utils::{is_name_char, is_name_start_char};
 
+use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
 use std::fmt::{Debug, Formatter};
-use std::{self, cell::RefCell, collections::HashMap, fmt,
+use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
 use std::marker::PhantomData;
@@ -384,8 +385,7 @@ trait TripleLike<A>
     /// What is the subject of the triple like
     fn subject(&self) -> &AsRefNamedOrBlankNode<A>;
 
-    /// Count the number of predicate arcs coming `subject`
-    fn predicates_from(&self, subject: &AsRefNamedOrBlankNode<A>) -> usize;
+    fn literal_objects(&self) -> Vec<&AsRefTriple<A>>;
 }
 
 impl<A> TripleLike<A> for AsRefTriple<A>
@@ -411,11 +411,11 @@ impl<A> TripleLike<A> for AsRefTriple<A>
         &self.subject
     }
 
-    fn predicates_from(&self, subject:&AsRefNamedOrBlankNode<A>) -> usize {
-        if &self.subject == subject {
-            1
+    fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
+        if matches!(self.object, AsRefTerm::Literal(_)) {
+            vec![self]
         } else {
-            0
+            vec![]
         }
     }
 }
@@ -445,8 +445,8 @@ where A: AsRef<str> + Clone + PartialEq
         &self.subject
     }
 
-    fn predicates_from(&self, subject: &AsRefNamedOrBlankNode<A>) -> usize {
-        self.vec.iter().fold(0, |acc, t| acc + t.predicates_from(subject))
+    fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
+        self.vec.iter().filter(|t| matches!(t.object, AsRefTerm::Literal(_))).collect()
     }
 }
 
@@ -470,7 +470,7 @@ where A: AsRef<str> + Clone
         &self.subject
     }
 
-    fn predicates_from(&self, _subject: &AsRefNamedOrBlankNode<A>) -> usize {
+    fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
         todo!()
     }
 }
@@ -509,8 +509,12 @@ where A: AsRef<str> + Clone + PartialEq {
         }
     }
 
-    fn predicates_from(&self, _subject: &AsRefNamedOrBlankNode<A>) -> usize {
-        todo!()
+    fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
+        match self {
+            Self::AsRefMultiTriple(mt) => mt.literal_objects(),
+            Self::AsRefTripleSeq(seq) => seq.literal_objects(),
+            Self::AsRefTriple(t) => t.literal_objects(),
+        }
     }
 }
 
@@ -566,19 +570,18 @@ where A: AsRef<str> + Clone + Debug + PartialEq
         self.0.iter().find(|et| et.subject().as_ref() == nnb.as_ref())
     }
 
-    // pub fn filter_subject(&self, nnb:&AsRefNamedOrBlankNode<A>)
-    //                       -> impl Iterator<Item=AsRefExpandedTriple<A>>{
-    //     self.0.iter().filter(|et| et.subject().as_ref() == nnb.as_ref())
-    // }
+    pub fn filter_subject<'a>(&'a self, nnb:&'a AsRefNamedOrBlankNode<A>)
+                          -> impl Iterator<Item=&'a AsRefExpandedTriple<A>>{
+        self.0.iter().filter(move |et| et.subject().as_ref() == nnb.as_ref())
+    }
 }
-
 
 
 #[derive(Clone, Debug, Default)]
 pub struct ChunkedRdfXmlFormatterConfig {
     pub bnode_contract: bool,
     pub indentation: usize,
-    pub prefix: HashMap<String, String>,
+    pub prefix: IndexMap<String, String>,
     pub typed_node: bool
 }
 
@@ -587,7 +590,7 @@ impl ChunkedRdfXmlFormatterConfig {
         ChunkedRdfXmlFormatterConfig {
             bnode_contract: false,
             indentation: 4,
-            prefix: HashMap::new(),
+            prefix: IndexMap::new(),
             typed_node: false
         }
     }
@@ -695,7 +698,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         }
     }
 
-    fn format_head<T:TripleLike<A>>(&mut self, triple_like:&T) -> Result<(), io::Error> {
+    fn format_head<'a, T:TripleLike<A>>(&mut self, triple_like:&'a T)
+                                    -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
+        let mut triples_rendered = vec![];
+
         let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
         match triple_like.subject() {
             AsRefNamedOrBlankNode::NamedNode(ref n) => {
@@ -705,18 +711,55 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
             }
         }
+
+        // TODO: Shares lots of code with format_property
+        // TODO: check all properties unique!!
+        for literal_t in triple_like.literal_objects() {
+            if let AsRefTerm::Literal(l) = &literal_t.object {
+                match l {
+                    AsRefLiteral::Simple {value} => {
+                        let (iri_protocol_and_host, iri_qname) = literal_t.predicate.split_iri();
+                        if let Some(iri_ns_prefix) = &self.config.prefix.get(iri_protocol_and_host) {
+                            description_open.push_attribute(
+                                (
+                                    &format!("{}:{}", &iri_ns_prefix, &iri_qname)[..],
+                                    value.as_ref()
+                                )
+                            );
+                            triples_rendered.push(literal_t);
+                        } else {
+                           todo!()
+                        }
+                    }
+                    AsRefLiteral::LanguageTaggedString {value:_, language:_} => {
+                        todo!()
+                    }
+                    AsRefLiteral::Typed {value:_, datatype:_} => {
+                        todo!()
+                    }
+                }
+            } else {
+                debug_assert!(false, "Non literal object returned from literal object method");
+            }
+        }
         self.write_start(Event::Start(description_open))
             .map_err(map_err)?;
 
-        Ok(())
+        Ok(triples_rendered)
     }
 
-    fn format_property_arc(&mut self, triple: &AsRefTriple<A>, chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
+    fn format_property_arc(&mut self, triple: &AsRefTriple<A>,
+                           rendered_in_head:&Vec<&AsRefTriple<A>>,
+                           chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
+        if rendered_in_head.contains(&triple) {
+            return Ok(())
+        }
+
         let mut property_open = self.bytes_start_iri(&triple.predicate);
 
         let content = match &triple.object {
             AsRefTerm::NamedNode(n) => {
-                if let Some(t) = chunk.find_subject(&n.clone().into()) {
+                if let Some(_t) = chunk.find_subject(&n.clone().into()) {
                     dbg!(n);
                     todo!("need to render next node");
                 } else {
@@ -757,18 +800,18 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     }
 
     fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
-        self.format_head(triple)?;
-        self.format_property_arc(triple, chunk)?;
+        let rendered_in_head = self.format_head(triple)?;
+        self.format_property_arc(triple, &rendered_in_head, chunk)?;
         self.write_close()?;
         Ok(())
     }
 
     fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>, chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
-        self.format_head(multi_triple)?;
+        let rendered_in_head = self.format_head(multi_triple)?;
 
         // Rewrite: 2.3 Multiple Property Elements
         for triple in multi_triple.vec.iter() {
-            self.format_property_arc(triple, chunk)?;
+            self.format_property_arc(triple, &rendered_in_head, chunk)?;
         }
 
         self.write_close()?;
@@ -959,14 +1002,9 @@ mod test {
         nt_xml_roundtrip_prefix(
 r###"<http://www.w3.org/TR/rdf-syntax-grammar> <http://purl.org/dc/elements/1.1/title> "RDF1.1 XML Syntax" .
 "### ,
-r###"
-<?xml version="1.0"?>
-<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-            xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:ex="http://example.org/stuff/1.0/">
-
-  <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar"
-             dc:title="RDF1.1 XML Syntax"/>
+r###"<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ex="http://example.org/stuff/1.0/">
+    <rdf:Description rdf:about="http://www.w3.org/TR/rdf-syntax-grammar" dc:title="RDF1.1 XML Syntax"/>
 </rdf:RDF>"### ,
             spec_prefix()
         )
