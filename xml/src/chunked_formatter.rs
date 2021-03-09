@@ -1077,4 +1077,24 @@ r###"<?xml version="1.0" encoding="UTF-8"?>
             spec_prefix()
         )
     }
+
+    #[test]
+    fn example14_typed_nodes() {
+        nt_xml_roundtrip_prefix(
+r###"<http://example.org/thing> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/stuff/1.0/Document> .
+<http://example.org/thing> <http://purl.org/dc/elements/1.1/title> "A marvelous thing" ."### ,
+
+r###"<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:ex="http://example.org/stuff/1.0/">
+
+  <ex:Document rdf:about="http://example.org/thing">
+    <dc:title>A marvelous thing</dc:title>
+  </ex:Document>
+
+</rdf:RDF>"###  ,
+            spec_prefix()
+        )
+    }
 }
