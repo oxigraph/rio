@@ -769,7 +769,16 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 }
             }
             AsRefTerm::BlankNode(n) => {
-                property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
+                let mut need_id = true;
+                dbg!(n);
+                for t in chunk.filter_subject(&n.clone().into()) {
+                    dbg!(t);
+                    need_id = false;
+                    self.format_expanded(t, chunk)?;
+                }
+                if need_id {
+                    property_open.push_attribute(("rdf:nodeID", n.id.as_ref()));
+                }
                 None
             }
             AsRefTerm::Literal(l) => match l {
@@ -818,23 +827,29 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(())
     }
 
+    fn format_expanded(&mut self, expanded:&AsRefExpandedTriple<A>,
+                       chunk:&AsRefChunk<A>) -> Result<(), io::Error> {
+        match expanded {
+            AsRefExpandedTriple::AsRefTriple(ref t) => {
+                self.format_triple(t, chunk)?;
+            }
+            AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
+                self.format_multi(mt, chunk)?;
+            }
+            _ =>{
+                todo!()
+            }
+        }
+        Ok(())
+    }
+
     pub fn format(&mut self, triple: &AsRefTriple<A>) -> Result<(), io::Error> {
         self.format_triple(triple, &AsRefChunk::empty())
     }
 
     pub fn format_chunk(&mut self, chunk: &AsRefChunk<A>) -> Result<(), io::Error> {
         for i in chunk.0.iter() {
-            match i {
-                AsRefExpandedTriple::AsRefTriple(ref t) => {
-                    self.format_triple(t, chunk)?;
-                }
-                AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
-                    self.format_multi(mt, chunk)?;
-                }
-                _ =>{
-                    todo!()
-                }
-            }
+            self.format_expanded(i, chunk)?;
         }
 
         Ok(())
