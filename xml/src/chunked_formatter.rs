@@ -718,7 +718,6 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     fn format_head<'a, T:TripleLike<A> + Debug>(&mut self, triple_like:&'a T, chunk:&AsRefChunk<A>)
                                         -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
         let mut triples_rendered = vec![];
-        dbg!(triple_like);
         let mut description_open =
             match dbg!(triple_like.find_typed()) {
                 Some(t) => {
@@ -1039,8 +1038,34 @@ r###"<http://example.org/thing> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type
 
 r###"<?xml version="1.0" encoding="UTF-8"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ex="http://example.org/stuff/1.0/">
-  <ex:Document rdf:about="http://example.org/thing" dc:title"A marvelous thing"/>
+    <ex:Document rdf:about="http://example.org/thing" dc:title="A marvelous thing"/>
 </rdf:RDF>"###  ,
+            spec_prefix()
+        )
+    }
+
+    #[test]
+    fn example19_collections() {
+        nt_xml_roundtrip_prefix(
+r###"_:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/banana> .
+_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/apple> .
+_:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:genid2 .
+_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.org/pear> .
+_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:genid3 .
+_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> .
+<http://example.org/basket> <http://example.org/stuff/1.0/hasFruit> _:genid1 ."### ,
+
+r###"<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns:ex="http://example.org/stuff/1.0/">
+<rdf:Description rdf:about="http://example.org/basket">
+<ex:hasFruit rdf:parseType="Collection">
+<rdf:Description rdf:about="http://example.org/banana"/>
+<rdf:Description rdf:about="http://example.org/apple"/>
+<rdf:Description rdf:about="http://example.org/pear"/>
+</ex:hasFruit>
+</rdf:Description>
+</rdf:RDF>"### ,
             spec_prefix()
         )
     }
