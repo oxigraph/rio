@@ -343,6 +343,20 @@ pub struct AsRefTriple<A: AsRef<str>> {
     pub object: AsRefTerm<A>
 }
 
+impl<A:AsRef<str>> AsRefTriple<A> {
+    pub fn is_type(&self) -> bool {
+        self.predicate.iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    }
+
+    pub fn is_collection_end(&self) -> bool {
+        if let AsRefTerm::NamedNode(nn) = &self.object {
+            nn.iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
+        } else {
+            false
+        }
+    }
+}
+
 impl<A:AsRef<str>> fmt::Display for AsRefTriple<A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let t:Triple<'_> = self.into();
@@ -422,7 +436,7 @@ where A: AsRef<str> + Clone + PartialEq
 
     fn find_typed(&self) -> Option<&AsRefTriple<A>> {
         self.vec.iter().find(
-            |et| et.predicate.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+            |et| et.is_type()
         )
     }
 }
