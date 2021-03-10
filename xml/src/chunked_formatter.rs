@@ -671,7 +671,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     // Write a single event here.
     fn write_event(&mut self, event: Event<'_>) -> Result<(), quick_xml::Error> {
         self.write_complete_open()?;
-        //println!("\nwrite_event:{:?}", &event);
+
         // If this is a start event, capture it, and hold it till the
         // next event. If the next event is a cognate close, send a Empty.
         self.writer.write_event(event)
@@ -793,9 +793,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 
         match &triple.object {
             AsRefTerm::NamedNode(n) => {
-                if let Some(_t) = chunk.find_subject(&n.iri) {
-                    dbg!(n);
-                    todo!("need to render next node");
+                if let Some(t) = chunk.find_subject(&n.iri) {
+                    self.write_start(Event::Start(property_open))
+                        .map_err(map_err)?;
+                    self.format_expanded(&t, chunk)?;
                 } else {
                     // Rewrite: 2.4 Empty Property Elements
                     property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
@@ -834,20 +835,9 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             },
         };
 
-        // self.write_start(Event::Start(property_open))
-        //         .map_err(map_err)?;
-        //     self.write_event(Event::Text(BytesText::from_plain_str(&content.as_ref())))
-        //         .map_err(map_err)?;
         self.write_close()?;
         Ok(())
     }
-
-    // fn format_triple(&mut self, triple: &AsRefTriple<A>, chunk:&mut AsRefChunk<A>) -> Result<(), io::Error> {
-    //     let rendered_in_head = self.format_head(triple)?;
-    //     self.format_property_arc(triple, &rendered_in_head, chunk)?;
-    //     self.write_close()?;
-    //     Ok(())
-    // }
 
     fn format_multi(&mut self, multi_triple: &AsRefMultiTriple<A>,
                     chunk:&mut AsRefChunk<A>,
@@ -899,7 +889,6 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 
     /// Finishes writing and returns the underlying `Write`
     pub fn finish(mut self) -> Result<W, io::Error> {
-        //write!(self.writer.inner(), "\nformat_bnode_cache_left: {:?}", &self.bnode_cache);
         while !self.open_tag_stack.is_empty() {
             self.write_close()?;
         }
@@ -956,7 +945,6 @@ mod test {
             ]
         );
 
-        //dbg!(&chk);
         assert_eq!(chk.0.len(), 1);
     }
 
@@ -994,7 +982,6 @@ mod test {
 
         let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
         let chk = AsRefChunk::normalize(source);
-        //dbg!(&chk);
         f.format_chunk(chk).unwrap();
 
         let w = f.finish().unwrap();
@@ -1003,56 +990,11 @@ mod test {
         s
     }
 
-    // fn nt_xml_roundtrip(nt: &str, xml: &str) {
-    //     assert_eq!(
-    //         from_nt(nt), xml
-    //     );
-    // }
-
     fn nt_xml_roundtrip_prefix(nt: &str, xml: &str, prefix: IndexMap<&str, &str>){
         assert_eq!(
             from_nt_prefix(nt, prefix), xml
         );
     }
-
-    // fn xml_roundtrip(xml: &str) {
-    //     xml_roundtrip_prefix(xml, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
-    // }
-
-    // fn xml_roundtrip_prefix(xml: &str, prefix: IndexMap<&str, &str>){
-    //     let mut source: Vec<AsRefTriple<String>> = vec![];
-    //     let _: Vec<Result<(), RdfXmlError>>
-    //         = RdfXmlParser::new(xml.as_bytes(), None).into_iter(
-    //             |rio_triple| {
-    //                 source.push(rio_triple.into());
-    //                 Ok(())
-    //             }
-    //         ).collect();
-
-
-    //     let sink = vec![];
-
-    //     let mut config = ChunkedRdfXmlFormatterConfig::new();
-    //     config.prefix =
-    //         prefix.into_iter().map(
-    //             |(k, v)|
-    //             (k.to_string(), v.to_string())
-    //         ).collect();
-
-    //     let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
-    //     f.format_chunk(
-    //         &AsRefChunk::from_raw(
-    //             source.into_iter().map(|t| AsRefExpandedTriple::AsRefTriple(t)).collect()
-    //         )
-    //     ).unwrap();
-
-    //     let w = f.finish().unwrap();
-    //     let s = String::from_utf8(w).unwrap();
-    //     println!("{}", s);
-    //     assert_eq!(
-    //         s, xml
-    //     )
-    // }
 
     #[test]
     fn example4_single_triple() {
