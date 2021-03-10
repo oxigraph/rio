@@ -388,33 +388,22 @@ trait TripleLike<A>
 // All the triples in `vec` should start with `subject`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AsRefMultiTriple<A:AsRef<str>> {
-    subject: AsRefNamedOrBlankNode<A>,
     vec: Vec<AsRefTriple<A>>,
 }
 
 impl<A> AsRefMultiTriple<A>
 where A: AsRef<str> + PartialEq
 {
-    pub fn remove(&mut self, t:&AsRefTriple<A>) -> bool {
-        if let Some(pos) = self.vec.iter().position(|tr| tr == t) {
-            self.vec.remove(pos);
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.vec.len()
     }
 }
 
-
 impl<A> TripleLike<A> for AsRefMultiTriple<A>
 where A: AsRef<str> + Clone + PartialEq
 {
     fn accept(&mut self, t:AsRefTriple<A>) -> Option<AsRefTriple<A>> {
-        if self.subject.as_ref() == t.subject.as_ref() {
+        if self.subject().as_ref() == t.subject.as_ref() {
             self.vec.push(t);
             None
         } else {
@@ -423,7 +412,8 @@ where A: AsRef<str> + Clone + PartialEq
     }
 
     fn subject(&self) -> &AsRefNamedOrBlankNode<A> {
-        &self.subject
+        // There should be no empty instances, so this should be safe
+        &self.vec[0].subject
     }
 
     fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
@@ -443,7 +433,7 @@ where A: AsRef<str> + Clone + PartialEq
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AsRefTripleSeq<A:AsRef<str>> {
     subject: AsRefNamedOrBlankNode<A>,
-    seq: Vec<AsRefTerm<A>>,
+    seq: Vec<AsRefTriple<A>>,
 }
 
 impl<A> TripleLike<A> for AsRefTripleSeq<A>
@@ -479,7 +469,6 @@ where A: AsRef<str> + Clone
     fn from(t: AsRefTriple<A>) -> Self {
         AsRefExpandedTriple::AsRefMultiTriple(
             AsRefMultiTriple{
-                subject: t.subject.clone(),
                 vec: vec![t]
             }
         )
@@ -522,7 +511,7 @@ where A: AsRef<str> + Clone + PartialEq {
 /// A chunk of RDF that should that should be coherent.
 /// Current invariants:
 ///   - each subject should appear only once (i.e. all subjects are
-///   grouped in AsRefMultiTriple)
+///   grouped in AsRefMultiTriple, or AsRefSeq)
 ///   - if a subject appears it represents all appearances of the node
 ///   as a subject in the document of which this is a chunk
 ///   - if BNodes appear as subjects, they appear after any
@@ -719,7 +708,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                                         -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
         let mut triples_rendered = vec![];
         let mut description_open =
-            match dbg!(triple_like.find_typed()) {
+            match triple_like.find_typed() {
                 Some(t) => {
                     if let AsRefTerm::NamedNode(nn) = &t.object {
                         triples_rendered.push(t);
@@ -981,6 +970,7 @@ mod test {
 
         let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
         let chk = AsRefChunk::normalize(source);
+        dbg!(&chk);
         f.format_chunk(chk).unwrap();
 
         let w = f.finish().unwrap();
