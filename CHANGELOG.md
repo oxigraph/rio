@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3] - 2022-03-10
+
+### Changed
+- RDF/XML parser now resolves custom XML entities
+- Upgrades `quick_xml` dependency to 0.22. This release fixes wasm compilation problems
+
+
 ## [0.5.2] - 2022-02-19
 
 ### Added
