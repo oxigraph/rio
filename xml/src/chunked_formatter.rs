@@ -380,8 +380,9 @@ trait TripleLike<A>
     fn subject(&self) -> &AsRefNamedOrBlankNode<A>;
 
     fn literal_objects(&self) -> Vec<&AsRefTriple<A>>;
-}
 
+    fn find_typed(&self) -> Option<&AsRefTriple<A>>;
+}
 
 // A set of triples with a shared subject
 // All the triples in `vec` should start with `subject`.
@@ -428,6 +429,12 @@ where A: AsRef<str> + Clone + PartialEq
     fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
         self.vec.iter().filter(|t| matches!(t.object, AsRefTerm::Literal(_))).collect()
     }
+
+    fn find_typed(&self) -> Option<&AsRefTriple<A>> {
+        self.vec.iter().find(
+            |et| et.predicate.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+        )
+    }
 }
 
 
@@ -451,6 +458,10 @@ where A: AsRef<str> + Clone
     }
 
     fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
+        todo!()
+    }
+
+    fn find_typed(&self) -> Option<&AsRefTriple<A>> {
         todo!()
     }
 }
@@ -495,6 +506,13 @@ where A: AsRef<str> + Clone + PartialEq {
         match self {
             Self::AsRefMultiTriple(mt) => mt.literal_objects(),
             Self::AsRefTripleSeq(seq) => seq.literal_objects(),
+        }
+    }
+
+    fn find_typed(&self) -> Option<&AsRefTriple<A>> {
+        match self {
+            Self::AsRefMultiTriple(mt) => mt.find_typed(),
+            Self::AsRefTripleSeq(seq) => seq.find_typed(),
         }
     }
 }
@@ -697,11 +715,25 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         }
     }
 
-    fn format_head<'a, T:TripleLike<A>>(&mut self, triple_like:&'a T, chunk:&AsRefChunk<A>)
+    fn format_head<'a, T:TripleLike<A> + Debug>(&mut self, triple_like:&'a T, chunk:&AsRefChunk<A>)
                                         -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
         let mut triples_rendered = vec![];
+        dbg!(triple_like);
+        let mut description_open =
+            match dbg!(triple_like.find_typed()) {
+                Some(t) => {
+                    if let AsRefTerm::NamedNode(nn) = &t.object {
+                        triples_rendered.push(t);
+                        self.bytes_start_iri(nn)
+                    } else {
+                        panic!("BNodes cannot be typed, I think")
+                    }
+                },
+                None => {
+                    BytesStart::borrowed_name(b"rdf:Description")
+                }
+            };
 
-        let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
         match triple_like.subject() {
             AsRefNamedOrBlankNode::NamedNode(ref n) => {
                 description_open.push_attribute(("rdf:about", n.iri.as_ref()))
@@ -1063,15 +1095,9 @@ r###"<?xml version="1.0" encoding="UTF-8"?>
 r###"<http://example.org/thing> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/stuff/1.0/Document> .
 <http://example.org/thing> <http://purl.org/dc/elements/1.1/title> "A marvelous thing" ."### ,
 
-r###"<?xml version="1.0"?>
-<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-            xmlns:dc="http://purl.org/dc/elements/1.1/"
-            xmlns:ex="http://example.org/stuff/1.0/">
-
-  <ex:Document rdf:about="http://example.org/thing">
-    <dc:title>A marvelous thing</dc:title>
-  </ex:Document>
-
+r###"<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ex="http://example.org/stuff/1.0/">
+  <ex:Document rdf:about="http://example.org/thing" dc:title"A marvelous thing"/>
 </rdf:RDF>"###  ,
             spec_prefix()
         )
