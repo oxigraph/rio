@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::fmt::{Debug, Formatter};
+use std::{collections::VecDeque, fmt::{Debug, Formatter}};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
@@ -167,7 +167,7 @@ impl<A:AsRef<str>> AsRef<str> for AsRefBlankNode<A> {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub enum AsRefLiteral<A:AsRef<str>> {
     Simple {
         value: A,
@@ -284,7 +284,7 @@ impl<A:AsRef<str>> AsRef<str> for AsRefNamedOrBlankNode<A> {
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Hash)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub enum AsRefTerm<A:AsRef<str>> {
     NamedNode(AsRefNamedNode<A>),
     BlankNode(AsRefBlankNode<A>),
@@ -336,7 +336,7 @@ impl<A:AsRef<str>> From<AsRefNamedNode<A>> for AsRefTerm<A> {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AsRefTriple<A: AsRef<str>> {
     pub subject: AsRefNamedOrBlankNode<A>,
     pub predicate: AsRefNamedNode<A>,
@@ -346,6 +346,18 @@ pub struct AsRefTriple<A: AsRef<str>> {
 impl<A:AsRef<str>> AsRefTriple<A> {
     pub fn is_type(&self) -> bool {
         self.predicate.iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+    }
+
+    pub fn is_collection(&self) -> bool {
+        self.is_collection_first() || self.is_collection_rest()
+    }
+
+    pub fn is_collection_first(&self) -> bool {
+        &self.predicate.iri.as_ref() == &"http://www.w3.org/1999/02/22-rdf-syntax-ns#first"
+    }
+
+    pub fn is_collection_rest(&self) -> bool {
+        &self.predicate.iri.as_ref() == &"http://www.w3.org/1999/02/22-rdf-syntax-ns#rest"
     }
 
     pub fn is_collection_end(&self) -> bool {
@@ -400,7 +412,7 @@ trait TripleLike<A>
 
 // A set of triples with a shared subject
 // All the triples in `vec` should start with `subject`.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AsRefMultiTriple<A:AsRef<str>> {
     vec: Vec<AsRefTriple<A>>,
 }
@@ -444,41 +456,74 @@ where A: AsRef<str> + Clone + PartialEq
 
 // A set of terms that should be rendered as a RDF list, using first
 // as a the subject of the first node
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AsRefTripleSeq<A:AsRef<str>> {
-    subject: AsRefNamedOrBlankNode<A>,
-    seq: Vec<AsRefTriple<A>>,
+    list_seq: VecDeque<(AsRefNamedOrBlankNode<A>, Option<AsRefTriple<A>>)>,
+}
+
+impl<A:AsRef<str>> AsRefTripleSeq<A> {
+    fn from_end(t:AsRefTriple<A>) -> AsRefTripleSeq<A> {
+        let mut seq = AsRefTripleSeq{list_seq: vec![].into()};
+        if let AsRefNamedOrBlankNode::BlankNode(_) = &t.subject {
+            seq.list_seq.push_front((t.subject, None));
+        } else {
+            todo!("This shouldn't happen")
+        }
+        seq
+    }
+
 }
 
 impl<A> TripleLike<A> for AsRefTripleSeq<A>
-where A: AsRef<str> + Clone
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
-    fn accept(&mut self, _t:AsRefTriple<A>) -> Option<AsRefTriple<A>> {
-        todo!()
+    fn accept(&mut self, t:AsRefTriple<A>) -> Option<AsRefTriple<A>> {
+        if t.is_collection_first() {
+            if let Some(pos) = self.list_seq.iter().position(
+                |tup| &tup.0 == &t.subject
+            ){
+                if let Some(tuple) = self.list_seq.get_mut(pos){
+                    (*tuple).1 = Some(t)
+                }
+
+                return None;
+            }
+        }
+
+        if let AsRefTerm::BlankNode(bn) = &t.object {
+            if let &AsRefNamedOrBlankNode::BlankNode(ref snn) = self.subject() {
+                if t.is_collection_rest() && snn == bn {
+                    self.list_seq.push_front((t.subject, None));
+                    return None;
+                }
+            }
+        }
+
+        Some(t)
     }
 
     fn subject(&self) -> &AsRefNamedOrBlankNode<A> {
-        &self.subject
+        &self.list_seq[0].0
     }
 
     fn literal_objects(&self) -> Vec<&AsRefTriple<A>> {
-        todo!()
+        vec![]
     }
 
     fn find_typed(&self) -> Option<&AsRefTriple<A>> {
-        todo!()
+        None
     }
 }
 
 // All the different forms of RDF subgraph
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AsRefExpandedTriple<A:AsRef<str>> {
     AsRefMultiTriple(AsRefMultiTriple<A>),
     AsRefTripleSeq(AsRefTripleSeq<A>),
 }
 
 impl<A> From<AsRefTriple<A>> for AsRefExpandedTriple<A>
-where A: AsRef<str> + Clone
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
     fn from(t: AsRefTriple<A>) -> Self {
         AsRefExpandedTriple::AsRefMultiTriple(
@@ -490,7 +535,7 @@ where A: AsRef<str> + Clone
 }
 
 impl<A> TripleLike<A> for AsRefExpandedTriple<A>
-where A: AsRef<str> + Clone + PartialEq {
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq {
     fn accept(&mut self, triple: AsRefTriple<A>) -> Option<AsRefTriple<A>> {
         match self {
             Self::AsRefMultiTriple(mt) => mt.accept(triple),
@@ -538,11 +583,28 @@ pub struct AsRefChunk<A:AsRef<str>>(
 
 
 impl<A> AsRefChunk<A>
-where A: AsRef<str> + Clone + Debug + PartialEq
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
     pub fn normalize(v:Vec<AsRefTriple<A>>) -> Self {
         let mut etv:Vec<AsRefExpandedTriple<A>> = vec![];
+        let mut seq:Vec<AsRefTripleSeq<A>> = vec![];
+        let mut seq_triple:Vec<AsRefTriple<A>> = vec![];
+
         'top: for mut t in v {
+
+            // We have a collection add. Create a new seq and store it
+            if t.is_collection_end() {
+                seq.push(AsRefTripleSeq::from_end(t));
+                continue 'top;
+            }
+
+            // We have a collection part. Remember for later
+            if t.is_collection() {
+                seq_triple.push(t);
+                continue 'top;
+            }
+
+            // We have something else. Combine it with existing multi tripes
             for et in etv.iter_mut() {
                 match et.accept(t) {
                     None => {
@@ -553,10 +615,46 @@ where A: AsRef<str> + Clone + Debug + PartialEq
                     }
                 }
             }
+
+            // We have an orphan triple, store it a new multi triple
             etv.push(t.clone().into())
         }
+
+        // Deal with sequences
+        loop {
+            let seq_triples_left = seq_triple.len();
+            let mut new_seq_triple = vec![];
+            // Check each Seq to see if this one fits
+            'top2: for mut t in seq_triple {
+                for sq in seq.iter_mut(){
+                    match sq.accept(t) {
+                        None => {
+                            continue 'top2;
+                        }
+                        Some(ret) => {
+                            t = ret;
+                        }
+                    }
+                }
+                new_seq_triple.push(t);
+            }
+
+            // If no triples have been eaten then stop
+            if seq_triples_left == new_seq_triple.len() {
+                break;
+            }
+
+            // Back to the start and try again!
+            seq_triple = new_seq_triple;
+        }
+
         etv.reverse();
-        AsRefChunk(etv)
+
+        let mut v:Vec<_> = seq.into_iter()
+            .map(|seq| AsRefExpandedTriple::AsRefTripleSeq(seq))
+            .collect();
+        v.append(&mut etv);
+        AsRefChunk(v)
     }
 
     pub fn from_raw(mut v:Vec<AsRefExpandedTriple<A>>) -> Self {
@@ -625,7 +723,7 @@ pub struct ChunkedRdfXmlFormatter<A, W: Write> {
 }
 
 impl<A, W> ChunkedRdfXmlFormatter<A, W>
-where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
       W: Write,
 {
     pub fn new(write: W, mut config: ChunkedRdfXmlFormatterConfig) -> Result<Self, io::Error> {
@@ -783,17 +881,13 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(triples_rendered)
     }
 
-    fn format_property_arc(&mut self, triple: &AsRefTriple<A>,
-                           rendered_in_head:&Vec<&AsRefTriple<A>>,
-                           chunk:&mut AsRefChunk<A>,
-    ) -> Result<(), io::Error> {
-        if rendered_in_head.contains(&triple) {
-            return Ok(())
-        }
-
-        let mut property_open = self.bytes_start_iri(&triple.predicate);
-
-        match &triple.object {
+    fn format_object(&mut self,
+                     mut property_open:BytesStart<'_>,
+                     object:&AsRefTerm<A>, chunk:&mut AsRefChunk<A>,
+                     collection: bool
+    )
+                     -> Result<(), io::Error> {
+        match object {
             AsRefTerm::NamedNode(n) => {
                 if let Some(t) = chunk.find_subject(&n.iri) {
                     self.write_start(Event::Start(property_open))
@@ -801,13 +895,21 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                     self.format_expanded(&t, chunk)?;
                 } else {
                     // Rewrite: 2.4 Empty Property Elements
-                    property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
+                    if collection {
+                        property_open.push_attribute(("rdf:about", n.iri.as_ref()));
+                    } else {
+                        property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
+                    }
+
                     self.write_start(Event::Start(property_open))
                         .map_err(map_err)?;
                 }
             }
             AsRefTerm::BlankNode(n) => {
                 if let Some(t) = chunk.find_subject(&n.id) {
+                    if let AsRefExpandedTriple::AsRefTripleSeq(_) = t {
+                        property_open.push_attribute(("rdf:parseType", "Collection"));
+                    }
                     self.write_start(Event::Start(property_open))
                         .map_err(map_err)?;
                     self.format_expanded(&t, chunk)?;
@@ -837,7 +939,34 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             },
         };
 
+        Ok(())
+    }
+
+    fn format_property_arc(&mut self, triple: &AsRefTriple<A>,
+                           rendered_in_head:&Vec<&AsRefTriple<A>>,
+                           chunk:&mut AsRefChunk<A>,
+    ) -> Result<(), io::Error> {
+        if rendered_in_head.contains(&triple) {
+            return Ok(())
+        }
+
+        let property_open = self.bytes_start_iri(&triple.predicate);
+        self.format_object(property_open, &triple.object, chunk, false)?;
+
         self.write_close()?;
+        Ok(())
+    }
+
+    fn format_seq(&mut self, seq: &AsRefTripleSeq<A>, chunk:&mut AsRefChunk<A>)
+                  -> Result<(), io::Error> {
+        for tup in seq.list_seq.iter() {
+            if let Some(ref triple) = tup.1 {
+                let property_open = BytesStart::borrowed_name(b"rdf:Description");
+                self.format_object(property_open, &triple.object, chunk, true)?;
+                self.write_close()?;
+            }
+        }
+
         Ok(())
     }
 
@@ -862,8 +991,8 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
                 self.format_multi(mt, chunk)?;
             }
-            _ =>{
-                todo!()
+            AsRefExpandedTriple::AsRefTripleSeq(ref seq) =>{
+                self.format_seq(seq, chunk)?;
             }
         }
         chunk.remove_et(expanded);
@@ -984,7 +1113,7 @@ mod test {
 
         let mut f = ChunkedRdfXmlFormatter::new(sink,config).unwrap();
         let chk = AsRefChunk::normalize(source);
-        dbg!(&chk);
+        //dbg!(&chk);
         f.format_chunk(chk).unwrap();
 
         let w = f.finish().unwrap();
@@ -1060,15 +1189,14 @@ _:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/19
 <http://example.org/basket> <http://example.org/stuff/1.0/hasFruit> _:genid1 ."### ,
 
 r###"<?xml version="1.0" encoding="UTF-8"?>
-<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-            xmlns:ex="http://example.org/stuff/1.0/">
-<rdf:Description rdf:about="http://example.org/basket">
-<ex:hasFruit rdf:parseType="Collection">
-<rdf:Description rdf:about="http://example.org/banana"/>
-<rdf:Description rdf:about="http://example.org/apple"/>
-<rdf:Description rdf:about="http://example.org/pear"/>
-</ex:hasFruit>
-</rdf:Description>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ex="http://example.org/stuff/1.0/">
+    <rdf:Description rdf:about="http://example.org/basket">
+        <ex:hasFruit rdf:parseType="Collection">
+            <rdf:Description rdf:about="http://example.org/banana"/>
+            <rdf:Description rdf:about="http://example.org/apple"/>
+            <rdf:Description rdf:about="http://example.org/pear"/>
+        </ex:hasFruit>
+    </rdf:Description>
 </rdf:RDF>"### ,
             spec_prefix()
         )
