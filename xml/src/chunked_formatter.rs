@@ -604,7 +604,10 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq
                 continue 'top;
             }
 
-            // We have something else. Combine it with existing multi tripes
+            // We have something else. Combine it with existing multi
+            // tripes
+            //
+            // This is quadratic in performance and extremely slow!
             for et in etv.iter_mut() {
                 match et.accept(t) {
                     None => {
@@ -865,10 +868,12 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
                         }
                     }
                     AsRefLiteral::LanguageTaggedString {value:_, language:_} => {
-                        todo!()
+                        // Don't do anything here, because the
+                        // language environment is wrong. Render later.
                     }
                     AsRefLiteral::Typed {value:_, datatype:_} => {
-                        todo!()
+                        // Don't do anything here because we need to
+                        // render later.
                     }
                 }
             } else {
