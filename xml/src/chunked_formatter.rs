@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::{collections::VecDeque, fmt::{Debug, Formatter}};
+use std::{collections::{HashMap, VecDeque}, fmt::{Debug, Formatter}};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
@@ -522,15 +522,30 @@ pub enum AsRefExpandedTriple<A:AsRef<str>> {
     AsRefTripleSeq(AsRefTripleSeq<A>),
 }
 
+impl<A> From<AsRefTriple<A>> for AsRefMultiTriple<A>
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
+{
+    fn from(t: AsRefTriple<A>) -> Self {
+        AsRefMultiTriple{
+            vec: vec![t]
+        }
+    }
+}
+
 impl<A> From<AsRefTriple<A>> for AsRefExpandedTriple<A>
 where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
     fn from(t: AsRefTriple<A>) -> Self {
-        AsRefExpandedTriple::AsRefMultiTriple(
-            AsRefMultiTriple{
-                vec: vec![t]
-            }
-        )
+        let t:AsRefMultiTriple<A> = t.into();
+        t.into()
+    }
+}
+
+impl<A> From<AsRefMultiTriple<A>> for AsRefExpandedTriple<A>
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
+{
+    fn from(t: AsRefMultiTriple<A>) -> Self {
+        AsRefExpandedTriple::AsRefMultiTriple(t)
     }
 }
 
@@ -583,14 +598,15 @@ pub struct AsRefChunk<A:AsRef<str>>(
 
 
 impl<A> AsRefChunk<A>
-where A: AsRef<str> + Clone + Debug + Eq + PartialEq
+where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
 {
     pub fn normalize(v:Vec<AsRefTriple<A>>) -> Self {
-        let mut etv:Vec<AsRefExpandedTriple<A>> = vec![];
+        let mut etv:IndexMap<AsRefNamedOrBlankNode<A>, AsRefMultiTriple<A>> = Default::default();
         let mut seq:Vec<AsRefTripleSeq<A>> = vec![];
-        let mut seq_triple:Vec<AsRefTriple<A>> = vec![];
+        let mut seq_rest:HashMap<AsRefNamedOrBlankNode<A>, AsRefTriple<A>> = Default::default();
+        let mut seq_first:HashMap<AsRefNamedOrBlankNode<A>, AsRefTriple<A>> = Default::default();
 
-        'top: for mut t in v {
+        'top: for t in v {
 
             // We have a collection add. Create a new seq and store it
             if t.is_collection_end() {
@@ -599,70 +615,56 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq
             }
 
             // We have a collection part. Remember for later
-            if t.is_collection() {
-                seq_triple.push(t);
+            if t.is_collection_rest() {
+                if let AsRefTerm::BlankNode(bn) = t.object.clone() {
+                    seq_rest.insert(AsRefNamedOrBlankNode::BlankNode(bn), t);
+                }
+                continue 'top;
+            }
+            if t.is_collection_first() {
+                seq_first.insert(t.subject.clone(), t);
                 continue 'top;
             }
 
             // We have something else. Combine it with existing multi
-            // tripes
-            //
-            // This is quadratic in performance and extremely slow!
-            for et in etv.iter_mut() {
-                match et.accept(t) {
-                    None => {
-                        continue 'top;
-                    }
-                    Some(ret) => {
-                        t = ret;
-                    }
-                }
+            // triples
+            if let Some(multi) = etv.get_mut(&t.subject) {
+                multi.accept(t);
+            } else {
+                // We have an orphan triple, store it a new multi
+                etv.insert(t.subject.clone(), t.into());
             }
-
-            // We have an orphan triple, store it a new multi triple
-            etv.push(t.clone().into())
         }
 
-        // Deal with sequences
-        loop {
-            let seq_triples_left = seq_triple.len();
-            let mut new_seq_triple = vec![];
-            // Check each Seq to see if this one fits
-            'top2: for mut t in seq_triple {
-                for sq in seq.iter_mut(){
-                    match sq.accept(t) {
-                        None => {
-                            continue 'top2;
-                        }
-                        Some(ret) => {
-                            t = ret;
-                        }
-                    }
+        for s in seq.iter_mut() {
+            loop {
+                if let Some(t) = seq_first.remove(s.subject()) {
+                    s.accept(t);
                 }
-                new_seq_triple.push(t);
-            }
 
-            // If no triples have been eaten then stop
-            if seq_triples_left == new_seq_triple.len() {
-                break;
+                if let Some(t) = seq_rest.remove(s.subject()) {
+                    s.accept(t);
+                } else {
+                    break;
+                }
             }
-
-            // Back to the start and try again!
-            seq_triple = new_seq_triple;
         }
+
+        let mut etv:Vec<AsRefExpandedTriple<A>> = etv.into_iter()
+            .map(|(_k, v)| v.into())
+            .collect();
 
         etv.reverse();
 
         let mut v:Vec<_> = seq.into_iter()
-            .map(|seq| AsRefExpandedTriple::AsRefTripleSeq(seq))
+            .map(|s| AsRefExpandedTriple::AsRefTripleSeq(s))
             .collect();
         v.append(&mut etv);
         AsRefChunk(v)
     }
 
-    pub fn from_raw(mut v:Vec<AsRefExpandedTriple<A>>) -> Self {
-        v.reverse();
-        AsRefChunk(v)
+    pub fn from_raw(vec:Vec<AsRefExpandedTriple<A>>) -> Self {
+        AsRefChunk(vec)
     }
 
     pub fn empty() -> Self {
@@ -726,7 +728,7 @@ pub struct ChunkedRdfXmlFormatter<A, W: Write> {
 }
 
 impl<A, W> ChunkedRdfXmlFormatter<A, W>
-where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
+where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
       W: Write,
 {
     pub fn new(write: W, mut config: ChunkedRdfXmlFormatterConfig) -> Result<Self, io::Error> {
@@ -894,21 +896,15 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
                      -> Result<(), io::Error> {
         match object {
             AsRefTerm::NamedNode(n) => {
-                if let Some(t) = chunk.find_subject(&n.iri) {
-                    self.write_start(Event::Start(property_open))
-                        .map_err(map_err)?;
-                    self.format_expanded(&t, chunk)?;
+                // Rewrite: 2.4 Empty Property Elements
+                if collection {
+                    property_open.push_attribute(("rdf:about", n.iri.as_ref()));
                 } else {
-                    // Rewrite: 2.4 Empty Property Elements
-                    if collection {
-                        property_open.push_attribute(("rdf:about", n.iri.as_ref()));
-                    } else {
-                        property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
-                    }
-
-                    self.write_start(Event::Start(property_open))
-                        .map_err(map_err)?;
+                    property_open.push_attribute(("rdf:resource", n.iri.as_ref()));
                 }
+
+                self.write_start(Event::Start(property_open))
+                    .map_err(map_err)?;
             }
             AsRefTerm::BlankNode(n) => {
                 if let Some(t) = chunk.find_subject(&n.id) {
@@ -992,6 +988,8 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
     fn format_expanded(&mut self, expanded:&AsRefExpandedTriple<A>,
                        chunk:&mut AsRefChunk<A>,
     ) -> Result<(), io::Error> {
+        chunk.remove_et(expanded);
+
         match expanded {
             AsRefExpandedTriple::AsRefMultiTriple(ref mt) => {
                 self.format_multi(mt, chunk)?;
@@ -1000,7 +998,6 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
                 self.format_seq(seq, chunk)?;
             }
         }
-        chunk.remove_et(expanded);
 
         Ok(())
     }
@@ -1092,9 +1089,9 @@ mod test {
         ]
     }
 
-    // fn from_nt(nt: &str) -> String {
-    //     from_nt_prefix(nt, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
-    // }
+    fn from_nt(nt: &str) -> String {
+        from_nt_prefix(nt, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
+    }
 
     fn from_nt_prefix(nt: &str, prefix: IndexMap<&str, &str>) -> String {
         let mut source: Vec<AsRefTriple<String>> = vec![];
@@ -1130,6 +1127,12 @@ mod test {
     fn nt_xml_roundtrip_prefix(nt: &str, xml: &str, prefix: IndexMap<&str, &str>){
         assert_eq!(
             from_nt_prefix(nt, prefix), xml
+        );
+    }
+
+    fn nt_xml_roundtrip(nt: &str, xml: &str) {
+        assert_eq!(
+            from_nt(nt), xml
         );
     }
 
@@ -1206,4 +1209,23 @@ r###"<?xml version="1.0" encoding="UTF-8"?>
             spec_prefix()
         )
     }
+
+    #[test]
+    fn collection_recursion() {
+        nt_xml_roundtrip(
+r###"<http://example.com/owl/families/> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> .
+<http://example.com/owl/families/ChildlessPerson> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .
+<http://example.com/owl/families/ChildlessPerson> <http://www.w3.org/2002/07/owl#equivalentClass> _:genid1 .
+_:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .
+_:genid1 <http://www.w3.org/2002/07/owl#intersectionOf> _:genid2 .
+_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.com/owl/families/Person> .
+_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:genid3 .
+_:genid4 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .
+_:genid4 <http://www.w3.org/2002/07/owl#complementOf> <http://example.com/owl/families/Parent> .
+_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:genid4 .
+_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> ."### ,
+            "fred"
+        )
+    }
 }
+
