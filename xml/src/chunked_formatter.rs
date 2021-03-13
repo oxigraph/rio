@@ -687,11 +687,6 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
     fn find_subject(&self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
         self.0.iter().find(|et| et.subject().as_ref() == iri_or_id.as_ref()).cloned()
     }
-
-    fn filter_subject<'a>(&'a self, nnb:&'a AsRefNamedOrBlankNode<A>)
-                          -> impl Iterator<Item=&'a AsRefExpandedTriple<A>> {
-        self.0.iter().filter(move |et| et.subject().as_ref() == nnb.as_ref())
-    }
 }
 
 
@@ -1009,13 +1004,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         self.format_chunk(chk)
     }
 
-    pub fn format(&mut self, triple:AsRefTriple<A>) -> Result<(), io::Error> {
-        self.format_chunk(AsRefChunk::from_raw(
-            vec![triple.into()]
-        ))
-    }
-
-   pub fn format_chunk(&mut self, mut chunk:AsRefChunk<A>) -> Result<(), io::Error> {
+    pub fn format_chunk(&mut self, mut chunk:AsRefChunk<A>) -> Result<(), io::Error> {
         loop {
             let optet = chunk.next();
             if let Some(et) = optet {
@@ -1041,6 +1030,42 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(self.writer.into_inner())
     }
 }
+
+
+pub struct PrettyRdfXmlFormatter<A:AsRef<str>, W: Write> (
+    ChunkedRdfXmlFormatter<A, W>,
+    Vec<AsRefTriple<A>>
+);
+
+impl<A, W> PrettyRdfXmlFormatter<A, W>
+where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
+      W: Write,
+{
+    pub fn new(write: W, config: ChunkedRdfXmlFormatterConfig) -> Result<Self, io::Error> {
+        Ok(
+            PrettyRdfXmlFormatter(
+                ChunkedRdfXmlFormatter::new(write, config)?,
+                vec![]
+            )
+        )
+    }
+
+    pub fn format(&mut self, triple:AsRefTriple<A>) -> Result<(), io::Error> {
+        &self.1.push(triple);
+        Ok(())
+    }
+
+    pub fn finish(mut self) -> Result<W, io::Error> {
+        self.0.format_chunk(
+            AsRefChunk::normalize(self.1)
+        )?;
+
+        self.0.finish()
+    }
+}
+
+
+
 
 
 #[cfg(test)]
