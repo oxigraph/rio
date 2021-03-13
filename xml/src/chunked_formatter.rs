@@ -591,8 +591,7 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq {
 ///   apperance as an object (TODO: Not implemented yet!)
 #[derive(Debug)]
 pub struct AsRefChunk<A:AsRef<str>>(
-    // triples in reverse order for efficient popping
-    Vec<AsRefExpandedTriple<A>>
+    VecDeque<AsRefExpandedTriple<A>>
 );
 
 
@@ -649,25 +648,23 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
             }
         }
 
-        let mut etv:Vec<AsRefExpandedTriple<A>> = etv.into_iter()
+        let etv:VecDeque<AsRefExpandedTriple<A>> = etv.into_iter()
             .map(|(_k, v)| v.into())
+            .chain(
+                seq.into_iter()
+                    .map(|s| AsRefExpandedTriple::AsRefTripleSeq(s))
+            )
             .collect();
 
-        etv.reverse();
-
-        let mut v:Vec<_> = seq.into_iter()
-            .map(|s| AsRefExpandedTriple::AsRefTripleSeq(s))
-            .collect();
-        v.append(&mut etv);
-        AsRefChunk(v)
+        AsRefChunk(etv)
     }
 
     pub fn from_raw(vec:Vec<AsRefExpandedTriple<A>>) -> Self {
-        AsRefChunk(vec)
+        AsRefChunk(vec.into())
     }
 
     pub fn empty() -> Self {
-        AsRefChunk(vec![])
+        AsRefChunk(vec![].into())
     }
 
     pub fn remove_et(&mut self, et: &AsRefExpandedTriple<A>) -> bool {
@@ -680,16 +677,11 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
     }
 
     pub fn insert(&mut self, et:AsRefExpandedTriple<A>){
-        self.0.insert(1, et);
+        self.0.push_back(et);
     }
 
     pub fn next(&mut self) -> Option<AsRefExpandedTriple<A>> {
-        self.0.pop()
-    }
-
-    pub fn remove_subject(&mut self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
-        self.0.iter().position(|et| et.subject().as_ref() == iri_or_id.as_ref())
-            .map(|pos|self.0.remove(pos))
+        self.0.pop_front()
     }
 
     pub fn find_subject(&self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
