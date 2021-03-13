@@ -667,15 +667,6 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
         AsRefChunk(vec![].into())
     }
 
-    pub fn remove_et(&mut self, et: &AsRefExpandedTriple<A>) -> bool {
-        if let Some(pos) = self.0.iter().position(|tet| tet == et) {
-            self.0.remove(pos);
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn insert(&mut self, et:AsRefExpandedTriple<A>){
         self.0.push_back(et);
     }
@@ -684,11 +675,20 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
         self.0.pop_front()
     }
 
-    pub fn find_subject(&self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
+    fn remove_et(&mut self, et: &AsRefExpandedTriple<A>) -> bool {
+        if let Some(pos) = self.0.iter().position(|tet| tet == et) {
+            self.0.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn find_subject(&self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
         self.0.iter().find(|et| et.subject().as_ref() == iri_or_id.as_ref()).cloned()
     }
 
-    pub fn filter_subject<'a>(&'a self, nnb:&'a AsRefNamedOrBlankNode<A>)
+    fn filter_subject<'a>(&'a self, nnb:&'a AsRefNamedOrBlankNode<A>)
                           -> impl Iterator<Item=&'a AsRefExpandedTriple<A>> {
         self.0.iter().filter(move |et| et.subject().as_ref() == nnb.as_ref())
     }
