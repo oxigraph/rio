@@ -8,7 +8,6 @@ use std::{collections::{HashMap, VecDeque}, fmt::{Debug, Formatter}};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
-use std::marker::PhantomData;
 
 // Utilities
 fn map_err(error: quick_xml::Error) -> io::Error {
@@ -680,7 +679,11 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
         }
     }
 
-    pub fn pop(&mut self) -> Option<AsRefExpandedTriple<A>> {
+    pub fn insert(&mut self, et:AsRefExpandedTriple<A>){
+        self.0.insert(1, et);
+    }
+
+    pub fn next(&mut self) -> Option<AsRefExpandedTriple<A>> {
         self.0.pop()
     }
 
@@ -719,12 +722,12 @@ impl ChunkedRdfXmlFormatterConfig {
     }
 }
 
-pub struct ChunkedRdfXmlFormatter<A, W: Write> {
+pub struct ChunkedRdfXmlFormatter<A:AsRef<str>, W: Write> {
     writer: Writer<W>,
     config: ChunkedRdfXmlFormatterConfig,
     pub (crate) open_tag_stack: Vec<Vec<u8>>,
     last_open_tag: Option<BytesStart<'static>>,
-    pd: PhantomData<A>
+    chunk: AsRefChunk<A>,
 }
 
 impl<A, W> ChunkedRdfXmlFormatter<A, W>
@@ -741,7 +744,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             config,
             open_tag_stack: Default::default(),
             last_open_tag: None,
-            pd: PhantomData
+            chunk: AsRefChunk::empty(),
         }
         .write_declaration()
     }
@@ -821,7 +824,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         }
     }
 
-    fn format_head<'a, T:TripleLike<A> + Debug>(&mut self, triple_like:&'a T, chunk:&AsRefChunk<A>)
+    fn format_head<'a, T:TripleLike<A> + Debug>(&mut self, triple_like:&'a T, _chunk:&AsRefChunk<A>)
                                         -> Result<Vec<&'a AsRefTriple<A>>, io::Error> {
         let mut triples_rendered = vec![];
         let mut description_open =
@@ -843,10 +846,8 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             AsRefNamedOrBlankNode::NamedNode(ref n) => {
                 description_open.push_attribute(("rdf:about", n.iri.as_ref()))
             }
-            AsRefNamedOrBlankNode::BlankNode(ref n) => {
-                if chunk.find_subject(&n.id).is_none() {
-                    description_open.push_attribute(("rdf:nodeID", n.id.as_ref()))
-                }
+            AsRefNamedOrBlankNode::BlankNode(_) => {
+                // Empty
             }
         }
 
@@ -1002,15 +1003,29 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(())
     }
 
-    pub fn format(&mut self, triple: AsRefTriple<A>) -> Result<(), io::Error> {
+    pub fn chunk_triple(&mut self, triple:AsRefTriple<A>) {
+        self.chunk.insert(triple.into());
+    }
+
+    pub fn chunk_multi(&mut self, multi: AsRefMultiTriple<A>) {
+        self.chunk.insert(multi.into())
+    }
+
+    pub fn finish_chunk(&mut self) -> Result<(), io::Error> {
+        let mut chk = AsRefChunk::empty();
+        std::mem::swap(&mut self.chunk, &mut chk);
+        self.format_chunk(chk)
+    }
+
+    pub fn format(&mut self, triple:AsRefTriple<A>) -> Result<(), io::Error> {
         self.format_chunk(AsRefChunk::from_raw(
-            vec![triple.clone().into()]
+            vec![triple.into()]
         ))
     }
 
-    pub fn format_chunk(&mut self, mut chunk:AsRefChunk<A>) -> Result<(), io::Error> {
+   pub fn format_chunk(&mut self, mut chunk:AsRefChunk<A>) -> Result<(), io::Error> {
         loop {
-            let optet = chunk.pop();
+            let optet = chunk.next();
             if let Some(et) = optet {
                 self.format_expanded(&et, &mut chunk)?;
             } else {
@@ -1025,6 +1040,8 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         while !self.open_tag_stack.is_empty() {
             self.write_close()?;
         }
+
+        self.finish_chunk()?;
 
         self.write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
             .map_err(map_err)?;
@@ -1089,6 +1106,7 @@ mod test {
         ]
     }
 
+    #[allow(dead_code)]
     fn from_nt(nt: &str) -> String {
         from_nt_prefix(nt, indexmap!("http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf"))
     }
@@ -1130,6 +1148,7 @@ mod test {
         );
     }
 
+    #[allow(dead_code)]
     fn nt_xml_roundtrip(nt: &str, xml: &str) {
         assert_eq!(
             from_nt(nt), xml
@@ -1207,24 +1226,6 @@ r###"<?xml version="1.0" encoding="UTF-8"?>
     </rdf:Description>
 </rdf:RDF>"### ,
             spec_prefix()
-        )
-    }
-
-    #[test]
-    fn collection_recursion() {
-        nt_xml_roundtrip(
-r###"<http://example.com/owl/families/> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Ontology> .
-<http://example.com/owl/families/ChildlessPerson> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .
-<http://example.com/owl/families/ChildlessPerson> <http://www.w3.org/2002/07/owl#equivalentClass> _:genid1 .
-_:genid1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .
-_:genid1 <http://www.w3.org/2002/07/owl#intersectionOf> _:genid2 .
-_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://example.com/owl/families/Person> .
-_:genid2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> _:genid3 .
-_:genid4 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Class> .
-_:genid4 <http://www.w3.org/2002/07/owl#complementOf> <http://example.com/owl/families/Parent> .
-_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:genid4 .
-_:genid3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#rest> <http://www.w3.org/1999/02/22-rdf-syntax-ns#nil> ."### ,
-            "fred"
         )
     }
 }
