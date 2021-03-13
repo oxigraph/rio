@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::{collections::{HashMap, VecDeque}, fmt::{Debug, Formatter}};
+use std::{collections::VecDeque, fmt::{Debug, Formatter}};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
@@ -522,30 +522,15 @@ pub enum AsRefExpandedTriple<A:AsRef<str>> {
     AsRefTripleSeq(AsRefTripleSeq<A>),
 }
 
-impl<A> From<AsRefTriple<A>> for AsRefMultiTriple<A>
-where A: AsRef<str> + Clone + Debug + Eq + PartialEq
-{
-    fn from(t: AsRefTriple<A>) -> Self {
-        AsRefMultiTriple{
-            vec: vec![t]
-        }
-    }
-}
-
 impl<A> From<AsRefTriple<A>> for AsRefExpandedTriple<A>
 where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
     fn from(t: AsRefTriple<A>) -> Self {
-        let t:AsRefMultiTriple<A> = t.into();
-        t.into()
-    }
-}
-
-impl<A> From<AsRefMultiTriple<A>> for AsRefExpandedTriple<A>
-where A: AsRef<str> + Clone + Debug + Eq + PartialEq
-{
-    fn from(t: AsRefMultiTriple<A>) -> Self {
-        AsRefExpandedTriple::AsRefMultiTriple(t)
+        AsRefExpandedTriple::AsRefMultiTriple(
+            AsRefMultiTriple{
+                vec: vec![t]
+            }
+        )
     }
 }
 
@@ -598,15 +583,14 @@ pub struct AsRefChunk<A:AsRef<str>>(
 
 
 impl<A> AsRefChunk<A>
-where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
     pub fn normalize(v:Vec<AsRefTriple<A>>) -> Self {
-        let mut etv:IndexMap<AsRefNamedOrBlankNode<A>, AsRefMultiTriple<A>> = Default::default();
+        let mut etv:Vec<AsRefExpandedTriple<A>> = vec![];
         let mut seq:Vec<AsRefTripleSeq<A>> = vec![];
-        let mut seq_rest:HashMap<AsRefNamedOrBlankNode<A>, AsRefTriple<A>> = Default::default();
-        let mut seq_first:HashMap<AsRefNamedOrBlankNode<A>, AsRefTriple<A>> = Default::default();
+        let mut seq_triple:Vec<AsRefTriple<A>> = vec![];
 
-        'top: for t in v {
+        'top: for mut t in v {
 
             // We have a collection add. Create a new seq and store it
             if t.is_collection_end() {
@@ -615,56 +599,70 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
             }
 
             // We have a collection part. Remember for later
-            if t.is_collection_rest() {
-                if let AsRefTerm::BlankNode(bn) = t.object.clone() {
-                    seq_rest.insert(AsRefNamedOrBlankNode::BlankNode(bn), t);
-                }
-                continue 'top;
-            }
-            if t.is_collection_first() {
-                seq_first.insert(t.subject.clone(), t);
+            if t.is_collection() {
+                seq_triple.push(t);
                 continue 'top;
             }
 
             // We have something else. Combine it with existing multi
-            // triples
-            if let Some(multi) = etv.get_mut(&t.subject) {
-                multi.accept(t);
-            } else {
-                // We have an orphan triple, store it a new multi
-                etv.insert(t.subject.clone(), t.into());
-            }
-        }
-
-        for s in seq.iter_mut() {
-            loop {
-                if let Some(t) = seq_first.remove(s.subject()) {
-                    s.accept(t);
-                }
-
-                if let Some(t) = seq_rest.remove(s.subject()) {
-                    s.accept(t);
-                } else {
-                    break;
+            // tripes
+            //
+            // This is quadratic in performance and extremely slow!
+            for et in etv.iter_mut() {
+                match et.accept(t) {
+                    None => {
+                        continue 'top;
+                    }
+                    Some(ret) => {
+                        t = ret;
+                    }
                 }
             }
+
+            // We have an orphan triple, store it a new multi triple
+            etv.push(t.clone().into())
         }
 
-        let mut etv:Vec<AsRefExpandedTriple<A>> = etv.into_iter()
-            .map(|(_k, v)| v.into())
-            .collect();
+        // Deal with sequences
+        loop {
+            let seq_triples_left = seq_triple.len();
+            let mut new_seq_triple = vec![];
+            // Check each Seq to see if this one fits
+            'top2: for mut t in seq_triple {
+                for sq in seq.iter_mut(){
+                    match sq.accept(t) {
+                        None => {
+                            continue 'top2;
+                        }
+                        Some(ret) => {
+                            t = ret;
+                        }
+                    }
+                }
+                new_seq_triple.push(t);
+            }
+
+            // If no triples have been eaten then stop
+            if seq_triples_left == new_seq_triple.len() {
+                break;
+            }
+
+            // Back to the start and try again!
+            seq_triple = new_seq_triple;
+        }
 
         etv.reverse();
 
         let mut v:Vec<_> = seq.into_iter()
-            .map(|s| AsRefExpandedTriple::AsRefTripleSeq(s))
+            .map(|seq| AsRefExpandedTriple::AsRefTripleSeq(seq))
             .collect();
         v.append(&mut etv);
         AsRefChunk(v)
     }
 
-    pub fn from_raw(vec:Vec<AsRefExpandedTriple<A>>) -> Self {
-        AsRefChunk(vec)
+    pub fn from_raw(mut v:Vec<AsRefExpandedTriple<A>>) -> Self {
+        v.reverse();
+        AsRefChunk(v)
     }
 
     pub fn empty() -> Self {
@@ -728,7 +726,7 @@ pub struct ChunkedRdfXmlFormatter<A, W: Write> {
 }
 
 impl<A, W> ChunkedRdfXmlFormatter<A, W>
-where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq,
       W: Write,
 {
     pub fn new(write: W, mut config: ChunkedRdfXmlFormatterConfig) -> Result<Self, io::Error> {
