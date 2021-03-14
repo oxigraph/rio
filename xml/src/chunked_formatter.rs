@@ -704,20 +704,32 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
 
 #[derive(Clone, Debug, Default)]
 pub struct ChunkedRdfXmlFormatterConfig {
-    pub bnode_contract: bool,
-    pub indentation: usize,
-    pub prefix: IndexMap<String, String>,
-    pub typed_node: bool
+    indent: usize,
+    prefix: IndexMap<String, String>,
 }
 
 impl ChunkedRdfXmlFormatterConfig {
-    pub fn new() -> Self {
+    pub fn none() -> Self {
         ChunkedRdfXmlFormatterConfig {
-            bnode_contract: false,
-            indentation: 4,
+            indent: 0,
             prefix: IndexMap::new(),
-            typed_node: false
         }
+    }
+    pub fn all() -> Self {
+        ChunkedRdfXmlFormatterConfig {
+            indent:4,
+            prefix:IndexMap::new(),
+        }
+    }
+
+    pub fn prefix(mut config: Self, indexmap:IndexMap<String, String>) -> Self {
+        config.prefix=indexmap;
+        config
+    }
+
+    pub fn indent(mut config: Self, indent:usize) -> {
+        config.ident = ident;
+        config
     }
 }
 
@@ -739,7 +751,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                              "rdf".to_string());
 
         Self {
-            writer: Writer::new_with_indent(write, b' ', config.indentation),
+            writer: Writer::new_with_indent(write, b' ', config.indent),
             config,
             open_tag_stack: Default::default(),
             last_open_tag: None,
