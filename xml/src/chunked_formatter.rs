@@ -290,6 +290,18 @@ pub enum AsRefTerm<A:AsRef<str>> {
     Literal(AsRefLiteral<A>),
 }
 
+impl<A:AsRef<str>> PartialEq<AsRefNamedOrBlankNode<A>> for AsRefTerm<A> {
+    fn eq(&self, other: &AsRefNamedOrBlankNode<A>) -> bool {
+        match (self, other) {
+            (Self::NamedNode(nn), AsRefNamedOrBlankNode::NamedNode(onn))
+                => nn.iri.as_ref() == onn.iri.as_ref(),
+            (Self::BlankNode(bn), AsRefNamedOrBlankNode::BlankNode(obn))
+                => bn.id.as_ref() == obn.id.as_ref(),
+            _ => false
+        }
+    }
+}
+
 impl<A:AsRef<str>> fmt::Display for AsRefTerm<A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let t:Term<'_> = self.into();
@@ -614,8 +626,8 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
 
             // We have a collection part. Remember for later
             if t.is_collection_rest() {
-                if let AsRefTerm::BlankNode(bn) = t.object.clone() {
-                    seq_rest.insert(AsRefNamedOrBlankNode::BlankNode(bn), t);
+                if let AsRefTerm::BlankNode(ref bn) = &t.object {
+                    seq_rest.insert(AsRefNamedOrBlankNode::BlankNode(bn.clone()), t);
                 }
                 continue 'top;
             }
