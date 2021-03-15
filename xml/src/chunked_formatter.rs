@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::{collections::{HashMap, VecDeque}, fmt::{Debug, Formatter}};
+use std::{cmp::Ordering, collections::{HashMap, VecDeque}, fmt::{Debug, Formatter}};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
@@ -41,22 +41,23 @@ impl<A:AsRef<str>> AsRefNamedNode<A> {
 }
 
 impl <A:Debug + AsRef<str>> Debug for AsRefNamedNode<A> {
-        fn fmt(&self, f: &mut Formatter<'_>) -> ::core::fmt::Result {
-            match *self {
-                AsRefNamedNode {
-                    ref iri,
-                    position_cache: _,
-                    position_base: _,
-                    position_add:_
-                } => {
-                    let mut debug_trait_builder =
-                        f.debug_struct("AsRefNamedNode");
-                    let _ = debug_trait_builder.field("iri", &&(*iri));
-                    debug_trait_builder.finish()
-                }
+    fn fmt(&self, f: &mut Formatter<'_>) -> ::core::fmt::Result {
+        match *self {
+            AsRefNamedNode {
+                ref iri,
+                position_cache: _,
+                position_base: _,
+                position_add:_
+            } => {
+                let mut debug_trait_builder =
+                    f.debug_struct("AsRefNamedNode");
+                let _ = debug_trait_builder.field("iri", &&(*iri));
+                debug_trait_builder.finish()
             }
         }
     }
+}
+
 impl<A:AsRef<str>> Hash for AsRefNamedNode<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.iri.as_ref().hash(state);
@@ -431,6 +432,11 @@ pub struct AsRefMultiTriple<A:AsRef<str>> {
 impl<A> AsRefMultiTriple<A>
 where A: AsRef<str> + PartialEq
 {
+    #[allow(dead_code)]
+    pub (crate) fn empty() -> AsRefMultiTriple<A> {
+        AsRefMultiTriple{vec:vec![]}
+    }
+
     pub fn len(&self) -> usize {
         self.vec.len()
     }
@@ -473,7 +479,12 @@ pub struct AsRefTripleSeq<A:AsRef<str>> {
 }
 
 impl<A:AsRef<str>> AsRefTripleSeq<A> {
-    fn from_end(t:AsRefTriple<A>) -> AsRefTripleSeq<A> {
+    #[allow(dead_code)]
+    pub (crate) fn empty() -> AsRefTripleSeq<A> {
+        AsRefTripleSeq{list_seq: VecDeque::new()}
+    }
+
+    pub fn from_end(t:AsRefTriple<A>) -> AsRefTripleSeq<A> {
         let mut seq = AsRefTripleSeq{list_seq: vec![].into()};
         if let AsRefNamedOrBlankNode::BlankNode(_) = &t.subject {
             seq.list_seq.push_front((t.subject, None));
@@ -482,7 +493,6 @@ impl<A:AsRef<str>> AsRefTripleSeq<A> {
         }
         seq
     }
-
 }
 
 impl<A> TripleLike<A> for AsRefTripleSeq<A>
@@ -557,6 +567,14 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 {
     fn from(t: AsRefMultiTriple<A>) -> Self {
         AsRefExpandedTriple::AsRefMultiTriple(t)
+    }
+}
+
+impl<A> From<AsRefTripleSeq<A>> for AsRefExpandedTriple<A>
+where A: AsRef<str> + Clone + Debug + Eq + PartialEq
+{
+    fn from(t: AsRefTripleSeq<A>) -> Self {
+        AsRefExpandedTriple::AsRefTripleSeq(t)
     }
 }
 
@@ -679,6 +697,47 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
         AsRefChunk(vec![].into())
     }
 
+    pub fn sort(&mut self) {
+        &self.0.make_contiguous()
+            .sort_by(
+                |a, b| {
+                    match (a, b) {
+                        (
+                            AsRefExpandedTriple::AsRefMultiTriple(_),
+                            AsRefExpandedTriple::AsRefTripleSeq(_)
+                        ) => Ordering::Less,
+                        (
+                            AsRefExpandedTriple::AsRefTripleSeq(_),
+                            AsRefExpandedTriple::AsRefMultiTriple(_)
+                        ) => Ordering::Greater,
+                        (
+                            AsRefExpandedTriple::AsRefMultiTriple(
+                                amt
+                            ),
+                            AsRefExpandedTriple::AsRefMultiTriple(
+                                bmt
+                            )
+                        ) => {
+                            match (
+                                amt.subject(), bmt.subject()
+                            ) {
+                                (
+                                    AsRefNamedOrBlankNode::NamedNode(_),
+                                    AsRefNamedOrBlankNode::BlankNode(_),
+                                ) => Ordering::Less,
+                                (
+                                    AsRefNamedOrBlankNode::BlankNode(_),
+                                    AsRefNamedOrBlankNode::NamedNode(_),
+                                ) => Ordering::Greater,
+                                _ => Ordering::Equal
+                            }
+                        }
+                        _ => Ordering::Equal
+                    }
+                }
+            );
+    }
+
     pub fn insert(&mut self, et:AsRefExpandedTriple<A>){
         self.0.push_back(et);
     }
@@ -727,8 +786,8 @@ impl ChunkedRdfXmlFormatterConfig {
         config
     }
 
-    pub fn indent(mut config: Self, indent:usize) -> {
-        config.ident = ident;
+    pub fn indent(mut config: Self, indent:usize) -> Self{
+        config.indent = indent;
         config
     }
 }
@@ -1014,6 +1073,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         Ok(())
     }
 
+    pub fn chunk_seq(&mut self, seq:AsRefTripleSeq<A>) {
+        self.chunk.insert(seq.into())
+    }
+
     pub fn chunk_triple(&mut self, triple:AsRefTriple<A>) {
         self.chunk.insert(triple.into());
     }
@@ -1099,12 +1162,28 @@ mod test {
     use rio_api::parser::TriplesParser;
     use rio_turtle::TurtleError;
 
-    use super::{AsRefChunk, AsRefNamedNode, AsRefTriple,
+    use super::{AsRefChunk, AsRefBlankNode, AsRefNamedNode, AsRefTriple, AsRefTripleSeq,
                 ChunkedRdfXmlFormatter, ChunkedRdfXmlFormatterConfig};
 
     fn tnn () -> AsRefTriple<String> {
         AsRefTriple {
             subject: AsRefNamedNode::new("http://example.com/s".to_string()).into(),
+            predicate: AsRefNamedNode::new("http://example.com/p".to_string()).into(),
+            object: AsRefNamedNode::new("http://example.com/o".to_string()).into()
+        }
+    }
+
+    fn tnn1 () -> AsRefTriple<String> {
+        AsRefTriple {
+            subject: AsRefNamedNode::new("http://example.com/s1".to_string()).into(),
+            predicate: AsRefNamedNode::new("http://example.com/p1".to_string()).into(),
+            object: AsRefNamedNode::new("http://example.com/o1".to_string()).into()
+        }
+    }
+
+    fn bnn () -> AsRefTriple<String> {
+        AsRefTriple {
+            subject: AsRefBlankNode::new("hello_id".to_string()).into(),
             predicate: AsRefNamedNode::new("http://example.com/p".to_string()).into(),
             object: AsRefNamedNode::new("http://example.com/o".to_string()).into()
         }
@@ -1139,6 +1218,40 @@ mod test {
         assert_eq!(chk.0.len(), 1);
     }
 
+    #[test]
+    pub fn multi_chunk_sort_stable() {
+        let mut chk:AsRefChunk<String>=AsRefChunk::empty();
+        chk.insert(tnn().into());
+        chk.insert(tnn1().into());
+        chk.sort();
+
+        assert_eq!(chk.next(), Some(tnn().into()));
+        assert_eq!(chk.next(), Some(tnn1().into()));
+
+        let mut chk:AsRefChunk<String>=AsRefChunk::empty();
+        chk.insert(tnn1().into());
+        chk.insert(tnn().into());
+        chk.sort();
+
+        assert_eq!(chk.next(), Some(tnn1().into()));
+        assert_eq!(chk.next(), Some(tnn().into()));
+    }
+
+    #[test]
+    pub fn multi_chunk_sort() {
+        let mut chk:AsRefChunk<String>=AsRefChunk::empty();
+
+        chk.insert(AsRefTripleSeq::empty().into());
+        chk.insert(bnn().into());
+        chk.insert(tnn().into());
+
+        chk.sort();
+
+        assert_eq!(chk.next(), Some(tnn().into()));
+        assert_eq!(chk.next(), Some(bnn().into()));
+        assert_eq!(chk.next(), Some(AsRefTripleSeq::empty().into()));
+    }
+
     fn spec_prefix() -> IndexMap<&'static str, &'static str> {
         indexmap![
             "http://www.w3.org/1999/02/22-rdf-syntax-ns#" => "rdf",
@@ -1165,7 +1278,7 @@ mod test {
 
         let sink = vec![];
 
-        let mut config = ChunkedRdfXmlFormatterConfig::new();
+        let mut config = ChunkedRdfXmlFormatterConfig::all();
         config.prefix =
             prefix.into_iter().map(
                 |(k, v)|
