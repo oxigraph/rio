@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use quick_xml::{Writer, events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event}};
 use rio_api::model::{BlankNode, Literal, NamedNode, NamedOrBlankNode, Term, Triple};
 
-use std::{cmp::Ordering, collections::{HashMap, VecDeque}, fmt::{Debug, Formatter}};
+use std::{cmp::Ordering, collections::{HashMap, HashSet, VecDeque}, fmt::{Debug, Formatter}};
 use std::{self, cell::RefCell, fmt,
           hash::{Hash,Hasher},
           io::{self, Write}};
@@ -167,7 +167,7 @@ impl<A:AsRef<str>> AsRef<str> for AsRefBlankNode<A> {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum AsRefLiteral<A:AsRef<str>> {
     Simple {
         value: A,
@@ -284,7 +284,7 @@ impl<A:AsRef<str>> AsRef<str> for AsRefNamedOrBlankNode<A> {
     }
 }
 
-#[derive(Eq, PartialEq, Debug, Clone)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum AsRefTerm<A:AsRef<str>> {
     NamedNode(AsRefNamedNode<A>),
     BlankNode(AsRefBlankNode<A>),
@@ -299,6 +299,15 @@ impl<A:AsRef<str>> PartialEq<AsRefNamedOrBlankNode<A>> for AsRefTerm<A> {
             (Self::BlankNode(bn), AsRefNamedOrBlankNode::BlankNode(obn))
                 => bn.id.as_ref() == obn.id.as_ref(),
             _ => false
+        }
+    }
+}
+
+impl<A:AsRef<str>> From<AsRefNamedOrBlankNode<A>> for AsRefTerm<A> {
+    fn from(nbn: AsRefNamedOrBlankNode<A>) -> Self {
+        match nbn {
+            AsRefNamedOrBlankNode::NamedNode(nn) => nn.into(),
+            AsRefNamedOrBlankNode::BlankNode(bn) => bn.into(),
         }
     }
 }
@@ -348,7 +357,7 @@ impl<A:AsRef<str>> From<AsRefNamedNode<A>> for AsRefTerm<A> {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AsRefTriple<A: AsRef<str>> {
     pub subject: AsRefNamedOrBlankNode<A>,
     pub predicate: AsRefNamedNode<A>,
@@ -356,6 +365,12 @@ pub struct AsRefTriple<A: AsRef<str>> {
 }
 
 impl<A:AsRef<str>> AsRefTriple<A> {
+    pub fn new(subject:AsRefNamedOrBlankNode<A>,
+               predicate:AsRefNamedNode<A>,
+               object:AsRefTerm<A>) -> AsRefTriple<A> {
+        AsRefTriple{subject, predicate, object}
+    }
+
     pub fn is_type(&self) -> bool {
         self.predicate.iri.as_ref() == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
     }
@@ -424,7 +439,7 @@ trait TripleLike<A>
 
 // A set of triples with a shared subject
 // All the triples in `vec` should start with `subject`.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AsRefMultiTriple<A:AsRef<str>> {
     vec: Vec<AsRefTriple<A>>,
 }
@@ -435,6 +450,10 @@ where A: AsRef<str> + PartialEq
     #[allow(dead_code)]
     pub (crate) fn empty() -> AsRefMultiTriple<A> {
         AsRefMultiTriple{vec:vec![]}
+    }
+
+    pub fn new(vec:Vec<AsRefTriple<A>>) -> AsRefMultiTriple<A> {
+        AsRefMultiTriple{vec}
     }
 
     pub fn len(&self) -> usize {
@@ -473,7 +492,7 @@ where A: AsRef<str> + Clone + PartialEq
 
 // A set of terms that should be rendered as a RDF list, using first
 // as a the subject of the first node
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AsRefTripleSeq<A:AsRef<str>> {
     list_seq: VecDeque<(AsRefNamedOrBlankNode<A>, Option<AsRefTriple<A>>)>,
 }
@@ -537,7 +556,7 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq
 }
 
 // All the different forms of RDF subgraph
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum AsRefExpandedTriple<A:AsRef<str>> {
     AsRefMultiTriple(AsRefMultiTriple<A>),
     AsRefTripleSeq(AsRefTripleSeq<A>),
@@ -620,9 +639,11 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq {
 ///   - if BNodes appear as subjects, they appear after any
 ///   apperance as an object (TODO: Not implemented yet!)
 #[derive(Debug)]
-pub struct AsRefChunk<A:AsRef<str>>(
-    VecDeque<AsRefExpandedTriple<A>>
-);
+pub struct AsRefChunk<A:AsRef<str>>{
+    v: VecDeque<AsRefExpandedTriple<A>>,
+    r: HashSet<AsRefExpandedTriple<A>>,
+    by_sub: HashMap<AsRefBlankNode<A>, AsRefExpandedTriple<A>>
+}
 
 
 impl<A> AsRefChunk<A>
@@ -686,19 +707,19 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
             )
             .collect();
 
-        AsRefChunk(etv)
+        AsRefChunk{v:etv, r:HashSet::new(), by_sub:HashMap::new()}
     }
 
     pub fn from_raw(vec:Vec<AsRefExpandedTriple<A>>) -> Self {
-        AsRefChunk(vec.into())
+        AsRefChunk{v:vec.into(), r:HashSet::new(), by_sub:HashMap::new()}
     }
 
     pub fn empty() -> Self {
-        AsRefChunk(vec![].into())
+        AsRefChunk{v:vec![].into(), r:HashSet::new(), by_sub:HashMap::new()}
     }
 
     pub fn sort(&mut self) {
-        &self.0.make_contiguous()
+        &self.v.make_contiguous()
             .sort_by(
                 |a, b| {
                     match (a, b) {
@@ -739,24 +760,35 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
     }
 
     pub fn insert(&mut self, et:AsRefExpandedTriple<A>){
-        self.0.push_back(et);
+        self.v.push_back(et);
+        self.by_sub.clear()
     }
 
     pub fn next(&mut self) -> Option<AsRefExpandedTriple<A>> {
-        self.0.pop_front()
-    }
-
-    fn remove_et(&mut self, et: &AsRefExpandedTriple<A>) -> bool {
-        if let Some(pos) = self.0.iter().position(|tet| tet == et) {
-            self.0.remove(pos);
-            true
-        } else {
-            false
+        loop {
+            if let Some(front) = self.v.pop_front() {
+                if !self.r.contains(&front) {
+                    return Some(front)
+                }
+            } else {
+                return None;
+            }
         }
     }
 
-    fn find_subject(&self, iri_or_id:&A) -> Option<AsRefExpandedTriple<A>> {
-        self.0.iter().find(|et| et.subject().as_ref() == iri_or_id.as_ref()).cloned()
+    fn remove_et(&mut self, et: &AsRefExpandedTriple<A>) {
+        self.r.insert(et.clone());
+    }
+
+    fn find_subject(&mut self, bn:&AsRefBlankNode<A>) -> Option<AsRefExpandedTriple<A>> {
+        if self.by_sub.is_empty() {
+            for v in self.v.iter() {
+                if let AsRefNamedOrBlankNode::BlankNode(n) = v.subject() {
+                    &self.by_sub.insert(n.clone(), v.clone());
+                }
+            }
+        }
+        self.by_sub.get(bn).cloned()
     }
 }
 
@@ -978,7 +1010,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                     .map_err(map_err)?;
             }
             AsRefTerm::BlankNode(n) => {
-                if let Some(t) = chunk.find_subject(&n.id) {
+                if let Some(t) = chunk.find_subject(n) {
                     if let AsRefExpandedTriple::AsRefTripleSeq(_) = t {
                         property_open.push_attribute(("rdf:parseType", "Collection"));
                     }
@@ -1085,6 +1117,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
         self.chunk.insert(multi.into())
     }
 
+    pub fn sort_chunk(&mut self) {
+        self.chunk.sort()
+    }
+
     pub fn finish_chunk(&mut self) -> Result<(), io::Error> {
         let mut chk = AsRefChunk::empty();
         std::mem::swap(&mut self.chunk, &mut chk);
@@ -1143,10 +1179,8 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     }
 
     pub fn finish(mut self) -> Result<W, io::Error> {
-        self.0.format_chunk(
-            AsRefChunk::normalize(self.1)
-        )?;
-
+        let chk = AsRefChunk::normalize(self.1);
+        self.0.format_chunk(chk)?;
         self.0.finish()
     }
 }
@@ -1202,7 +1236,7 @@ mod test {
             ]
         );
 
-        assert_eq!(chk.0.len(), 1);
+        assert_eq!(chk.v.len(), 1);
     }
 
     #[test]
@@ -1215,7 +1249,7 @@ mod test {
             ]
         );
 
-        assert_eq!(chk.0.len(), 1);
+        assert_eq!(chk.v.len(), 1);
     }
 
     #[test]
