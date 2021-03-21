@@ -1,5 +1,6 @@
 use rio_api::formatter::{QuadsFormatter, TriplesFormatter};
 use rio_api::model::*;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::io::Write;
 
@@ -342,4 +343,67 @@ impl NamedOrBlankNodeType {
             NamedOrBlankNodeType::BlankNode => BlankNode { id: value }.into(),
         }
     }
+}
+
+/// A [Turtle](https://www.w3.org/TR/turtle/) formatter.
+///
+/// Write some triples into a `Vec` buffer:
+/// ```
+/// use rio_turtle::format_pretty_turtle;
+/// use rio_api::model::{NamedNode, Triple, BlankNode};
+/// use std::rc::Rc;
+///
+/// let foo = Rc::new("http://example.com/foo");
+/// let triples = vec![
+///     Triple {
+///         subject: NamedNode { iri: &foo }.into(),
+///         predicate: NamedNode { iri: "http://schema.org/parent" },
+///         object: BlankNode { id: "11" }.into()
+///     },
+///     Triple {
+///         subject: BlankNode { id: "11" }.into(),
+///         predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" },
+///         object: NamedNode { iri: "http://schema.org/Person" }.into()
+///     },
+///     Triple {
+///         subject: NamedNode { iri: &foo }.into(),
+///         predicate: NamedNode { iri: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" },
+///         object: NamedNode { iri: "http://schema.org/Person" }.into()
+///     }
+/// ];
+///
+/// let mut buffer = Vec::new();
+/// format_pretty_turtle(&mut buffer, triples.iter().cloned())?;
+/// # std::io::Result::Ok(())
+/// ```
+pub fn format_pretty_turtle<'a>(
+    mut writer: impl Write,
+    triples: impl IntoIterator<Item = Triple<'a>>,
+) -> Result<(), io::Error> {
+    let mut tree: HashMap<NamedOrBlankNode<'a>, HashMap<NamedNode<'a>, HashSet<Term<'a>>>> =
+        HashMap::new(); // Subject -> predicte -> objects map
+    for triple in triples {
+        tree.entry(triple.subject)
+            .or_insert_with(HashMap::default)
+            .entry(triple.predicate)
+            .or_insert_with(HashSet::default)
+            .insert(triple.object);
+    }
+    for (subject, predicate_objects) in &tree {
+        write!(writer, "{}", subject)?;
+        for (i, (predicate, objects)) in predicate_objects.iter().enumerate() {
+            if i > 0 {
+                write!(writer, " ;\n\t")?;
+            }
+            write!(writer, "\t{}", predicate)?;
+            for (j, object) in objects.iter().enumerate() {
+                if j > 0 {
+                    write!(writer, " ,\n")?;
+                }
+                write!(writer, " {}", object)?;
+            }
+        }
+        write!(writer, " .\n")?;
+    }
+    Ok(())
 }

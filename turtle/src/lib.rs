@@ -53,6 +53,7 @@ mod utils;
 mod gtrig;
 
 pub use error::TurtleError;
+pub use formatters::format_pretty_turtle;
 pub use formatters::NQuadsFormatter;
 pub use formatters::NTriplesFormatter;
 pub use formatters::TriGFormatter;
