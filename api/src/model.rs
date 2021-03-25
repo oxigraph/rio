@@ -277,11 +277,11 @@ impl<'a> fmt::Display for Quad<'a> {
 }
 
 fn escape(s: &str) -> impl Iterator<Item = char> + '_ {
-    s.chars().flat_map(EscapeRDF::new)
+    s.chars().flat_map(EscapeRdf::new)
 }
 
 /// A customized version of EscapeDefault of the Rust standard library
-struct EscapeRDF {
+struct EscapeRdf {
     state: EscapeRdfState,
 }
 
@@ -291,7 +291,7 @@ enum EscapeRdfState {
     Backslash(char),
 }
 
-impl EscapeRDF {
+impl EscapeRdf {
     fn new(c: char) -> Self {
         Self {
             state: match c {
@@ -305,7 +305,7 @@ impl EscapeRDF {
     }
 }
 
-impl Iterator for EscapeRDF {
+impl Iterator for EscapeRdf {
     type Item = char;
 
     fn next(&mut self) -> Option<char> {
@@ -332,7 +332,7 @@ impl Iterator for EscapeRDF {
     }
 }
 
-impl ExactSizeIterator for EscapeRDF {
+impl ExactSizeIterator for EscapeRdf {
     fn len(&self) -> usize {
         match self.state {
             EscapeRdfState::Done => 0,

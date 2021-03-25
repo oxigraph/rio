@@ -13,7 +13,7 @@ pub trait LookAheadByteRead {
     /// Returns the current byte if it exists or fail if it does not
     fn required_current(&self) -> Result<u8, TurtleError> {
         self.current()
-            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEOF))
+            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEof))
     }
 
     /// Returns the next byte if it exists
@@ -46,7 +46,7 @@ pub trait LookAheadByteRead {
     fn unexpected_char_error<T>(&self) -> Result<T, TurtleError> {
         Err(self.parse_error(match self.current() {
             Some(c) => TurtleErrorKind::UnexpectedByte(c),
-            None => TurtleErrorKind::PrematureEOF,
+            None => TurtleErrorKind::PrematureEof,
         }))
     }
 
@@ -176,7 +176,7 @@ impl<R: BufRead> LookAheadByteRead for LookAheadByteReader<R> {
                     self.byte_number += 1;
                 }
             } else {
-                return Err(self.parse_error(TurtleErrorKind::PrematureEOF));
+                return Err(self.parse_error(TurtleErrorKind::PrematureEof));
             }
         }
         if self.buffer.is_empty() {

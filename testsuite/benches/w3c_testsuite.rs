@@ -26,7 +26,7 @@ fn test_data_from_testsuite(
         if include_tests_types.contains(&test.kind.iri.as_str()) {
             read_w3c_rdf_test_file(&test.action, &test_path)?
                 .read_to_end(&mut data)
-                .map_err(|e| TestEvaluationError::IO(test.action, e))?;
+                .map_err(|e| TestEvaluationError::Io(test.action, e))?;
             data.push(b'\n');
         }
     }

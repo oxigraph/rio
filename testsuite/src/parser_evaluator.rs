@@ -101,7 +101,7 @@ pub fn read_w3c_rdf_test_file(
     }?);
 
     Ok(BufReader::new(File::open(&path).map_err(|e| {
-        TestEvaluationError::IO(path.to_string_lossy().to_string(), e)
+        TestEvaluationError::Io(path.to_string_lossy().to_string(), e)
     })?))
 }
 
@@ -174,7 +174,7 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
 pub enum TestEvaluationError {
     UnknownTestUrl(String),
     UnsupportedFormat(String),
-    IO(String, io::Error),
+    Io(String, io::Error),
 }
 
 impl fmt::Display for TestEvaluationError {
@@ -188,7 +188,7 @@ impl fmt::Display for TestEvaluationError {
                 "The extension of {} does not match any supported format",
                 u
             ),
-            TestEvaluationError::IO(file, error) => {
+            TestEvaluationError::Io(file, error) => {
                 write!(f, "I/O error on file {}: {}", file, error)
             }
         }

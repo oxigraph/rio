@@ -162,7 +162,7 @@ enum RdfXmlState {
     Doc {
         base_iri: Option<Iri<String>>,
     },
-    RDF {
+    Rdf {
         base_iri: Option<Iri<String>>,
         language: Option<LanguageTag<String>>,
     },
@@ -205,7 +205,7 @@ impl RdfXmlState {
     fn base_iri(&self) -> Option<&Iri<String>> {
         match self {
             RdfXmlState::Doc { base_iri, .. } => base_iri,
-            RdfXmlState::RDF { base_iri, .. } => base_iri,
+            RdfXmlState::Rdf { base_iri, .. } => base_iri,
             RdfXmlState::NodeElt { base_iri, .. } => base_iri,
             RdfXmlState::PropertyElt { base_iri, .. } => base_iri,
             RdfXmlState::ParseTypeCollectionPropertyElt { base_iri, .. } => base_iri,
@@ -217,7 +217,7 @@ impl RdfXmlState {
     fn language(&self) -> Option<&LanguageTag<String>> {
         match self {
             RdfXmlState::Doc { .. } => None,
-            RdfXmlState::RDF { language, .. } => language.as_ref(),
+            RdfXmlState::Rdf { language, .. } => language.as_ref(),
             RdfXmlState::NodeElt { language, .. } => language.as_ref(),
             RdfXmlState::PropertyElt { language, .. } => language.as_ref(),
             RdfXmlState::ParseTypeCollectionPropertyElt { language, .. } => language.as_ref(),
@@ -300,7 +300,7 @@ impl<R: BufRead> RdfXmlReader<R> {
 
         #[derive(PartialEq, Eq)]
         enum RdfXmlNextProduction {
-            RDF,
+            Rdf,
             NodeElt,
             PropertyElt { subject: OwnedNamedOrBlankNode },
         }
@@ -445,8 +445,8 @@ impl<R: BufRead> RdfXmlReader<R> {
         };
 
         let expected_production = match self.state.last() {
-            Some(RdfXmlState::Doc { .. }) => RdfXmlNextProduction::RDF,
-            Some(RdfXmlState::RDF { .. }) => RdfXmlNextProduction::NodeElt,
+            Some(RdfXmlState::Doc { .. }) => RdfXmlNextProduction::Rdf,
+            Some(RdfXmlState::Rdf { .. }) => RdfXmlNextProduction::NodeElt,
             Some(RdfXmlState::NodeElt { subject, .. }) => RdfXmlNextProduction::PropertyElt {
                 subject: subject.clone(),
             },
@@ -465,9 +465,9 @@ impl<R: BufRead> RdfXmlReader<R> {
         };
 
         let new_state = match expected_production {
-            RdfXmlNextProduction::RDF => {
+            RdfXmlNextProduction::Rdf => {
                 if *iri == *RDF_RDF {
-                    RdfXmlState::RDF { base_iri, language }
+                    RdfXmlState::Rdf { base_iri, language }
                 } else if RESERVED_RDF_ELEMENTS.contains(&&*iri) {
                     return Err(RdfXmlError::msg(format!(
                         "Invalid node element tag name: {}",

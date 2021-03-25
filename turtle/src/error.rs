@@ -17,9 +17,9 @@ pub struct TurtleError {
 
 #[derive(Debug)]
 pub enum TurtleErrorKind {
-    IO(io::Error),
+    Io(io::Error),
     UnknownPrefix(String),
-    PrematureEOF,
+    PrematureEof,
     UnexpectedByte(u8),
     InvalidUnicodeCodePoint(u32),
     InvalidIri {
@@ -35,9 +35,9 @@ pub enum TurtleErrorKind {
 impl fmt::Display for TurtleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            TurtleErrorKind::IO(error) => return error.fmt(f),
+            TurtleErrorKind::Io(error) => return error.fmt(f),
             TurtleErrorKind::UnknownPrefix(prefix) => write!(f, "unknown prefix '{}'", prefix),
-            TurtleErrorKind::PrematureEOF => write!(f, "premature end of file"),
+            TurtleErrorKind::PrematureEof => write!(f, "premature end of file"),
             TurtleErrorKind::UnexpectedByte(c) => match char::from_u32(u32::from(*c)) {
                 Some(c) => write!(f, "unexpected character '{}'", c.escape_debug()),
                 None => write!(f, "unexpected byter {}", c),
@@ -67,7 +67,7 @@ impl fmt::Display for TurtleError {
 impl Error for TurtleError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
-            TurtleErrorKind::IO(error) => Some(error),
+            TurtleErrorKind::Io(error) => Some(error),
             TurtleErrorKind::InvalidIri { error, .. } => Some(error),
             TurtleErrorKind::InvalidLanguageTag { error, .. } => Some(error),
             _ => None,
@@ -84,7 +84,7 @@ impl ParseError for TurtleError {
 impl From<io::Error> for TurtleError {
     fn from(error: io::Error) -> Self {
         Self {
-            kind: TurtleErrorKind::IO(error),
+            kind: TurtleErrorKind::Io(error),
             position: None,
         }
     }
@@ -93,8 +93,8 @@ impl From<io::Error> for TurtleError {
 impl From<TurtleError> for io::Error {
     fn from(error: TurtleError) -> Self {
         match error.kind {
-            TurtleErrorKind::IO(error) => error,
-            TurtleErrorKind::PrematureEOF => io::Error::new(io::ErrorKind::UnexpectedEof, error),
+            TurtleErrorKind::Io(error) => error,
+            TurtleErrorKind::PrematureEof => io::Error::new(io::ErrorKind::UnexpectedEof, error),
             _ => io::Error::new(io::ErrorKind::InvalidData, error),
         }
     }
