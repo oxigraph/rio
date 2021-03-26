@@ -394,6 +394,15 @@ impl<A:AsRef<str>> AsRefTriple<A> {
             false
         }
     }
+
+    pub fn printable(&self) -> String {
+        format!(
+            "{}\n\t{}\n\t{}",
+            self.subject,
+            self.predicate,
+            self.object
+        )
+    }
 }
 
 impl<A:AsRef<str>> fmt::Display for AsRefTriple<A> {
@@ -788,7 +797,12 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq
                 }
             }
         }
-        self.by_sub.get(bn).cloned()
+        if let Some(sub) = self.by_sub.get(bn).cloned() {
+            if !self.r.contains(&sub) {
+                return Some(sub);
+            }
+        }
+        None
     }
 }
 
@@ -813,14 +827,14 @@ impl ChunkedRdfXmlFormatterConfig {
         }
     }
 
-    pub fn prefix(mut config: Self, indexmap:IndexMap<String, String>) -> Self {
-        config.prefix=indexmap;
-        config
+    pub fn prefix(mut self, indexmap:IndexMap<String, String>) -> Self {
+        self.prefix = indexmap;
+        self
     }
 
-    pub fn indent(mut config: Self, indent:usize) -> Self{
-        config.indent = indent;
-        config
+    pub fn indent(mut self, indent:usize) -> Self{
+        self.indent = indent;
+        self
     }
 }
 
@@ -960,6 +974,7 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                 match l {
                     AsRefLiteral::Simple {value} => {
                         let (iri_protocol_and_host, iri_qname) = literal_t.predicate.split_iri();
+
                         if let Some(iri_ns_prefix) = &self.config.prefix.get(iri_protocol_and_host) {
                             description_open.push_attribute(
                                 (
@@ -968,8 +983,6 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                                 )
                             );
                             triples_rendered.push(literal_t);
-                        } else {
-                           todo!()
                         }
                     }
                     AsRefLiteral::LanguageTaggedString {value:_, language:_} => {
@@ -1026,7 +1039,12 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             AsRefTerm::Literal(l) => {
                 let content =
                     match l {
-                        AsRefLiteral::Simple { value } => value,
+                        AsRefLiteral::Simple { value } => {
+                            property_open.push_attribute(("rdf:datatype",
+                                                          "http://www.w3.org/2001/XMLSchema#string"
+                            ));
+                            value
+                        }
                         AsRefLiteral::LanguageTaggedString { value, language } => {
                             property_open.push_attribute(("xml:lang", language.as_ref()));
                             value
@@ -1065,9 +1083,22 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
                   -> Result<(), io::Error> {
         for tup in seq.list_seq.iter() {
             if let Some(ref triple) = tup.1 {
-                let property_open = BytesStart::borrowed_name(b"rdf:Description");
-                self.format_object(property_open, &triple.object, chunk, true)?;
-                self.write_close()?;
+                match &triple.object {
+                    // Just render in place
+                    AsRefTerm::BlankNode(bn) => {
+                        if let Some(t) = chunk.find_subject(bn) {
+                            self.format_expanded(&t, chunk)?;
+                        }
+                    }
+                    // render the object, but not the property which
+                    // is the collection joiner
+                    AsRefTerm::NamedNode(_) => {
+                        let property_open = BytesStart::borrowed_name(b"rdf:Description");
+                        self.format_object(property_open, &triple.object, chunk, true)?;
+                        self.write_close()?;
+                    }
+                    _ => todo!()
+                }
             }
         }
 
@@ -1155,9 +1186,9 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 }
 
 
-pub struct PrettyRdfXmlFormatter<A:AsRef<str>, W: Write> (
+pub struct PrettyRdfXmlFormatter<A:AsRef<str>+Debug, W: Write> (
     ChunkedRdfXmlFormatter<A, W>,
-    Vec<AsRefTriple<A>>
+    pub Vec<AsRefTriple<A>>
 );
 
 impl<A, W> PrettyRdfXmlFormatter<A, W>
@@ -1176,6 +1207,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
     pub fn format(&mut self, triple:AsRefTriple<A>) -> Result<(), io::Error> {
         &self.1.push(triple);
         Ok(())
+    }
+
+    pub fn triples(&self) -> Vec<AsRefTriple<A>> {
+        self.1.clone()
     }
 
     pub fn finish(mut self) -> Result<W, io::Error> {
