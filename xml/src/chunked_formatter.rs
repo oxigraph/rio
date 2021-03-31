@@ -503,10 +503,25 @@ where A: AsRef<str> + Clone + PartialEq
 // as a the subject of the first node
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct AsRefTripleSeq<A:AsRef<str>> {
-    list_seq: VecDeque<(AsRefNamedOrBlankNode<A>, Option<AsRefTriple<A>>)>,
+    list_seq: VecDeque<(AsRefNamedOrBlankNode<A>, Option<AsRefTriple<A>>, AsRefTriple<A>)>,
 }
 
-impl<A:AsRef<str>> AsRefTripleSeq<A> {
+impl<A:AsRef<str> + Eq> From<AsRefTripleSeq<A>> for Vec<AsRefMultiTriple<A>> {
+    fn from(seq: AsRefTripleSeq<A>) -> Self {
+        let mut v = vec![];
+        for tup in seq.list_seq {
+            let mut items = vec![];
+            if let Some(t) = tup.1 {
+                items.push(t);
+            }
+            items.push(tup.2);
+            v.push(AsRefMultiTriple::new(items));
+        }
+        v
+    }
+}
+
+impl<A:AsRef<str> + Clone> AsRefTripleSeq<A> {
     #[allow(dead_code)]
     pub (crate) fn empty() -> AsRefTripleSeq<A> {
         AsRefTripleSeq{list_seq: VecDeque::new()}
@@ -515,11 +530,26 @@ impl<A:AsRef<str>> AsRefTripleSeq<A> {
     pub fn from_end(t:AsRefTriple<A>) -> AsRefTripleSeq<A> {
         let mut seq = AsRefTripleSeq{list_seq: vec![].into()};
         if let AsRefNamedOrBlankNode::BlankNode(_) = &t.subject {
-            seq.list_seq.push_front((t.subject, None));
+            seq.list_seq.push_front((t.subject.clone(), None, t));
         } else {
             todo!("This shouldn't happen")
         }
         seq
+    }
+
+    pub fn has_literal(&self) -> bool {
+        self.list_seq.iter().any (
+            |(_, t, _)|
+            matches!(t,
+                     Some(
+                         AsRefTriple {
+                             subject:_,
+                             predicate:_,
+                             object: AsRefTerm::Literal(_)
+                         }
+                     )
+            )
+        )
     }
 }
 
@@ -542,7 +572,7 @@ where A: AsRef<str> + Clone + Debug + Eq + PartialEq
         if let AsRefTerm::BlankNode(bn) = &t.object {
             if let &AsRefNamedOrBlankNode::BlankNode(ref snn) = self.subject() {
                 if t.is_collection_rest() && snn == bn {
-                    self.list_seq.push_front((t.subject, None));
+                    self.list_seq.push_front((t.subject.clone(), None, t));
                     return None;
                 }
             }
@@ -1024,8 +1054,10 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
             }
             AsRefTerm::BlankNode(n) => {
                 if let Some(t) = chunk.find_subject(n) {
-                    if let AsRefExpandedTriple::AsRefTripleSeq(_) = t {
-                        property_open.push_attribute(("rdf:parseType", "Collection"));
+                    if let AsRefExpandedTriple::AsRefTripleSeq(ref seq) = t {
+                        if !seq.has_literal() {
+                            property_open.push_attribute(("rdf:parseType", "Collection"));
+                        }
                     }
                     self.write_start(Event::Start(property_open))
                         .map_err(map_err)?;
@@ -1081,6 +1113,22 @@ where A: AsRef<str> + Clone + Debug + Eq + Hash + PartialEq,
 
     fn format_seq(&mut self, seq: &AsRefTripleSeq<A>, chunk:&mut AsRefChunk<A>)
                   -> Result<(), io::Error> {
+
+        // We can't format seqs with literals in like this -- we need
+        // to do long hand
+        if seq.has_literal() {
+            let subj = seq.subject().clone();
+            let v:Vec<AsRefMultiTriple<A>> = seq.clone().into();
+            for i in v {
+                chunk.insert(i.into())
+            }
+            if let AsRefNamedOrBlankNode::BlankNode(n) = subj {
+                return self.format_expanded(&chunk.find_subject(&n).unwrap(), chunk);
+            }
+            todo!("We shouldn't get here");
+        }
+
+
         for tup in seq.list_seq.iter() {
             if let Some(ref triple) = tup.1 {
                 match &triple.object {
