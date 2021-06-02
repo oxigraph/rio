@@ -26,6 +26,7 @@ pub struct NamedNode<'a> {
 }
 
 impl<'a> fmt::Display for NamedNode<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<{}>", self.iri)
     }
@@ -51,6 +52,7 @@ pub struct BlankNode<'a> {
 }
 
 impl<'a> fmt::Display for BlankNode<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "_:{}", self.id)
     }
@@ -138,6 +140,7 @@ pub enum NamedOrBlankNode<'a> {
 }
 
 impl<'a> fmt::Display for NamedOrBlankNode<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             NamedOrBlankNode::NamedNode(node) => node.fmt(f),
@@ -147,12 +150,14 @@ impl<'a> fmt::Display for NamedOrBlankNode<'a> {
 }
 
 impl<'a> From<NamedNode<'a>> for NamedOrBlankNode<'a> {
+    #[inline]
     fn from(node: NamedNode<'a>) -> Self {
         NamedOrBlankNode::NamedNode(node)
     }
 }
 
 impl<'a> From<BlankNode<'a>> for NamedOrBlankNode<'a> {
+    #[inline]
     fn from(node: BlankNode<'a>) -> Self {
         NamedOrBlankNode::BlankNode(node)
     }
@@ -171,6 +176,7 @@ pub enum Term<'a> {
 }
 
 impl<'a> fmt::Display for Term<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Term::NamedNode(node) => node.fmt(f),
@@ -181,24 +187,28 @@ impl<'a> fmt::Display for Term<'a> {
 }
 
 impl<'a> From<NamedNode<'a>> for Term<'a> {
+    #[inline]
     fn from(node: NamedNode<'a>) -> Self {
         Term::NamedNode(node)
     }
 }
 
 impl<'a> From<BlankNode<'a>> for Term<'a> {
+    #[inline]
     fn from(node: BlankNode<'a>) -> Self {
         Term::BlankNode(node)
     }
 }
 
 impl<'a> From<Literal<'a>> for Term<'a> {
+    #[inline]
     fn from(literal: Literal<'a>) -> Self {
         Term::Literal(literal)
     }
 }
 
 impl<'a> From<NamedOrBlankNode<'a>> for Term<'a> {
+    #[inline]
     fn from(resource: NamedOrBlankNode<'a>) -> Self {
         match resource {
             NamedOrBlankNode::NamedNode(node) => Term::NamedNode(node),
@@ -232,6 +242,7 @@ pub struct Triple<'a> {
 }
 
 impl<'a> fmt::Display for Triple<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {} {} .", self.subject, self.predicate, self.object)
     }
@@ -264,6 +275,7 @@ pub struct Quad<'a> {
 }
 
 impl<'a> fmt::Display for Quad<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.graph_name {
             Some(graph_name) => write!(

@@ -51,6 +51,7 @@ impl<'a> TTerm for Literal<'a> {
     fn kind(&self) -> TermKind {
         TermKind::Literal
     }
+
     #[inline]
     fn value_raw(&self) -> RawValue<'_> {
         match self {
@@ -218,18 +219,22 @@ impl<'a> TTerm for GeneralizedTerm<'a> {
 impl<'a> SophiaQuad for GeneralizedQuad<'a> {
     type Term = GeneralizedTerm<'a>;
 
+    #[inline]
     fn s(&self) -> &Self::Term {
         &self.subject
     }
 
+    #[inline]
     fn p(&self) -> &Self::Term {
         &self.predicate
     }
 
+    #[inline]
     fn o(&self) -> &Self::Term {
         &self.object
     }
 
+    #[inline]
     fn g(&self) -> Option<&Self::Term> {
         self.graph_name.as_ref()
     }

@@ -31,6 +31,7 @@ pub mod model {
     }
 
     impl<'a> fmt::Display for Variable<'a> {
+        #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "?{}", self.name)
         }
@@ -58,30 +59,35 @@ pub mod model {
     }
 
     impl<'a> From<NamedNode<'a>> for GeneralizedTerm<'a> {
+        #[inline]
         fn from(other: NamedNode<'a>) -> GeneralizedTerm<'a> {
             GeneralizedTerm::NamedNode(other)
         }
     }
 
     impl<'a> From<BlankNode<'a>> for GeneralizedTerm<'a> {
+        #[inline]
         fn from(other: BlankNode<'a>) -> GeneralizedTerm<'a> {
             GeneralizedTerm::BlankNode(other)
         }
     }
 
     impl<'a> From<Literal<'a>> for GeneralizedTerm<'a> {
+        #[inline]
         fn from(other: Literal<'a>) -> GeneralizedTerm<'a> {
             GeneralizedTerm::Literal(other)
         }
     }
 
     impl<'a> From<Variable<'a>> for GeneralizedTerm<'a> {
+        #[inline]
         fn from(other: Variable<'a>) -> GeneralizedTerm<'a> {
             GeneralizedTerm::Variable(other)
         }
     }
 
     impl<'a> From<NamedOrBlankNode<'a>> for GeneralizedTerm<'a> {
+        #[inline]
         fn from(other: NamedOrBlankNode<'a>) -> GeneralizedTerm<'a> {
             match other {
                 NamedOrBlankNode::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
@@ -91,6 +97,7 @@ pub mod model {
     }
 
     impl<'a> From<Term<'a>> for GeneralizedTerm<'a> {
+        #[inline]
         fn from(other: Term<'a>) -> GeneralizedTerm<'a> {
             match other {
                 Term::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
@@ -102,6 +109,8 @@ pub mod model {
 
     impl<'a> TryFrom<GeneralizedTerm<'a>> for NamedNode<'a> {
         type Error = StrictRdfError;
+
+        #[inline]
         fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedNode<'a>, StrictRdfError> {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(inner),
@@ -120,6 +129,8 @@ pub mod model {
 
     impl<'a> TryFrom<GeneralizedTerm<'a>> for NamedOrBlankNode<'a> {
         type Error = StrictRdfError;
+
+        #[inline]
         fn try_from(other: GeneralizedTerm<'a>) -> Result<NamedOrBlankNode<'a>, StrictRdfError> {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(NamedOrBlankNode::NamedNode(inner)),
@@ -136,6 +147,8 @@ pub mod model {
 
     impl<'a> TryFrom<GeneralizedTerm<'a>> for Term<'a> {
         type Error = StrictRdfError;
+
+        #[inline]
         fn try_from(other: GeneralizedTerm<'a>) -> Result<Term<'a>, StrictRdfError> {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(Term::NamedNode(inner)),
@@ -149,6 +162,7 @@ pub mod model {
     }
 
     impl<'a> fmt::Display for GeneralizedTerm<'a> {
+        #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 GeneralizedTerm::NamedNode(node) => node.fmt(f),
@@ -199,6 +213,7 @@ pub mod model {
     }
 
     impl<'a> From<Quad<'a>> for GeneralizedQuad<'a> {
+        #[inline]
         fn from(other: Quad<'a>) -> GeneralizedQuad<'a> {
             GeneralizedQuad {
                 subject: other.subject.into(),
@@ -212,6 +227,7 @@ pub mod model {
     impl<'a> TryFrom<GeneralizedQuad<'a>> for Quad<'a> {
         type Error = StrictRdfError;
 
+        #[inline]
         fn try_from(other: GeneralizedQuad<'a>) -> Result<Quad<'a>, StrictRdfError> {
             Ok(Quad {
                 subject: other.subject.try_into()?,
@@ -228,6 +244,7 @@ pub mod model {
     impl<'a> TryFrom<GeneralizedQuad<'a>> for Triple<'a> {
         type Error = StrictRdfError;
 
+        #[inline]
         fn try_from(other: GeneralizedQuad<'a>) -> Result<Triple<'a>, StrictRdfError> {
             match other.graph_name {
                 Some(_) => Err(StrictRdfError {
@@ -243,6 +260,7 @@ pub mod model {
     }
 
     impl<'a> fmt::Display for GeneralizedQuad<'a> {
+        #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             if let Some(graph_name) = self.graph_name {
                 write!(f, "GRAPH {} {{ ", graph_name)?;
@@ -264,6 +282,7 @@ pub mod model {
     }
 
     impl<'a> fmt::Display for StrictRdfError {
+        #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             self.message.fmt(f)
         }
