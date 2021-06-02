@@ -62,7 +62,6 @@ impl<R: BufRead> RdfXmlParser<R> {
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         let mut reader = Reader::from_reader(reader);
         reader.expand_empty_elements(true);
-        reader.trim_text(true);
         Self {
             reader: RdfXmlReader {
                 reader,
@@ -247,7 +246,11 @@ impl<R: BufRead> RdfXmlReader<R> {
             if input.starts_with(b"%") {
                 input = trim_start(&input[1..]);
             }
-            let (entity_name, input) = split_once(input, |c| c.is_ascii_whitespace()).ok_or_else(|| RdfXmlError::msg("<!ENTITY declarations should contain both an entity name and an entity value"))?;
+            let (entity_name, input) = split_once(input, is_whitespace).ok_or_else(|| {
+                RdfXmlError::msg(
+                    "<!ENTITY declarations should contain both an entity name and an entity value",
+                )
+            })?;
             let input = trim_start(input);
             if !input.starts_with(b"\"") {
                 return Err(RdfXmlError::msg(
@@ -646,25 +649,33 @@ impl<R: BufRead> RdfXmlReader<R> {
     fn parse_text_event(&mut self, event: BytesText<'_>) -> Result<(), RdfXmlError> {
         match self.state.last_mut() {
             Some(RdfXmlState::PropertyElt { object, .. }) => {
-                *object = Some(NodeOrText::Text(
-                    event.unescape_and_decode_with_custom_entities(
-                        &self.reader,
-                        &self.custom_entities,
-                    )?,
-                ));
+                if !event.iter().all(is_whitespace) {
+                    *object = Some(NodeOrText::Text(
+                        event.unescape_and_decode_with_custom_entities(
+                            &self.reader,
+                            &self.custom_entities,
+                        )?,
+                    ));
+                }
                 Ok(())
             }
             Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) => {
                 writer.write_event(Event::Text(event))?;
                 Ok(())
             }
-            _ => Err(RdfXmlError::msg(format!(
-                "Unexpected text event: {}",
-                event.unescape_and_decode_with_custom_entities(
-                    &self.reader,
-                    &self.custom_entities
-                )?
-            ))),
+            _ => {
+                if event.iter().all(is_whitespace) {
+                    Ok(())
+                } else {
+                    Err(RdfXmlError::msg(format!(
+                        "Unexpected text event: {}",
+                        event.unescape_and_decode_with_custom_entities(
+                            &self.reader,
+                            &self.custom_entities
+                        )?
+                    )))
+                }
+            }
         }
     }
 
@@ -1090,10 +1101,14 @@ fn split_once(input: &[u8], pred: impl FnMut(&u8) -> bool) -> Option<(&[u8], &[u
 }
 
 fn trim_start(input: &[u8]) -> &[u8] {
-    for i in 0..input.len() {
-        if !input[i].is_ascii_whitespace() {
-            return input.split_at(i).1;
+    for (i, c) in input.iter().enumerate() {
+        if !is_whitespace(c) {
+            return &input[i..];
         }
     }
     b"".as_ref()
+}
+
+fn is_whitespace(c: &u8) -> bool {
+    matches!(c, b' ' | b'\t' | b'\n' | b'\r')
 }

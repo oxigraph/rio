@@ -12,6 +12,7 @@
 		<#language_normalization_ttl>
 		<#language_normalization_xml>
 		<#xml_entities>
+		<#literal_value_space>
 	) .
 
 <#no_end_line_jump>
@@ -47,3 +48,9 @@
 	mf:name "custom XML entities" ;
 	mf:action <xml_entities.rdf> ;
 	mf:result <xml_entities.nt> .
+
+<#literal_value_space>
+	rdf:type rdft:TestXMLEval ;
+	mf:name "spaces in literal values" ;
+	mf:action <literal_value_space.rdf> ;
+	mf:result <literal_value_space.nt> .
