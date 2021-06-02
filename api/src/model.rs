@@ -109,21 +109,13 @@ pub enum Literal<'a> {
 impl<'a> fmt::Display for Literal<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Literal::Simple { value } => {
-                f.write_char('"')?;
-                escape(value).try_for_each(|c| f.write_char(c))?;
-                f.write_char('"')
-            }
+            Literal::Simple { value } => fmt_quoted_str(value, f),
             Literal::LanguageTaggedString { value, language } => {
-                f.write_char('"')?;
-                escape(value).try_for_each(|c| f.write_char(c))?;
-                f.write_char('"')?;
+                fmt_quoted_str(value, f)?;
                 write!(f, "@{}", language)
             }
             Literal::Typed { value, datatype } => {
-                f.write_char('"')?;
-                escape(value).try_for_each(|c| f.write_char(c))?;
-                f.write_char('"')?;
+                fmt_quoted_str(value, f)?;
                 write!(f, "^^{}", datatype)
             }
         }
@@ -288,68 +280,17 @@ impl<'a> fmt::Display for Quad<'a> {
     }
 }
 
-fn escape(s: &str) -> impl Iterator<Item = char> + '_ {
-    s.chars().flat_map(EscapeRdf::new)
-}
-
-/// A customized version of EscapeDefault of the Rust standard library
-struct EscapeRdf {
-    state: EscapeRdfState,
-}
-
-enum EscapeRdfState {
-    Done,
-    Char(char),
-    Backslash(char),
-}
-
-impl EscapeRdf {
-    fn new(c: char) -> Self {
-        Self {
-            state: match c {
-                '\n' => EscapeRdfState::Backslash('n'),
-                '\r' => EscapeRdfState::Backslash('r'),
-                '"' => EscapeRdfState::Backslash('"'),
-                '\\' => EscapeRdfState::Backslash('\\'),
-                c => EscapeRdfState::Char(c),
-            },
-        }
+#[inline]
+fn fmt_quoted_str(string: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_char('"')?;
+    for c in string.chars() {
+        match c {
+            '\n' => f.write_str("\\n"),
+            '\r' => f.write_str("\\r"),
+            '"' => f.write_str("\\\""),
+            '\\' => f.write_str("\\\\"),
+            c => f.write_char(c),
+        }?;
     }
-}
-
-impl Iterator for EscapeRdf {
-    type Item = char;
-
-    fn next(&mut self) -> Option<char> {
-        match self.state {
-            EscapeRdfState::Backslash(c) => {
-                self.state = EscapeRdfState::Char(c);
-                Some('\\')
-            }
-            EscapeRdfState::Char(c) => {
-                self.state = EscapeRdfState::Done;
-                Some(c)
-            }
-            EscapeRdfState::Done => None,
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let n = self.len();
-        (n, Some(n))
-    }
-
-    fn count(self) -> usize {
-        self.len()
-    }
-}
-
-impl ExactSizeIterator for EscapeRdf {
-    fn len(&self) -> usize {
-        match self.state {
-            EscapeRdfState::Done => 0,
-            EscapeRdfState::Char(_) => 1,
-            EscapeRdfState::Backslash(_) => 2,
-        }
-    }
+    f.write_char('"')
 }
