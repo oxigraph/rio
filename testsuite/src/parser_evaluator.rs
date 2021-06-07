@@ -143,6 +143,7 @@ pub fn parse_w3c_rdf_test_file(
     }
 }
 
+/// Use GTrig instead of TriG parser
 #[cfg(feature = "generalized")]
 pub fn parse_w3c_rdf_test_file_for_gtrig(
     url: &str,
@@ -153,6 +154,39 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
 
     if url.ends_with(".nt") {
         NTriplesParser::new(read)
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".nq") {
+        NQuadsParser::new(read)
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".ttl") {
+        TurtleParser::new(read, Some(base_iri))
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".trig") {
+        GTriGParser::new(read, Some(base_iri))
+            .into_iter(|t| Ok(Quad::try_from(t)?.into()))
+            .collect()
+    } else {
+        Err(Box::new(TestEvaluationError::UnsupportedFormat(
+            url.to_owned(),
+        )))
+    }
+}
+
+/// Use NQuads instead of NTriples parser
+/// (in order to test the NQuads parser with NT files)
+#[cfg(feature = "star")]
+pub fn parse_w3c_rdf_test_file_for_nquads(
+    url: &str,
+    tests_path: &Path,
+) -> Result<OwnedDataset, Box<dyn Error>> {
+    let read = read_w3c_rdf_test_file(url, tests_path)?;
+    let base_iri = Iri::parse(url.to_owned())?;
+
+    if url.ends_with(".nt") {
+        NQuadsParser::new(read)
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".nq") {

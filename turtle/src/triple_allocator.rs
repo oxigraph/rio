@@ -36,6 +36,21 @@ impl TripleAllocator {
         &self.complete_stack[self.complete_len - 1]
     }
 
+    pub fn top_quad<'s>(&'s self, graph_name: Option<GraphName<'s>>) -> Quad<'s> {
+        debug_assert!(self.complete_len > 0);
+        let Triple {
+            subject,
+            predicate,
+            object,
+        } = *self.top();
+        Quad {
+            subject,
+            predicate,
+            object,
+            graph_name,
+        }
+    }
+
     pub fn push_triple_start(&mut self) {
         if self.incomplete_len == self.incomplete_stack.len() {
             self.incomplete_stack.push(Triple {

@@ -14,7 +14,9 @@ fn main() {
         eprintln!("Expecting two arguments: <w3c_rdf_tests_base_path> <manifest_url>");
         return;
     }
+    #[allow(unused_mut)]
     let mut parse_func: ParseFunction = parse_w3c_rdf_test_file;
+    #[allow(unused_mut)]
     let mut manifest_url = match args[2].as_ref() {
         "ntriples" | "nt" => "http://w3c.github.io/rdf-tests/ntriples/manifest.ttl",
         "nquads" | "nq" => "http://w3c.github.io/rdf-tests/nquads/manifest.ttl",

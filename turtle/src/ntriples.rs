@@ -120,10 +120,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 /// ```
 pub struct NQuadsParser<R: BufRead> {
     read: LookAheadByteReader<R>,
-    subject_buf: String,
-    predicate_buf: String,
-    object_buf: String,
-    object_annotation_buf: String, // datatype or language tag
+    triple_alloc: TripleAllocator,
     graph_name_buf: String,
 }
 
@@ -131,10 +128,7 @@ impl<R: BufRead> NQuadsParser<R> {
     pub fn new(reader: R) -> Self {
         Self {
             read: LookAheadByteReader::new(reader),
-            subject_buf: String::default(),
-            predicate_buf: String::default(),
-            object_buf: String::default(),
-            object_annotation_buf: String::default(),
+            triple_alloc: TripleAllocator::new(),
             graph_name_buf: String::default(),
         }
     }
@@ -147,30 +141,28 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
         &mut self,
         on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
-        let result = match parse_quad_line(
+        match parse_quad_line(
             &mut self.read,
-            &mut self.subject_buf,
-            &mut self.predicate_buf,
-            &mut self.object_buf,
-            &mut self.object_annotation_buf,
+            &mut self.triple_alloc,
             &mut self.graph_name_buf,
         ) {
-            Ok(Some(quad)) => on_quad(quad),
+            Ok(Some(opt_graph_name)) => match on_quad(self.triple_alloc.top_quad(opt_graph_name)) {
+                Ok(()) => {
+                    self.triple_alloc.pop_top_triple();
+                    Ok(())
+                }
+                Err(err) => {
+                    self.triple_alloc.clear();
+                    Err(err)
+                }
+            },
             Ok(None) => Ok(()),
             Err(error) => {
                 self.read.consume_line_end()?;
+                self.triple_alloc.clear();
                 Err(E::from(error))
             }
-        };
-
-        //We clear the buffers
-        self.subject_buf.clear();
-        self.predicate_buf.clear();
-        self.object_buf.clear();
-        self.object_annotation_buf.clear();
-        self.graph_name_buf.clear();
-
-        result
+        }
     }
 
     fn is_end(&self) -> bool {
@@ -232,31 +224,25 @@ fn parse_triple(
 
 fn parse_quad_line<'a>(
     read: &mut impl LookAheadByteRead,
-    subject_buf: &'a mut String,
-    predicate_buf: &'a mut String,
-    object_buf: &'a mut String,
-    object_annotation_buf: &'a mut String,
+    triple_alloc: &mut TripleAllocator,
     graph_name_buf: &'a mut String,
-) -> Result<Option<Quad<'a>>, TurtleError> {
+) -> Result<Option<Option<GraphName<'a>>>, TurtleError> {
     skip_whitespace(read)?;
 
-    let subject = match read.current() {
-        None | Some(b'#') | Some(b'\r') | Some(b'\n') => {
-            skip_until_eol(read)?;
-            return Ok(None);
+    if matches!(
+        read.current(),
+        None | Some(b'#') | Some(b'\r') | Some(b'\n')
+    ) {
+        skip_until_eol(read)?;
+        return Ok(None);
+    }
+
+    parse_triple(read, triple_alloc)?;
+    let opt_graph_name = match read.current() {
+        Some(b'<') | Some(b'_') => {
+            graph_name_buf.clear();
+            Some(parse_graph_name(read, graph_name_buf)?)
         }
-        _ => parse_subject(read, subject_buf)?,
-    };
-    skip_whitespace(read)?;
-
-    let predicate = parse_iriref(read, predicate_buf)?;
-    skip_whitespace(read)?;
-
-    let object = parse_term(read, object_buf, object_annotation_buf)?;
-    skip_whitespace(read)?;
-
-    let graph_name = match read.current() {
-        Some(b'<') | Some(b'_') => Some(parse_graph_name(read, graph_name_buf)?),
         _ => None,
     };
     skip_whitespace(read)?;
@@ -270,14 +256,10 @@ fn parse_quad_line<'a>(
         _ => read.unexpected_char_error()?,
     }
 
-    Ok(Some(Quad {
-        subject,
-        predicate,
-        object,
-        graph_name,
-    }))
+    Ok(Some(opt_graph_name))
 }
 
+#[cfg(not(feature = "star"))]
 fn parse_term<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
@@ -291,6 +273,7 @@ fn parse_term<'a>(
     }
 }
 
+#[cfg(not(feature = "star"))]
 fn parse_subject<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
@@ -435,4 +418,38 @@ fn parse_iriref<'a>(
 ) -> Result<NamedNode<'a>, TurtleError> {
     parse_iriref_absolute(read, buffer)?;
     Ok(NamedNode { iri: buffer })
+}
+
+#[cfg(test)]
+mod test {
+    #[cfg(feature = "star")]
+    #[test]
+    fn nquads_star_valid_quad() -> Result<(), Box<dyn std::error::Error>> {
+        // adding this test because there is currenly no testsuite specific to N-Quads star
+        use crate::{NQuadsParser, TurtleError};
+        use rio_api::parser::QuadsParser;
+        let file = b"<< <tag:a> <tag:b> <tag:c> >> <tag:d> << <tag:e> <tag:f> <tag:g> >> <tag:h>.";
+        let mut count = 0;
+        NQuadsParser::new(file.as_ref()).parse_all(&mut |_| -> Result<(), TurtleError> {
+            count += 1;
+            Ok(())
+        })?;
+        assert_eq!(1, count);
+        Ok(())
+    }
+
+    #[cfg(feature = "star")]
+    #[test]
+    fn nquads_star_invalid_graph_name() {
+        // adding this test because there is currenly no testsuite specific to N-Quads star
+        use crate::{NQuadsParser, TurtleError};
+        use rio_api::parser::QuadsParser;
+        let file = b"<tag:s> <tag:p> <tag:o> << <tag:a> <tag:b> <tag:c> >> .";
+        let mut count = 0;
+        let res = NQuadsParser::new(file.as_ref()).parse_all(&mut |_| -> Result<(), TurtleError> {
+            count += 1;
+            Ok(())
+        });
+        assert!(res.is_err());
+    }
 }
