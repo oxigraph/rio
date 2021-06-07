@@ -111,13 +111,36 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                 match self.manifests_to_do.pop() {
                     Some(url) => {
                         let manifest = OwnedNamedNode { iri: url.clone() };
-                        let manifest_subject = OwnedSubject::from(manifest.clone());
                         match (self.file_reader)(&url) {
                             Ok(g) => g.into_iter().for_each(|g| self.graph.insert(g)),
                             Err(e) => return Some(Err(e)),
                         }
 
                         // New manifests
+                        let manifest_subject = {
+                            let manifest_type =
+                                OwnedTerm::from(rio_api::model::Term::from(mf::MANIFEST));
+                            let mut candidates: Vec<_> = self
+                                .graph
+                                .iter()
+                                .filter_map(|q| {
+                                    if rdf::TYPE == q.predicate && manifest_type == q.object {
+                                        Some(q.subject.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            if candidates.is_empty() {
+                                OwnedSubject::from(manifest.clone())
+                            } else if candidates.len() == 1 {
+                                candidates.drain(0..1).next().unwrap()
+                            } else {
+                                return Some(Err(Box::new(TestManifestError::AmbigiousManifest(
+                                    manifest,
+                                ))));
+                            }
+                        };
                         match self
                             .graph
                             .object_for_subject_predicate(&manifest_subject, &mf::INCLUDE)
@@ -126,7 +149,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                                 self.manifests_to_do.extend(
                                     RdfListIterator::iter(&self.graph, list.clone().into())
                                         .filter_map(|m| match m {
-                                            OwnedTerm::NamedNode(nm) => Some(nm.iri),
+                                            OwnedTerm::NamedNode(nm) => Some(dbg!(nm.iri)),
                                             _ => None,
                                         }),
                                 );
@@ -168,6 +191,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
 
 #[derive(Debug, Clone)]
 pub enum TestManifestError {
+    AmbigiousManifest(OwnedNamedNode),
     InvalidTestType(OwnedNamedNode),
     InvalidTestAction(OwnedNamedNode),
     InvalidTestResult(OwnedNamedNode),
@@ -178,6 +202,9 @@ pub enum TestManifestError {
 impl fmt::Display for TestManifestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
+            TestManifestError::AmbigiousManifest(t) => {
+                write!(f, "Could not decide what is the manifest IRI in {}", t)
+            }
             TestManifestError::InvalidTestType(t) => {
                 write!(f, "The test {} has an unsupported or missing rdf:type", t)
             }

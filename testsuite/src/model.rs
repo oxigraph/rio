@@ -482,6 +482,22 @@ impl OwnedDataset {
             .map(|t| &t.object)
             .next()
     }
+
+    pub fn subject_for_predicate_object<'a, T, U>(
+        &'a self,
+        predicate: &T,
+        object: &U,
+    ) -> Option<&'a OwnedSubject>
+    where
+        T: PartialEq<OwnedNamedNode> + 'a,
+        U: PartialEq<OwnedTerm> + 'a,
+    {
+        self.inner
+            .iter()
+            .filter(move |t| predicate == &t.predicate && object == &t.object)
+            .map(|t| &t.subject)
+            .next()
+    }
 }
 
 impl IntoIterator for OwnedDataset {
