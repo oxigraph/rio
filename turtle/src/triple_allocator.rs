@@ -69,7 +69,10 @@ impl TripleAllocator {
         debug_assert!(dummy(self.current().subject));
         let buffer = self.string_stack.push();
         let subject = subject_factory(buffer)?;
-        debug_assert!(matches!(subject, Subject::NamedNode(_) | Subject::BlankNode(_)));
+        debug_assert!(matches!(
+            subject,
+            Subject::NamedNode(_) | Subject::BlankNode(_)
+        ));
         let subject: Subject<'static> = unsafe { transmute(subject) };
         // The unsafe code above changes the lifetime parameter of subject to `'static`.
         // This is ok because:
@@ -110,7 +113,10 @@ impl TripleAllocator {
         debug_assert!(dummy(self.current().object));
         let buffers = self.string_stack.push2();
         let object = object_factory(buffers.0, buffers.1)?;
-        debug_assert!(matches!(object, Term::NamedNode(_) | Term::BlankNode(_) | Term::Literal(_)));
+        debug_assert!(matches!(
+            object,
+            Term::NamedNode(_) | Term::BlankNode(_) | Term::Literal(_)
+        ));
         let object: Term<'static> = unsafe { transmute(object) };
         // The unsafe code above changes the lifetime parameter of object to `'static`.
         // This is ok because:

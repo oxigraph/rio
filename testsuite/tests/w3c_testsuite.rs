@@ -12,11 +12,16 @@ fn get_test_path() -> PathBuf {
 
 fn run_testsuite(manifest_uri: String) -> Result<(), Box<dyn Error>> {
     let test_path = get_test_path();
-    let manifest = TestManifest::new(manifest_uri, |url| parse_w3c_rdf_test_file(url, &test_path));
+    let manifest = TestManifest::new(manifest_uri.clone(), |url| {
+        parse_w3c_rdf_test_file(url, &test_path)
+    });
 
     let results = evaluate_parser_tests(manifest, |url| parse_w3c_rdf_test_file(url, &test_path))?;
 
     let mut errors = Vec::default();
+    if results.is_empty() {
+        errors.push(format!("<{}>: no entry found", &manifest_uri));
+    }
     for result in results {
         if let TestOutcome::Failed { error } = result.outcome {
             errors.push(format!("{}: failed with error {}", result.test, error))

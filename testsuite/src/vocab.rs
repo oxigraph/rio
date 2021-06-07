@@ -7,6 +7,9 @@ pub mod mf {
     pub const ENTRIES: NamedNode<'static> = NamedNode {
         iri: "http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#entries",
     };
+    pub const MANIFEST: NamedNode<'static> = NamedNode {
+        iri: "http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#Manifest",
+    };
     pub const NAME: NamedNode<'static> = NamedNode {
         iri: "http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#name",
     };
