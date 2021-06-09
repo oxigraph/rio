@@ -242,14 +242,6 @@ impl StringBufferStack {
         self.len -= 1;
     }
 
-    pub fn last(&self) -> &str {
-        &self.inner[self.len - 1]
-    }
-
-    pub fn before_last(&self) -> &str {
-        &self.inner[self.len - 2]
-    }
-
     pub fn clear(&mut self) {
         self.inner.clear();
         self.len = 0;

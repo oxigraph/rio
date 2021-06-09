@@ -508,10 +508,11 @@ fn parse_generalized_term<R: BufRead>(
                 &mut blank_node.value,
                 &mut parser.bnode_id_generator,
             )
+            .map(|_| ())
         }
         b'"' | b'\'' | b'+' | b'-' | b'.' | b'0'..=b'9' => {
             let literal = stack.push(OwnedTermKind::LiteralSimple);
-            let term_type = parse_literal(
+            literal.kind = parse_literal(
                 &mut parser.read,
                 &mut literal.value,
                 &mut literal.extra,
@@ -519,7 +520,6 @@ fn parse_generalized_term<R: BufRead>(
                 &parser.base_iri,
                 &parser.namespaces,
             )?;
-            literal.kind = term_type.into();
             Ok(())
         }
         b'?' | b'$' => {
@@ -564,7 +564,7 @@ pub(crate) fn parse_generalized_iri(
     if read.current() == Some(b'<') {
         parse_generalized_iriref(read, buffer, temp_buffer, base_iri)
     } else {
-        parse_prefixed_name(read, buffer, namespaces)
+        parse_prefixed_name(read, buffer, namespaces).map(|_| ())
     }
 }
 
@@ -586,6 +586,51 @@ pub fn parse_generalized_iriref(
         result
     } else {
         parse_iriref(read, buffer)
+    }
+}
+
+fn parse_literal<'a>(
+    read: &mut impl LookAheadByteRead,
+    buffer: &'a mut String,
+    annotation_buffer: &'a mut String,
+    temp_buffer: &mut String,
+    base_iri: &Option<Iri<String>>,
+    namespaces: &HashMap<String, String>,
+) -> Result<OwnedTermKind, TurtleError> {
+    // [13] 	literal 	::= 	RDFLiteral | NumericLiteral | BooleanLiteral
+    match read.required_current()? {
+        b'"' | b'\'' => {
+            match parse_rdf_literal(
+                read,
+                buffer,
+                annotation_buffer,
+                temp_buffer,
+                base_iri,
+                namespaces,
+            )? {
+                Literal::LanguageTaggedString { .. } => Ok(OwnedTermKind::LiteralLanguage),
+                Literal::Simple { .. } => Ok(OwnedTermKind::LiteralSimple),
+                Literal::Typed { .. } => Ok(OwnedTermKind::LiteralDatatype),
+            }
+        }
+        b'+' | b'-' | b'.' | b'0'..=b'9' => {
+            match parse_numeric_literal(read, buffer)? {
+                Literal::Typed { datatype, .. } => {
+                    annotation_buffer.push_str(datatype.iri);
+                }
+                _ => unreachable!(),
+            }
+            Ok(OwnedTermKind::LiteralDatatype)
+        }
+        _ => {
+            match parse_boolean_literal(read, buffer)? {
+                Literal::Typed { datatype, .. } => {
+                    annotation_buffer.push_str(datatype.iri);
+                }
+                _ => unreachable!(),
+            }
+            Ok(OwnedTermKind::LiteralDatatype)
+        }
     }
 }
 
@@ -729,18 +774,6 @@ impl<'a> From<&'a OwnedTerm> for GeneralizedTerm<'a> {
                 datatype: NamedNode { iri: &other.extra },
             }),
             OwnedTermKind::Variable => GeneralizedTerm::Variable(Variable { name: &other.value }),
-        }
-    }
-}
-
-impl From<TermType> for OwnedTermKind {
-    fn from(other: TermType) -> OwnedTermKind {
-        match other {
-            TermType::NamedNode => OwnedTermKind::NamedNode,
-            TermType::BlankNode => OwnedTermKind::BlankNode,
-            TermType::SimpleLiteral => OwnedTermKind::LiteralSimple,
-            TermType::LanguageTaggedString => OwnedTermKind::LiteralLanguage,
-            TermType::TypedLiteral => OwnedTermKind::LiteralDatatype,
         }
     }
 }

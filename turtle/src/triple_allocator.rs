@@ -102,6 +102,7 @@ impl TripleAllocator {
     where
         F: FnOnce(&mut String) -> Result<NamedNode<'_>, E>,
     {
+        debug_assert!(!dummy(self.current().subject));
         debug_assert!(dummy(self.current().predicate));
         let buffer = self.string_stack.push();
         let predicate = predicate_factory(buffer)?;
@@ -125,6 +126,7 @@ impl TripleAllocator {
     where
         F: for<'x> FnOnce(&'x mut String, &'x mut String) -> Result<Term<'x>, E>,
     {
+        debug_assert!(!dummy(self.current().predicate));
         debug_assert!(dummy(self.current().object));
         let buffers = self.string_stack.push2();
         let object = object_factory(buffers.0, buffers.1)?;
@@ -161,6 +163,7 @@ impl TripleAllocator {
     /// The top triple must not have been pushed already as the subject.
     #[cfg(feature = "star")]
     pub fn push_object_triple(&mut self) {
+        debug_assert!(!dummy(self.current().predicate));
         debug_assert!(dummy(self.current().object));
         debug_assert!(self.complete_len > 0);
         let triple = &*self.complete_stack[self.complete_len - 1];
@@ -202,7 +205,7 @@ impl TripleAllocator {
                 self.string_stack.pop()
             }
             #[cfg(feature = "star")]
-            Term::Triple(_) => self.do_pop_top_triple(),
+            Term::Triple(_) => self.pop_top_triple(),
             _ => (),
         }
         #[cfg(debug_assertions)] // to ensure that dummy() assertions work
@@ -227,7 +230,7 @@ impl TripleAllocator {
         match self.current().subject {
             Subject::NamedNode(_) | Subject::BlankNode(_) => self.string_stack.pop(),
             #[cfg(feature = "star")]
-            Subject::Triple(_) => self.do_pop_top_triple(),
+            Subject::Triple(_) => self.pop_top_triple(),
             _ => (),
         }
         #[cfg(debug_assertions)] // to ensure that dummy() assertions work
@@ -238,8 +241,19 @@ impl TripleAllocator {
 
     #[inline(always)]
     pub fn pop_top_triple(&mut self) {
-        debug_assert_eq!(self.incomplete_len, 0);
-        self.do_pop_top_triple();
+        debug_assert!(self.complete_len > 0);
+        self.pop_object();
+        self.pop_predicate();
+        self.pop_subject();
+        self.incomplete_len -= 1;
+    }
+
+    #[inline(always)]
+    pub fn pop_top_incomplete(&mut self) {
+        debug_assert!(self.incomplete_len > 0);
+        debug_assert!(dummy(self.current().predicate));
+        debug_assert!(dummy(self.current().subject));
+        self.incomplete_len -= 1;
     }
 
     pub fn clear(&mut self) {
@@ -260,14 +274,6 @@ impl TripleAllocator {
             *self.complete_stack[self.complete_len] = triple;
         }
         self.complete_len += 1;
-    }
-
-    fn do_pop_top_triple(&mut self) {
-        debug_assert!(self.complete_len > 0);
-        self.pop_object();
-        self.pop_predicate();
-        self.pop_subject();
-        self.incomplete_len -= 1;
     }
 
     fn current(&mut self) -> &mut Triple<'static> {

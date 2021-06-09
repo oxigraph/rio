@@ -8,10 +8,10 @@ use std::u8;
 
 pub const MAX_ASCII: u8 = 0x7F;
 
-pub fn parse_iriref_absolute(
+pub fn parse_iriref_absolute<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
-) -> Result<(), TurtleError> {
+    buffer: &'a mut String,
+) -> Result<NamedNode<'a>, TurtleError> {
     parse_iriref(read, buffer)?;
     Iri::parse(buffer.as_str()).map_err(|error| {
         read.parse_error(TurtleErrorKind::InvalidIri {
@@ -19,15 +19,15 @@ pub fn parse_iriref_absolute(
             error,
         })
     })?;
-    Ok(())
+    Ok(NamedNode { iri: buffer })
 }
 
-pub fn parse_iriref_relative(
+pub fn parse_iriref_relative<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
+    buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
-) -> Result<(), TurtleError> {
+) -> Result<NamedNode<'a>, TurtleError> {
     if let Some(base_iri) = base_iri {
         parse_iriref(read, temp_buffer)?;
         let result = base_iri.resolve_into(temp_buffer, buffer).map_err(|error| {
@@ -37,7 +37,7 @@ pub fn parse_iriref_relative(
             })
         });
         temp_buffer.clear();
-        result
+        result.map(move |_| NamedNode { iri: buffer })
     } else {
         parse_iriref_absolute(read, buffer)
     }
