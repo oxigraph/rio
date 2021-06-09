@@ -2,6 +2,7 @@
 
 use crate::error::*;
 use crate::shared::*;
+use crate::triple_allocator::TripleAllocator;
 use crate::utils::*;
 use oxiri::Iri;
 use rio_api::model::*;
@@ -44,25 +45,21 @@ pub struct TurtleParser<R: BufRead> {
     base_iri: Option<Iri<String>>,
     namespaces: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
-    subject_buf_stack: StringBufferStack,
-    subject_type_stack: Vec<SubjectType>,
-    predicate_buf_stack: StringBufferStack,
-    object_annotation_buf: String, // datatype or language tag
+    triple_alloc: TripleAllocator,
     temp_buf: String,
 }
 
 impl<R: BufRead> TurtleParser<R> {
     /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
+        let mut triple_alloc = TripleAllocator::new();
+        triple_alloc.push_triple_start();
         Self {
             read: LookAheadByteReader::new(reader),
             base_iri,
             namespaces: HashMap::default(),
             bnode_id_generator: BlankNodeIdGenerator::default(),
-            subject_buf_stack: StringBufferStack::default(),
-            subject_type_stack: Vec::default(),
-            predicate_buf_stack: StringBufferStack::default(),
-            object_annotation_buf: String::default(),
+            triple_alloc,
             temp_buf: String::default(),
         }
     }
@@ -244,15 +241,7 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
         parser.inner.read.consume_many("GRAPH".len())?;
         skip_whitespace(&mut parser.inner.read)?;
 
-        let graph_name = parse_label_or_subject(
-            &mut parser.inner.read,
-            &mut parser.graph_name_buf,
-            &mut parser.inner.temp_buf,
-            &parser.inner.base_iri,
-            &parser.inner.namespaces,
-            &mut parser.inner.bnode_id_generator,
-        )?
-        .with_value(&parser.graph_name_buf);
+        let graph_name = parse_label_or_subject(&mut parser.graph_name_buf, &mut parser.inner)?;
         skip_whitespace(&mut parser.inner.read)?;
 
         parse_wrapped_graph(
@@ -278,38 +267,35 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
-    let front_type = parse_label_or_subject(
-        &mut parser.inner.read,
-        &mut parser.graph_name_buf,
-        &mut parser.inner.temp_buf,
-        &parser.inner.base_iri,
-        &parser.inner.namespaces,
-        &mut parser.inner.bnode_id_generator,
-    )?;
-    skip_whitespace(&mut parser.inner.read)?;
+    let TriGParser {
+        inner,
+        graph_name_buf,
+    } = parser;
+    let graph_name = parse_label_or_subject(graph_name_buf, inner)?;
+    skip_whitespace(&mut inner.read)?;
 
-    if parser.inner.read.current() == Some(b'{') {
-        let graph_name = front_type.with_value(&parser.graph_name_buf);
+    if inner.read.current() == Some(b'{') {
         parse_wrapped_graph(
             &mut parser.inner,
             &mut on_triple_in_graph(on_quad, Some(graph_name)),
         )?;
-        parser.graph_name_buf.clear();
     } else {
-        parser
-            .inner
-            .subject_buf_stack
-            .push()
-            .push_str(&parser.graph_name_buf);
-        parser.graph_name_buf.clear();
-        parser.inner.subject_type_stack.push(front_type.into());
+        let blank = matches!(graph_name, GraphName::BlankNode(_));
+        inner.triple_alloc.try_push_subject(|b| {
+            b.push_str(graph_name_buf);
+            if blank {
+                Ok(Subject::BlankNode(BlankNode { id: b }))
+            } else {
+                Ok(Subject::NamedNode(NamedNode { iri: b }))
+            }
+        })?;
         parse_predicate_object_list(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))?;
-        parser.inner.subject_type_stack.pop();
-        parser.inner.subject_buf_stack.pop();
 
         parser.inner.read.check_is_current(b'.')?;
         parser.inner.read.consume()?;
+        parser.inner.triple_alloc.pop_subject();
     }
+    parser.graph_name_buf.clear();
     Ok(())
 }
 
@@ -320,21 +306,27 @@ fn parse_triples2<R: BufRead, E: From<TurtleError>>(
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
     match parser.read.current() {
         Some(b'[') if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
-            parse_blank_node_property_list(parser, on_triple)?;
+            let id = parse_blank_node_property_list(parser, on_triple)?;
+            parser.triple_alloc.try_push_subject(|b| {
+                b.push_str(id.as_ref());
+                Ok(Subject::from(BlankNode { id: b }))
+            })?;
             skip_whitespace(&mut parser.read)?;
             if parser.read.current() != Some(b'.') {
                 parse_predicate_object_list(parser, on_triple)?;
             }
         }
         _ => {
-            parse_collection(parser, on_triple)?;
+            let collec = parse_collection(parser, on_triple)?;
+            parser
+                .triple_alloc
+                .try_push_subject(|b| allocate_collection(collec, b))?;
             skip_whitespace(&mut parser.read)?;
             parse_predicate_object_list(parser, on_triple)?;
         }
     }
 
-    parser.subject_buf_stack.pop();
-    parser.subject_type_stack.pop();
+    parser.triple_alloc.pop_subject();
 
     parser.read.check_is_current(b'.')?;
     parser.read.consume()?;
@@ -354,7 +346,7 @@ fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     loop {
         if parser.read.current() == Some(b'}') {
             parser.read.consume()?;
-            return Ok(());
+            break;
         }
 
         parse_triples(parser, on_triple)?;
@@ -365,31 +357,38 @@ fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
             }
             Some(b'}') => {
                 parser.read.consume()?;
-                return Ok(());
+                break;
             }
             _ => parser.read.unexpected_char_error()?,
         }
     }
+    Ok(())
 }
 
-fn parse_label_or_subject(
-    read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
-    temp_buffer: &mut String,
-    base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
-    bnode_id_generator: &mut BlankNodeIdGenerator,
-) -> Result<GraphNameType, TurtleError> {
+fn parse_label_or_subject<'a, R: BufRead>(
+    buffer: &'a mut String,
+    parser: &mut TurtleParser<R>,
+) -> Result<GraphName<'a>, TurtleError> {
     //[7g] 	labelOrSubject 	::= 	iri | BlankNode
     // (split in two for the case of TriG*)
+
+    let TurtleParser {
+        read,
+        base_iri,
+        namespaces,
+        bnode_id_generator,
+        temp_buf,
+        ..
+    } = parser;
+
     Ok(match read.current() {
         Some(b'_') | Some(b'[') => {
             parse_blank_node(read, buffer, bnode_id_generator)?;
-            GraphNameType::BlankNode
+            BlankNode { id: buffer }.into()
         }
         _ => {
-            parse_iri(read, buffer, temp_buffer, base_iri, namespaces)?;
-            GraphNameType::NamedNode
+            parse_iri(read, buffer, temp_buf, base_iri, namespaces)?;
+            NamedNode { iri: buffer }.into()
         }
     })
 }
@@ -492,7 +491,11 @@ fn parse_triples<R: BufRead, E: From<TurtleError>>(
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
     match parser.read.current() {
         Some(b'[') if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
-            parse_blank_node_property_list(parser, on_triple)?;
+            let id = parse_blank_node_property_list(parser, on_triple)?;
+            parser.triple_alloc.try_push_subject(|b| {
+                b.push_str(id.as_ref());
+                Ok(Subject::from(BlankNode { id: b }))
+            })?;
             skip_whitespace(&mut parser.read)?;
             if parser.read.current() != Some(b'.') && parser.read.current() != Some(b'}') {
                 parse_predicate_object_list(parser, on_triple)?;
@@ -505,8 +508,7 @@ fn parse_triples<R: BufRead, E: From<TurtleError>>(
         }
     }
 
-    parser.subject_buf_stack.pop();
-    parser.subject_type_stack.pop();
+    parser.triple_alloc.pop_subject();
     Ok(())
 }
 
@@ -516,19 +518,13 @@ fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
     loop {
-        parse_verb(
-            &mut parser.read,
-            parser.predicate_buf_stack.push(),
-            &mut parser.temp_buf,
-            &parser.base_iri,
-            &parser.namespaces,
-        )?;
+        parse_verb(parser)?;
         skip_whitespace(&mut parser.read)?;
 
         parse_object_list(parser, on_triple)?;
         skip_whitespace(&mut parser.read)?;
 
-        parser.predicate_buf_stack.pop();
+        parser.triple_alloc.pop_predicate();
         if parser.read.current() != Some(b';') {
             return Ok(());
         }
@@ -560,28 +556,23 @@ fn parse_object_list<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_verb<'a>(
-    read: &mut impl LookAheadByteRead,
-    buffer: &'a mut String,
-    temp_buffer: &'a mut String,
-    base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
-) -> Result<(), TurtleError> {
+fn parse_verb<R: BufRead>(parser: &mut TurtleParser<R>) -> Result<(), TurtleError> {
     // [9] 	verb 	::= 	predicate | 'a'
-    if read.current() == Some(b'a') {
-        match read.next()? {
+    if parser.read.current() == Some(b'a') {
+        match parser.read.next()? {
             // We check that it is not a prefixed URI
             Some(c) if is_possible_pn_chars_ascii(c) || c == b'.' || c == b':' || c > MAX_ASCII => {
-                parse_predicate(read, buffer, temp_buffer, base_iri, namespaces)
+                parse_predicate(parser)
             }
             _ => {
-                buffer.push_str(RDF_TYPE);
-                read.consume()?;
-                Ok(())
+                parser.read.consume()?;
+                parser
+                    .triple_alloc
+                    .try_push_predicate(|_| Ok(NamedNode { iri: RDF_TYPE }))
             }
         }
     } else {
-        parse_predicate(read, buffer, temp_buffer, base_iri, namespaces)
+        parse_predicate(parser)
     }
 }
 
@@ -592,37 +583,50 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
     //[10] 	subject 	::= 	iri | BlankNode | collection
     match parser.read.current() {
         Some(b'_') | Some(b'[') => {
-            parser.subject_type_stack.push(SubjectType::BlankNode);
-            parse_blank_node(
-                &mut parser.read,
-                parser.subject_buf_stack.push(),
-                &mut parser.bnode_id_generator,
-            )?;
+            let TurtleParser {
+                read,
+                bnode_id_generator,
+                triple_alloc,
+                ..
+            } = parser;
+            triple_alloc.try_push_subject(|b| {
+                parse_blank_node(read, b, bnode_id_generator).map(Subject::from)
+            })?;
         }
-        Some(b'(') => parse_collection(parser, on_triple)?,
+        Some(b'(') => {
+            let collec = parse_collection(parser, on_triple)?;
+            parser
+                .triple_alloc
+                .try_push_subject(|b| allocate_collection(collec, b))?;
+        }
         _ => {
-            parser.subject_type_stack.push(SubjectType::NamedNode);
-            parse_iri(
-                &mut parser.read,
-                parser.subject_buf_stack.push(),
-                &mut parser.temp_buf,
-                &parser.base_iri,
-                &parser.namespaces,
-            )?;
+            let TurtleParser {
+                read,
+                base_iri,
+                namespaces,
+                triple_alloc,
+                temp_buf,
+                ..
+            } = parser;
+            triple_alloc.try_push_subject(|b| {
+                parse_iri(read, b, temp_buf, base_iri, namespaces).map(Subject::from)
+            })?;
         }
     };
     Ok(())
 }
 
-fn parse_predicate<'a>(
-    read: &mut impl LookAheadByteRead,
-    buffer: &'a mut String,
-    temp_buffer: &'a mut String,
-    base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
-) -> Result<(), TurtleError> {
+fn parse_predicate<R: BufRead>(parser: &mut TurtleParser<R>) -> Result<(), TurtleError> {
     //[11] 	predicate 	::= 	iri
-    parse_iri(read, buffer, temp_buffer, base_iri, namespaces)
+    let TurtleParser {
+        read,
+        base_iri,
+        namespaces,
+        triple_alloc,
+        temp_buf,
+        ..
+    } = parser;
+    triple_alloc.try_push_predicate(|b| parse_iri(read, b, temp_buf, base_iri, namespaces))
 }
 
 fn parse_object<R: BufRead, E: From<TurtleError>>(
@@ -633,135 +637,100 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
 
     match parser.read.required_current()? {
         b'<' => {
-            parse_iri(
-                &mut parser.read,
-                &mut parser.subject_buf_stack.push(),
-                &mut parser.temp_buf,
-                &parser.base_iri,
-                &parser.namespaces,
-            )?;
-            emit_triple(parser, TermType::NamedNode, on_triple)?;
+            let TurtleParser {
+                read,
+                base_iri,
+                triple_alloc,
+                temp_buf,
+                ..
+            } = parser;
+            triple_alloc.try_push_object(|b, _| {
+                parse_iriref_relative(read, b, temp_buf, base_iri).map(Term::from)
+            })?;
         }
         b'(' => {
-            parse_collection(parser, on_triple)?;
-            let object_type = *parser.subject_type_stack.last().unwrap();
-            parser.subject_type_stack.pop();
-            emit_triple(parser, object_type.into(), on_triple)?;
+            let collec = parse_collection(parser, on_triple)?;
+            parser
+                .triple_alloc
+                .try_push_object(|b, _| allocate_collection(collec, b).map(Term::from))?;
         }
         b'[' if !is_followed_by_space_and_closing_bracket(&mut parser.read)? => {
-            parse_blank_node_property_list(parser, on_triple)?;
-            let object_type = *parser.subject_type_stack.last().unwrap();
-            parser.subject_type_stack.pop();
-            emit_triple(parser, object_type.into(), on_triple)?;
+            let id = parse_blank_node_property_list(parser, on_triple)?;
+            parser.triple_alloc.try_push_object(|b, _| {
+                b.push_str(id.as_ref());
+                Ok(Term::from(BlankNode { id: b }))
+            })?;
         }
         b'_' | b'[' => {
-            parse_blank_node(
-                &mut parser.read,
-                &mut parser.subject_buf_stack.push(),
-                &mut parser.bnode_id_generator,
-            )?;
-            emit_triple(parser, TermType::BlankNode, on_triple)?;
+            let TurtleParser {
+                read,
+                bnode_id_generator,
+                triple_alloc,
+                ..
+            } = parser;
+            triple_alloc.try_push_object(|b, _| {
+                parse_blank_node(read, b, bnode_id_generator).map(Term::from)
+            })?;
         }
-        b'"' | b'\'' | b'+' | b'-' | b'.' | b'0'..=b'9' => {
-            let object_type = parse_literal(
-                &mut parser.read,
-                parser.subject_buf_stack.push(),
-                &mut parser.object_annotation_buf,
-                &mut parser.temp_buf,
-                &parser.base_iri,
-                &parser.namespaces,
-            )?;
-            emit_triple(parser, object_type, on_triple)?;
-            parser.object_annotation_buf.clear();
+        b'"' | b'\'' => {
+            let TurtleParser {
+                read,
+                base_iri,
+                namespaces,
+                triple_alloc,
+                temp_buf,
+                ..
+            } = parser;
+            triple_alloc.try_push_object(|b1, b2| {
+                parse_rdf_literal(read, b1, b2, temp_buf, base_iri, namespaces).map(Term::from)
+            })?;
+        }
+        b'+' | b'-' | b'.' | b'0'..=b'9' => {
+            let TurtleParser {
+                read, triple_alloc, ..
+            } = parser;
+            triple_alloc.try_push_object(|b, _| parse_numeric_literal(read, b).map(Term::from))?;
         }
         _ => {
-            if parser.read.starts_with(b"true") || parser.read.starts_with(b"false") {
-                let object_type = parse_literal(
-                    &mut parser.read,
-                    parser.subject_buf_stack.push(),
-                    &mut parser.object_annotation_buf,
-                    &mut parser.temp_buf,
-                    &parser.base_iri,
-                    &parser.namespaces,
-                )?;
-                emit_triple(parser, object_type, on_triple)?;
-                parser.object_annotation_buf.clear();
+            let TurtleParser {
+                read, triple_alloc, ..
+            } = parser;
+            if read.starts_with(b"true") || read.starts_with(b"false") {
+                triple_alloc
+                    .try_push_object(|b, _| parse_boolean_literal(read, b).map(Term::from))?;
             } else {
-                parse_iri(
-                    &mut parser.read,
-                    parser.subject_buf_stack.push(),
-                    &mut parser.temp_buf,
-                    &parser.base_iri,
-                    &parser.namespaces,
-                )?;
-                emit_triple(parser, TermType::NamedNode, on_triple)?;
+                let TurtleParser {
+                    read,
+                    namespaces,
+                    triple_alloc,
+                    ..
+                } = parser;
+                triple_alloc.try_push_object(|b, _| {
+                    parse_prefixed_name(read, b, namespaces).map(Term::from)
+                })?;
             }
         }
     };
-    parser.subject_buf_stack.pop();
-    Ok(())
-}
-
-fn emit_triple<R: BufRead, E: From<TurtleError>>(
-    parser: &TurtleParser<R>,
-    object_type: TermType,
-    on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
-) -> Result<(), E> {
-    let subject_buf = parser.subject_buf_stack.before_last();
-    let subject_type = parser.subject_type_stack[parser.subject_type_stack.len() - 1];
-    let predicate_buf = parser.predicate_buf_stack.last();
-    let object_buf = parser.subject_buf_stack.last();
-    on_triple(Triple {
-        subject: subject_type.with_value(subject_buf),
-        predicate: NamedNode { iri: predicate_buf },
-        object: object_type.with_value(object_buf, &parser.object_annotation_buf),
-    })?;
-    Ok(())
-}
-
-pub(crate) fn parse_literal<'a>(
-    read: &mut impl LookAheadByteRead,
-    buffer: &'a mut String,
-    annotation_buffer: &'a mut String,
-    temp_buffer: &mut String,
-    base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
-) -> Result<TermType, TurtleError> {
-    // [13] 	literal 	::= 	RDFLiteral | NumericLiteral | BooleanLiteral
-    match read.required_current()? {
-        b'"' | b'\'' => parse_rdf_literal(
-            read,
-            buffer,
-            annotation_buffer,
-            temp_buffer,
-            base_iri,
-            namespaces,
-        ),
-        b'+' | b'-' | b'.' | b'0'..=b'9' => {
-            parse_numeric_literal(read, buffer, annotation_buffer)?;
-            Ok(TermType::TypedLiteral)
-        }
-        _ => {
-            parse_boolean_literal(read, buffer, annotation_buffer)?;
-            Ok(TermType::TypedLiteral)
-        }
-    }
+    let res = on_triple(*parser.triple_alloc.top());
+    parser.triple_alloc.pop_object();
+    res
 }
 
 fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
-) -> Result<(), E> {
-    // [15] 	collection 	::= 	'(' object* ')'
+) -> Result<BlankNodeId, E> {
+    // [14] 	blankNodePropertyList 	::= 	'[' predicateObjectList ']'
     parser.read.check_is_current(b'[')?;
     parser.read.consume()?;
     skip_whitespace(&mut parser.read)?;
 
-    parser
-        .subject_buf_stack
-        .push()
-        .push_str(parser.bnode_id_generator.generate().as_ref());
-    parser.subject_type_stack.push(SubjectType::BlankNode);
+    let id = parser.bnode_id_generator.generate();
+    parser.triple_alloc.push_triple_start();
+    parser.triple_alloc.try_push_subject(|b| {
+        b.push_str(id.as_ref());
+        Ok(Subject::from(BlankNode { id: b }))
+    })?;
 
     loop {
         parse_predicate_object_list(parser, on_triple)?;
@@ -769,78 +738,92 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
 
         if parser.read.current() == Some(b']') {
             parser.read.consume()?;
-            return Ok(());
+            break;
         }
     }
+
+    parser.triple_alloc.pop_subject();
+    parser.triple_alloc.pop_top_incomplete();
+    Ok(id)
 }
 
 fn parse_collection<R: BufRead, E: From<TurtleError>>(
     parser: &mut TurtleParser<R>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
-) -> Result<(), E> {
+) -> Result<Option<BlankNodeId>, E> {
     // [15] 	collection 	::= 	'(' object* ')'
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
-
-    parser.subject_type_stack.push(SubjectType::BlankNode);
-    parser.predicate_buf_stack.push().push_str(RDF_FIRST);
-
     let mut root: Option<BlankNodeId> = None;
     loop {
         skip_whitespace(&mut parser.read)?;
 
         if parser.read.current().is_none() {
             return Ok(parser.read.unexpected_char_error()?);
-        } else if parser.read.current() == Some(b')') {
-            parser.read.consume()?;
-            match root {
-                Some(id) => {
-                    on_triple(Triple {
-                        subject: BlankNode {
-                            id: parser.subject_buf_stack.last(),
-                        }
-                        .into(),
-                        predicate: NamedNode { iri: RDF_REST },
-                        object: NamedNode { iri: RDF_NIL }.into(),
-                    })?;
-                    parser.subject_buf_stack.pop();
-                    parser.subject_buf_stack.push().push_str(id.as_ref());
-                }
-                None => {
-                    parser.subject_buf_stack.push().push_str(RDF_NIL);
-                    parser.subject_type_stack.pop();
-                    parser.subject_type_stack.push(SubjectType::NamedNode);
-                }
-            }
-            parser.predicate_buf_stack.pop();
-            return Ok(());
-        } else {
+        } else if parser.read.current() != Some(b')') {
             let new = parser.bnode_id_generator.generate();
             if root == None {
                 root = Some(new);
+                parser.triple_alloc.push_triple_start();
             } else {
-                on_triple(Triple {
-                    subject: BlankNode {
-                        id: parser.subject_buf_stack.last(),
-                    }
-                    .into(),
-                    predicate: NamedNode { iri: RDF_REST },
-                    object: BlankNode { id: new.as_ref() }.into(),
+                parser
+                    .triple_alloc
+                    .try_push_predicate(|_| Ok(NamedNode { iri: RDF_REST }))?;
+                parser.triple_alloc.try_push_object(|b, _| {
+                    b.push_str(new.as_ref());
+                    Ok(Term::from(BlankNode { id: b }))
                 })?;
-                parser.subject_buf_stack.pop();
+                on_triple(*parser.triple_alloc.top())?;
+                parser.triple_alloc.pop_object();
+                parser.triple_alloc.pop_predicate();
+                parser.triple_alloc.pop_subject();
             }
-            parser.subject_buf_stack.push().push_str(new.as_ref());
 
+            parser.triple_alloc.try_push_subject(|b| {
+                b.push_str(new.as_ref());
+                Ok(Subject::from(BlankNode { id: b }))
+            })?;
+            parser
+                .triple_alloc
+                .try_push_predicate(|_| Ok(NamedNode { iri: RDF_FIRST }))?;
             parse_object(parser, on_triple)?;
+            parser.triple_alloc.pop_predicate();
+        } else {
+            // trailing ')'
+            parser.read.consume()?;
+            if root.is_some() {
+                parser
+                    .triple_alloc
+                    .try_push_predicate(|_| Ok(NamedNode { iri: RDF_REST }))?;
+                parser
+                    .triple_alloc
+                    .try_push_object(|_, _| Ok(Term::from(NamedNode { iri: RDF_NIL })))?;
+                on_triple(*parser.triple_alloc.top())?;
+                parser.triple_alloc.pop_top_triple();
+            }
+            return Ok(root);
         }
     }
 }
 
-fn parse_numeric_literal(
-    read: &mut impl LookAheadByteRead,
+#[allow(clippy::unnecessary_wraps)]
+fn allocate_collection(
+    collection: Option<BlankNodeId>,
     buffer: &mut String,
-    annotation_buffer: &mut String,
-) -> Result<(), TurtleError> {
+) -> Result<Subject<'_>, TurtleError> {
+    match collection {
+        Some(id) => {
+            buffer.push_str(id.as_ref());
+            Ok(BlankNode { id: buffer }.into())
+        }
+        None => Ok(NamedNode { iri: RDF_NIL }.into()),
+    }
+}
+
+pub(crate) fn parse_numeric_literal<'a>(
+    read: &mut impl LookAheadByteRead,
+    buffer: &'a mut String,
+) -> Result<Literal<'a>, TurtleError> {
     // [16] 	NumericLiteral 	::= 	INTEGER | DECIMAL | DOUBLE
     // [19] 	INTEGER 	::= 	[+-]? [0-9]+
     // [20] 	DECIMAL 	::= 	[+-]? [0-9]* '.' [0-9]+
@@ -871,22 +854,17 @@ fn parse_numeric_literal(
     // We read the digits after .
     let count_after = if read.current() == Some(b'.') {
         //We check if it is not the end of a statement
-        if let Some(c) = read.next()? {
-            match c {
-                b'0'..=b'9' | b'e' | b'E' => (),
-                _ => {
-                    return if count_before > 0 {
-                        annotation_buffer.push_str(XSD_INTEGER);
-                        Ok(())
-                    } else {
-                        read.unexpected_char_error()
-                    }
-                }
-            }
-        } else {
+
+        let stop = match read.next()? {
+            Some(c) => !matches!(c, b'0'..=b'9' | b'e' | b'E'),
+            None => true,
+        };
+        if stop {
             return if count_before > 0 {
-                annotation_buffer.push_str(XSD_INTEGER);
-                Ok(())
+                Ok(Literal::Typed {
+                    value: buffer,
+                    datatype: NamedNode { iri: XSD_INTEGER },
+                })
             } else {
                 read.unexpected_char_error()
             };
@@ -912,38 +890,39 @@ fn parse_numeric_literal(
     };
 
     // End
-    match read.current() {
+    let datatype = match read.current() {
         Some(b'e') | Some(b'E') => {
             if count_before > 0 || count_after.unwrap_or(0) > 0 {
                 parse_exponent(read, buffer)?;
-                annotation_buffer.push_str(XSD_DOUBLE);
-                Ok(())
+                XSD_DOUBLE
             } else {
-                read.unexpected_char_error()
+                return read.unexpected_char_error();
             }
         }
         _ => {
             if count_after.is_none() && count_before > 0 {
-                annotation_buffer.push_str(XSD_INTEGER);
-                Ok(())
+                XSD_INTEGER
             } else if count_after != None && count_after != Some(0) {
-                annotation_buffer.push_str(XSD_DECIMAL);
-                Ok(())
+                XSD_DECIMAL
             } else {
-                read.unexpected_char_error()
+                return read.unexpected_char_error();
             }
         }
-    }
+    };
+    Ok(Literal::Typed {
+        value: buffer,
+        datatype: NamedNode { iri: datatype },
+    })
 }
 
-fn parse_rdf_literal(
+pub(crate) fn parse_rdf_literal<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
-    annotation_buffer: &mut String,
+    buffer: &'a mut String,
+    annotation_buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
     namespaces: &HashMap<String, String>,
-) -> Result<TermType, TurtleError> {
+) -> Result<Literal<'a>, TurtleError> {
     // [128s] 	RDFLiteral 	::= 	String (LANGTAG | '^^' iri)?
     parse_string(read, buffer)?;
     skip_whitespace(read)?;
@@ -951,7 +930,10 @@ fn parse_rdf_literal(
     match read.current() {
         Some(b'@') => {
             parse_langtag(read, annotation_buffer)?;
-            Ok(TermType::LanguageTaggedString)
+            Ok(Literal::LanguageTaggedString {
+                value: buffer,
+                language: annotation_buffer,
+            })
         }
         Some(b'^') => {
             read.consume()?;
@@ -959,30 +941,34 @@ fn parse_rdf_literal(
             read.consume()?;
             skip_whitespace(read)?;
             parse_iri(read, annotation_buffer, temp_buffer, base_iri, namespaces)?;
-            Ok(TermType::TypedLiteral)
+            Ok(Literal::Typed {
+                value: buffer,
+                datatype: NamedNode {
+                    iri: annotation_buffer,
+                },
+            })
         }
-        _ => Ok(TermType::SimpleLiteral),
+        _ => Ok(Literal::Simple { value: buffer }),
     }
 }
 
-fn parse_boolean_literal(
+pub(crate) fn parse_boolean_literal<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
-    annotation_buffer: &mut String,
-) -> Result<(), TurtleError> {
+    buffer: &'a mut String,
+) -> Result<Literal<'a>, TurtleError> {
     if read.starts_with(b"true") {
         read.consume_many("true".len())?;
         buffer.push_str("true");
-        annotation_buffer.push_str(XSD_BOOLEAN);
-        Ok(())
     } else if read.starts_with(b"false") {
         read.consume_many("false".len())?;
         buffer.push_str("false");
-        annotation_buffer.push_str(XSD_BOOLEAN);
-        Ok(())
     } else {
-        read.unexpected_char_error()
+        return read.unexpected_char_error();
     }
+    Ok(Literal::Typed {
+        value: buffer,
+        datatype: NamedNode { iri: XSD_BOOLEAN },
+    })
 }
 
 fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
@@ -1005,13 +991,13 @@ fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Resul
     }
 }
 
-pub(crate) fn parse_iri(
+pub(crate) fn parse_iri<'a>(
     read: &mut impl LookAheadByteRead,
-    buffer: &mut String,
+    buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
     namespaces: &HashMap<String, String>,
-) -> Result<(), TurtleError> {
+) -> Result<NamedNode<'a>, TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
     if read.current() == Some(b'<') {
         parse_iriref_relative(read, buffer, temp_buffer, base_iri)
@@ -1024,7 +1010,7 @@ pub(crate) fn parse_prefixed_name<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
     namespaces: &HashMap<String, String>,
-) -> Result<(), TurtleError> {
+) -> Result<NamedNode<'a>, TurtleError> {
     // [136s] 	PrefixedName 	::= 	PNAME_LN | PNAME_NS
     // It could be written: PNAME_NS PN_LOCAL?
 
@@ -1049,12 +1035,12 @@ pub(crate) fn parse_prefixed_name<'a>(
                 if is_possible_pn_chars_u_unicode(c) {
                     buffer.push(c)
                 } else {
-                    return Ok(());
+                    return Ok(NamedNode { iri: buffer });
                 }
             }
         }
     } else {
-        return Ok(());
+        return Ok(NamedNode { iri: buffer });
     }
 
     loop {
@@ -1064,7 +1050,7 @@ pub(crate) fn parse_prefixed_name<'a>(
                 if has_future_char_valid_pname_local(read)? {
                     buffer.push('.')
                 } else {
-                    return Ok(());
+                    break;
                 }
             }
             Some(b'\\') => parse_pn_local_esc(read, buffer)?,
@@ -1076,11 +1062,12 @@ pub(crate) fn parse_prefixed_name<'a>(
                 if is_possible_pn_chars_unicode(c) {
                     buffer.push(c)
                 } else {
-                    return Ok(());
+                    break;
                 }
             }
         }
     }
+    Ok(NamedNode { iri: buffer })
 }
 
 fn has_future_char_valid_pname_local(
@@ -1102,7 +1089,7 @@ pub(crate) fn parse_blank_node<'a>(
     read: &mut impl LookAheadByteRead,
     buffer: &'a mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
-) -> Result<(), TurtleError> {
+) -> Result<BlankNode<'a>, TurtleError> {
     // [137s] 	BlankNode 	::= 	BLANK_NODE_LABEL | ANON
     match read.current() {
         Some(b'_') => {
@@ -1113,7 +1100,7 @@ pub(crate) fn parse_blank_node<'a>(
         }
         _ => read.unexpected_char_error()?,
     }
-    Ok(())
+    Ok(BlankNode { id: buffer })
 }
 
 pub(crate) fn parse_pname_ns(
@@ -1349,83 +1336,6 @@ pub(crate) fn is_followed_by_space_and_closing_bracket(
         }
     }
     Ok(false)
-}
-
-#[derive(Clone, Copy)]
-enum SubjectType {
-    NamedNode,
-    BlankNode,
-}
-
-impl SubjectType {
-    fn with_value<'a>(&self, value: &'a str) -> Subject<'a> {
-        match self {
-            SubjectType::NamedNode => NamedNode { iri: value }.into(),
-            SubjectType::BlankNode => BlankNode { id: value }.into(),
-        }
-    }
-}
-
-impl From<GraphNameType> for SubjectType {
-    fn from(other: GraphNameType) -> SubjectType {
-        match other {
-            GraphNameType::BlankNode => SubjectType::BlankNode,
-            GraphNameType::NamedNode => SubjectType::NamedNode,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-enum GraphNameType {
-    NamedNode,
-    BlankNode,
-}
-
-impl GraphNameType {
-    fn with_value<'a>(&self, value: &'a str) -> GraphName<'a> {
-        match self {
-            GraphNameType::NamedNode => NamedNode { iri: value }.into(),
-            GraphNameType::BlankNode => BlankNode { id: value }.into(),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum TermType {
-    NamedNode,
-    BlankNode,
-    SimpleLiteral,
-    LanguageTaggedString,
-    TypedLiteral,
-}
-
-impl TermType {
-    fn with_value<'a>(&self, value: &'a str, annotation: &'a str) -> Term<'a> {
-        match self {
-            TermType::NamedNode => NamedNode { iri: value }.into(),
-            TermType::BlankNode => BlankNode { id: value }.into(),
-            TermType::SimpleLiteral => Literal::Simple { value }.into(),
-            TermType::LanguageTaggedString => Literal::LanguageTaggedString {
-                value,
-                language: annotation,
-            }
-            .into(),
-            TermType::TypedLiteral => Literal::Typed {
-                value,
-                datatype: NamedNode { iri: annotation },
-            }
-            .into(),
-        }
-    }
-}
-
-impl From<SubjectType> for TermType {
-    fn from(t: SubjectType) -> Self {
-        match t {
-            SubjectType::NamedNode => TermType::NamedNode,
-            SubjectType::BlankNode => TermType::BlankNode,
-        }
-    }
 }
 
 fn on_triple_in_graph<'a, E>(

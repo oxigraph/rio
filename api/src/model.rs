@@ -172,6 +172,16 @@ impl<'a> From<&'a Triple<'a>> for Subject<'a> {
     }
 }
 
+impl<'a> From<GraphName<'a>> for Subject<'a> {
+    #[inline]
+    fn from(node: GraphName<'a>) -> Self {
+        match node {
+            GraphName::BlankNode(node) => Subject::BlankNode(node),
+            GraphName::NamedNode(node) => Subject::NamedNode(node),
+        }
+    }
+}
+
 /// An RDF [term](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-term).
 ///
 /// It is the union of [IRIs](https://www.w3.org/TR/rdf11-concepts/#dfn-iri), [blank nodes](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node) and [literals](https://www.w3.org/TR/rdf11-concepts/#dfn-literal).
