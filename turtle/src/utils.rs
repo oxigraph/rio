@@ -64,6 +64,14 @@ pub trait LookAheadByteRead {
         }
     }
 
+    fn check_is_next(&mut self, expected: u8) -> Result<(), TurtleError> {
+        if self.next()? == Some(expected) {
+            Ok(())
+        } else {
+            self.unexpected_char_error()
+        }
+    }
+
     fn parse_error(&self, kind: TurtleErrorKind) -> TurtleError {
         TurtleError {
             kind,

@@ -380,16 +380,9 @@ fn parse_label_or_subject<'a, R: BufRead>(
         temp_buf,
         ..
     } = parser;
-
     Ok(match read.current() {
-        Some(b'_') | Some(b'[') => {
-            parse_blank_node(read, buffer, bnode_id_generator)?;
-            BlankNode { id: buffer }.into()
-        }
-        _ => {
-            parse_iri(read, buffer, temp_buf, base_iri, namespaces)?;
-            NamedNode { iri: buffer }.into()
-        }
+        Some(b'_') | Some(b'[') => parse_blank_node(read, buffer, bnode_id_generator)?.into(),
+        _ => parse_iri(read, buffer, temp_buf, base_iri, namespaces)?.into(),
     })
 }
 
@@ -534,6 +527,8 @@ fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
         }
         match parser.read.current() {
             Some(b'.') | Some(b']') | Some(b'}') | None => return Ok(()),
+            #[cfg(feature = "star")]
+            Some(b'|') => return Ok(()),
             _ => (), //continue
         }
     }
@@ -544,10 +539,31 @@ fn parse_object_list<R: BufRead, E: From<TurtleError>>(
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [8] 	objectList 	::= 	object (',' object)*
+    // or, for RDF-star
+    // [8] 	objectList 	::= 	object annotation? ( ',' object annotation? )*
+    // [30t] 	annotation 	::= 	'{|' predicateObjectList '|}'
     loop {
         parse_object(parser, on_triple)?;
         skip_whitespace(&mut parser.read)?;
 
+        #[cfg(feature = "star")]
+        if parser.read.current() == Some(b'{') {
+            parser.read.check_is_next(b'|')?;
+            parser.read.consume_many(2)?;
+            skip_whitespace(&mut parser.read)?;
+
+            parser.triple_alloc.push_triple_start();
+            parser.triple_alloc.push_subject_triple();
+            parse_predicate_object_list(parser, on_triple)?;
+
+            parser.read.check_is_current(b'|')?;
+            parser.read.check_is_next(b'}')?;
+            parser.read.consume_many(2)?;
+            skip_whitespace(&mut parser.read)?;
+            parser.triple_alloc.pop_annotation_triple();
+        }
+
+        parser.triple_alloc.pop_object();
         if parser.read.current() != Some(b',') {
             return Ok(());
         }
@@ -600,17 +616,30 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
                 .try_push_subject(|b| allocate_collection(collec, b))?;
         }
         _ => {
-            let TurtleParser {
-                read,
-                base_iri,
-                namespaces,
-                triple_alloc,
-                temp_buf,
-                ..
-            } = parser;
-            triple_alloc.try_push_subject(|b| {
-                parse_iri(read, b, temp_buf, base_iri, namespaces).map(Subject::from)
-            })?;
+            if cfg!(feature = "star")
+                && parser.read.required_current()? == b'<'
+                && parser.read.required_next()? == b'<'
+            {
+                #[cfg(feature = "star")]
+                {
+                    parse_embedded_triple(parser)?;
+                    parser.triple_alloc.push_subject_triple();
+                }
+                #[cfg(not(feature = "star"))]
+                unreachable!()
+            } else {
+                let TurtleParser {
+                    read,
+                    base_iri,
+                    namespaces,
+                    triple_alloc,
+                    temp_buf,
+                    ..
+                } = parser;
+                triple_alloc.try_push_subject(|b| {
+                    parse_iri(read, b, temp_buf, base_iri, namespaces).map(Subject::from)
+                })?;
+            }
         }
     };
     Ok(())
@@ -637,16 +666,26 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
 
     match parser.read.required_current()? {
         b'<' => {
-            let TurtleParser {
-                read,
-                base_iri,
-                triple_alloc,
-                temp_buf,
-                ..
-            } = parser;
-            triple_alloc.try_push_object(|b, _| {
-                parse_iriref_relative(read, b, temp_buf, base_iri).map(Term::from)
-            })?;
+            if cfg!(feature = "star") && parser.read.required_next()? == b'<' {
+                #[cfg(feature = "star")]
+                {
+                    parse_embedded_triple(parser)?;
+                    parser.triple_alloc.push_object_triple();
+                }
+                #[cfg(not(feature = "star"))]
+                unreachable!()
+            } else {
+                let TurtleParser {
+                    read,
+                    base_iri,
+                    triple_alloc,
+                    temp_buf,
+                    ..
+                } = parser;
+                triple_alloc.try_push_object(|b, _| {
+                    parse_iriref_relative(read, b, temp_buf, base_iri).map(Term::from)
+                })?;
+            }
         }
         b'(' => {
             let collec = parse_collection(parser, on_triple)?;
@@ -711,9 +750,7 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
             }
         }
     };
-    let res = on_triple(*parser.triple_alloc.top());
-    parser.triple_alloc.pop_object();
-    res
+    on_triple(*parser.triple_alloc.top())
 }
 
 fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
@@ -743,7 +780,7 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     }
 
     parser.triple_alloc.pop_subject();
-    parser.triple_alloc.pop_top_incomplete();
+    parser.triple_alloc.pop_top_empty_triple();
     Ok(id)
 }
 
@@ -787,6 +824,7 @@ fn parse_collection<R: BufRead, E: From<TurtleError>>(
                 .triple_alloc
                 .try_push_predicate(|_| Ok(NamedNode { iri: RDF_FIRST }))?;
             parse_object(parser, on_triple)?;
+            parser.triple_alloc.pop_object();
             parser.triple_alloc.pop_predicate();
         } else {
             // trailing ')'
@@ -1349,5 +1387,154 @@ fn on_triple_in_graph<'a, E>(
             object: t.object,
             graph_name,
         })
+    }
+}
+
+#[cfg(feature = "star")]
+pub(crate) fn parse_embedded_triple<R: BufRead>(
+    parser: &mut TurtleParser<R>,
+) -> Result<(), TurtleError> {
+    // [27t] 	embTriple 	::= 	'<<' embSubject verb embObject '>>'
+    parser.read.consume_many(2)?;
+    skip_whitespace(&mut parser.read)?;
+
+    parser.triple_alloc.push_triple_start();
+
+    parse_emb_subject(parser)?;
+    skip_whitespace(&mut parser.read)?;
+
+    parse_verb(parser)?;
+    skip_whitespace(&mut parser.read)?;
+
+    parse_emb_object(parser)?;
+    skip_whitespace(&mut parser.read)?;
+
+    parser.read.check_is_current(b'>')?;
+    parser.read.check_is_next(b'>')?;
+    parser.read.consume_many(2)?;
+
+    Ok(())
+}
+
+#[cfg(feature = "star")]
+pub(crate) fn parse_emb_subject<R: BufRead>(
+    parser: &mut TurtleParser<R>,
+) -> Result<(), TurtleError> {
+    // [28t] 	embSubject 	::= 	iri | BlankNode | embTriple
+    match parser.read.current() {
+        Some(b'<') => {
+            if parser.read.required_next()? == b'<' {
+                parse_embedded_triple(parser)?;
+                parser.triple_alloc.push_subject_triple();
+                Ok(())
+            } else {
+                let TurtleParser {
+                    read,
+                    base_iri,
+                    triple_alloc,
+                    temp_buf,
+                    ..
+                } = parser;
+                triple_alloc.try_push_subject(|b| {
+                    parse_iriref_relative(read, b, temp_buf, base_iri).map(Subject::from)
+                })
+            }
+        }
+        Some(b'_') | Some(b'[') => {
+            let TurtleParser {
+                read,
+                bnode_id_generator,
+                triple_alloc,
+                ..
+            } = parser;
+            triple_alloc.try_push_subject(|b| {
+                parse_blank_node(read, b, bnode_id_generator).map(Subject::from)
+            })
+        }
+        _ => {
+            let TurtleParser {
+                read,
+                namespaces,
+                triple_alloc,
+                ..
+            } = parser;
+            triple_alloc
+                .try_push_subject(|b| parse_prefixed_name(read, b, namespaces).map(Subject::from))
+        }
+    }
+}
+
+#[cfg(feature = "star")]
+pub(crate) fn parse_emb_object<R: BufRead>(
+    parser: &mut TurtleParser<R>,
+) -> Result<(), TurtleError> {
+    // [29t] 	embObject 	::= 	iri | BlankNode | literal | embTriple
+    match parser.read.required_current()? {
+        b'<' => {
+            if parser.read.required_next()? == b'<' {
+                parse_embedded_triple(parser)?;
+                parser.triple_alloc.push_object_triple();
+                Ok(())
+            } else {
+                let TurtleParser {
+                    read,
+                    base_iri,
+                    triple_alloc,
+                    temp_buf,
+                    ..
+                } = parser;
+                triple_alloc.try_push_object(|b, _| {
+                    parse_iriref_relative(read, b, temp_buf, base_iri).map(Term::from)
+                })
+            }
+        }
+        b'_' | b'[' => {
+            let TurtleParser {
+                read,
+                bnode_id_generator,
+                triple_alloc,
+                ..
+            } = parser;
+            triple_alloc.try_push_object(|b, _| {
+                parse_blank_node(read, b, bnode_id_generator).map(Term::from)
+            })
+        }
+        b'"' | b'\'' => {
+            let TurtleParser {
+                read,
+                base_iri,
+                namespaces,
+                triple_alloc,
+                temp_buf,
+                ..
+            } = parser;
+            triple_alloc.try_push_object(|b1, b2| {
+                parse_rdf_literal(read, b1, b2, temp_buf, base_iri, namespaces).map(Term::from)
+            })
+        }
+        b'+' | b'-' | b'.' | b'0'..=b'9' => {
+            let TurtleParser {
+                read, triple_alloc, ..
+            } = parser;
+            triple_alloc.try_push_object(|b, _| parse_numeric_literal(read, b).map(Term::from))
+        }
+        _ => {
+            let TurtleParser {
+                read, triple_alloc, ..
+            } = parser;
+            if read.starts_with(b"true") || read.starts_with(b"false") {
+                triple_alloc.try_push_object(|b, _| parse_boolean_literal(read, b).map(Term::from))
+            } else {
+                let TurtleParser {
+                    read,
+                    namespaces,
+                    triple_alloc,
+                    ..
+                } = parser;
+                triple_alloc.try_push_object(|b, _| {
+                    parse_prefixed_name(read, b, namespaces).map(Term::from)
+                })
+            }
+        }
     }
 }

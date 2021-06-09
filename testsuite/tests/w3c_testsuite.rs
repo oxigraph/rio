@@ -74,6 +74,22 @@ fn nquads_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     )
 }
 
+#[cfg(feature = "star")]
+#[test]
+fn turtle_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    run_testsuite("https://w3c.github.io/rdf-star/tests/turtle/syntax/manifest.ttl")?;
+    run_testsuite("https://w3c.github.io/rdf-star/tests/turtle/eval/manifest.ttl")?;
+    Ok(())
+}
+
+#[cfg(feature = "star")]
+#[test]
+fn trig_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
+    run_testsuite("https://w3c.github.io/rdf-star/tests/trig/syntax/manifest.ttl")?;
+    run_testsuite("https://w3c.github.io/rdf-star/tests/trig/eval/manifest.ttl")?;
+    Ok(())
+}
+
 #[cfg(feature = "generalized")]
 #[test]
 fn gtrig_w3c_testsuite() -> Result<(), Box<dyn Error>> {

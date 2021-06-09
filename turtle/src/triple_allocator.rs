@@ -240,19 +240,37 @@ impl TripleAllocator {
     }
 
     #[inline(always)]
+    /// Pops the latest complete triple, and recursively pops all its constituent triples.
+    /// Equivalent to pop_object, pop_predicate, pop_subject, pop_empty_triple
     pub fn pop_top_triple(&mut self) {
-        debug_assert!(self.complete_len > 0);
         self.pop_object();
         self.pop_predicate();
         self.pop_subject();
         self.incomplete_len -= 1;
     }
 
+    /// Pops the top-most empty triple, created with push_triple_start,
+    /// but with all its components having been popped (or never pushed)
     #[inline(always)]
-    pub fn pop_top_incomplete(&mut self) {
+    pub fn pop_top_empty_triple(&mut self) {
         debug_assert!(self.incomplete_len > 0);
         debug_assert!(dummy(self.current().predicate));
         debug_assert!(dummy(self.current().subject));
+        self.incomplete_len -= 1;
+    }
+
+    /// Pops the top-most annotation triple, i.e.
+    /// a triple on the incomplete stack with only its subject pushed,
+    /// and that subject is an embedded triple.
+    ///
+    /// The goal is to remove this triple *without* freeing the subject triple.
+    #[cfg(feature = "star")]
+    #[inline(always)]
+    pub fn pop_annotation_triple(&mut self) {
+        debug_assert!(self.incomplete_len > 0);
+        debug_assert!(dummy(self.current().predicate));
+        debug_assert!(!dummy(self.current().subject));
+        debug_assert!(matches!(self.current().subject, Subject::Triple(_)));
         self.incomplete_len -= 1;
     }
 
