@@ -161,7 +161,7 @@ impl fmt::Display for OwnedSubject {
             OwnedSubject::NamedNode(n) => n.fmt(f),
             OwnedSubject::BlankNode(n) => n.fmt(f),
             #[cfg(feature = "star")]
-            OwnedSubject::Triple(t) => t.fmt(f),
+            OwnedSubject::Triple(t) => write!(f, "<< {} >>", t),
         }
     }
 }
@@ -278,7 +278,7 @@ impl fmt::Display for OwnedTerm {
             OwnedTerm::BlankNode(n) => n.fmt(f),
             OwnedTerm::Literal(n) => n.fmt(f),
             #[cfg(feature = "star")]
-            OwnedTerm::Triple(t) => t.fmt(f),
+            OwnedTerm::Triple(t) => write!(f, "<< {} >>", t),
         }
     }
 }
