@@ -197,8 +197,8 @@ pub fn parse_w3c_rdf_test_file_for_nquads(
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".trig") {
-        GTriGParser::new(read, Some(base_iri))
-            .into_iter(|t| Ok(Quad::try_from(t)?.into()))
+        TriGParser::new(read, Some(base_iri))
+            .into_iter(|t| Ok(t.into()))
             .collect()
     } else {
         Err(Box::new(TestEvaluationError::UnsupportedFormat(
