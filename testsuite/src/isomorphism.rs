@@ -56,11 +56,8 @@ fn hash_blank_nodes<'a>(
             let subject = OwnedSubject::from(bnode.clone());
             let mut po_set: BTreeSet<PredicateObject<'_>> = BTreeSet::default();
             for po in predicate_objects_for_subject(dataset, &subject) {
-                match &po.object {
-                    OwnedTerm::BlankNode(_) => (),
-                    _ => {
-                        po_set.insert(po);
-                    }
+                if !matches!(&po.object, OwnedTerm::BlankNode(_) | OwnedTerm::Triple(_)) {
+                    po_set.insert(po);
                 }
             }
             for po in po_set {
@@ -72,11 +69,11 @@ fn hash_blank_nodes<'a>(
             let object = OwnedTerm::from(bnode.clone());
             let mut sp_set: BTreeSet<SubjectPredicate<'_>> = BTreeSet::default();
             for sp in subject_predicates_for_object(dataset, &object) {
-                match &sp.subject {
-                    OwnedSubject::BlankNode(_) => (),
-                    _ => {
-                        sp_set.insert(sp);
-                    }
+                if !matches!(
+                    &sp.subject,
+                    OwnedSubject::BlankNode(_) | OwnedSubject::Triple(_)
+                ) {
+                    sp_set.insert(sp);
                 }
             }
             for sp in sp_set {
@@ -169,28 +166,29 @@ fn check_is_contained<'a>(
     b: &OwnedDataset,
 ) -> bool {
     for t_a in a.iter() {
-        let subject = if let OwnedSubject::BlankNode(s_a) = &t_a.subject {
-            a_to_b_mapping[s_a].clone().into()
-        } else {
-            t_a.subject.clone()
+        let a_quad = OwnedQuad {
+            subject: if let OwnedSubject::BlankNode(s_a) = &t_a.subject {
+                a_to_b_mapping[s_a].clone().into()
+            } else if let OwnedSubject::Triple(s_a) = &t_a.subject {
+                OwnedSubject::Triple(Box::new(map_triple_blank_nodes(s_a, a_to_b_mapping)))
+            } else {
+                t_a.subject.clone()
+            },
+            predicate: t_a.predicate.clone(),
+            object: if let OwnedTerm::BlankNode(o_a) = &t_a.object {
+                a_to_b_mapping[o_a].clone().into()
+            } else if let OwnedTerm::Triple(o_a) = &t_a.object {
+                OwnedTerm::Triple(Box::new(map_triple_blank_nodes(o_a, a_to_b_mapping)))
+            } else {
+                t_a.object.clone()
+            },
+            graph_name: if let Some(OwnedGraphName::BlankNode(g_a)) = &t_a.graph_name {
+                Some(a_to_b_mapping[g_a].clone().into())
+            } else {
+                t_a.graph_name.clone()
+            },
         };
-        let predicate = t_a.predicate.clone();
-        let object = if let OwnedTerm::BlankNode(o_a) = &t_a.object {
-            a_to_b_mapping[o_a].clone().into()
-        } else {
-            t_a.object.clone()
-        };
-        let graph_name = if let Some(OwnedGraphName::BlankNode(g_a)) = &t_a.graph_name {
-            Some(a_to_b_mapping[g_a].clone().into())
-        } else {
-            t_a.graph_name.clone()
-        };
-        if !b.contains(&OwnedQuad {
-            subject,
-            predicate,
-            object,
-            graph_name,
-        }) {
+        if !b.contains(&a_quad) {
             return false;
         }
     }
@@ -198,20 +196,61 @@ fn check_is_contained<'a>(
     true
 }
 
+fn map_triple_blank_nodes<'a>(
+    t: &OwnedTriple,
+    a_to_b_mapping: &mut HashMap<&'a OwnedBlankNode, &'a OwnedBlankNode>,
+) -> OwnedTriple {
+    OwnedTriple {
+        subject: match &t.subject {
+            OwnedSubject::NamedNode(node) => node.clone().into(),
+            OwnedSubject::BlankNode(node) => a_to_b_mapping[node].clone().into(),
+            OwnedSubject::Triple(node) => {
+                OwnedSubject::Triple(Box::new(map_triple_blank_nodes(node, a_to_b_mapping)))
+            }
+        },
+        predicate: t.predicate.clone(),
+        object: match &t.object {
+            OwnedTerm::NamedNode(node) => node.clone().into(),
+            OwnedTerm::BlankNode(node) => a_to_b_mapping[node].clone().into(),
+            OwnedTerm::Literal(node) => node.clone().into(),
+            OwnedTerm::Triple(node) => {
+                OwnedTerm::Triple(Box::new(map_triple_blank_nodes(node, a_to_b_mapping)))
+            }
+        },
+    }
+}
+
 fn dataset_blank_nodes(dataset: &OwnedDataset) -> HashSet<&OwnedBlankNode> {
     let mut blank_nodes = HashSet::default();
     for t in dataset.iter() {
         if let OwnedSubject::BlankNode(subject) = &t.subject {
             blank_nodes.insert(subject);
+        } else if let OwnedSubject::Triple(t) = &t.subject {
+            add_triple_blank_nodes(t, &mut blank_nodes);
         }
         if let OwnedTerm::BlankNode(object) = &t.object {
             blank_nodes.insert(object);
+        } else if let OwnedSubject::Triple(t) = &t.subject {
+            add_triple_blank_nodes(t, &mut blank_nodes);
         }
         if let Some(OwnedGraphName::BlankNode(graph_name)) = &t.graph_name {
             blank_nodes.insert(graph_name);
         }
     }
     blank_nodes
+}
+
+fn add_triple_blank_nodes<'a>(t: &'a OwnedTriple, blank_nodes: &mut HashSet<&'a OwnedBlankNode>) {
+    if let OwnedSubject::BlankNode(subject) = &t.subject {
+        blank_nodes.insert(subject);
+    } else if let OwnedSubject::Triple(t) = &t.subject {
+        add_triple_blank_nodes(t, blank_nodes);
+    }
+    if let OwnedTerm::BlankNode(object) = &t.object {
+        blank_nodes.insert(object);
+    } else if let OwnedTerm::Triple(t) = &t.object {
+        add_triple_blank_nodes(t, blank_nodes);
+    }
 }
 
 pub fn are_datasets_isomorphic(a: &OwnedDataset, b: &OwnedDataset) -> bool {
