@@ -386,7 +386,7 @@ mod test {
     fn simple_triple_w_named() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
         ta.push_triple_start();
-        ta.try_push_subject(|b| iri(b, "a").into())?;
+        ta.try_push_subject(|b| iri(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b, _| iri(b, "c"))?;
         assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c> ."#);

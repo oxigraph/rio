@@ -151,7 +151,6 @@ impl PartialEq<OwnedLiteral> for Literal<'_> {
 pub enum OwnedSubject {
     NamedNode(OwnedNamedNode),
     BlankNode(OwnedBlankNode),
-    #[cfg(feature = "star")]
     Triple(Box<OwnedTriple>),
 }
 
@@ -160,7 +159,6 @@ impl fmt::Display for OwnedSubject {
         match self {
             OwnedSubject::NamedNode(n) => n.fmt(f),
             OwnedSubject::BlankNode(n) => n.fmt(f),
-            #[cfg(feature = "star")]
             OwnedSubject::Triple(t) => write!(f, "<< {} >>", t),
         }
     }
@@ -171,7 +169,6 @@ impl From<Subject<'_>> for OwnedSubject {
         match t {
             Subject::NamedNode(n) => OwnedSubject::NamedNode(n.into()),
             Subject::BlankNode(n) => OwnedSubject::BlankNode(n.into()),
-            #[cfg(feature = "star")]
             Subject::Triple(t) => OwnedSubject::Triple(Box::new(OwnedTriple::from(*t))),
             _ => panic!("Unsupported subject {:?}", t),
         }
@@ -183,7 +180,6 @@ impl PartialEq<OwnedSubject> for Subject<'_> {
         match (self, other) {
             (Subject::NamedNode(n1), OwnedSubject::NamedNode(n2)) => n1 == n2,
             (Subject::BlankNode(n1), OwnedSubject::BlankNode(n2)) => n1 == n2,
-            #[cfg(feature = "star")]
             (Subject::Triple(t1), OwnedSubject::Triple(t2)) => *t1 == &**t2,
             _ => false,
         }
@@ -267,7 +263,6 @@ pub enum OwnedTerm {
     NamedNode(OwnedNamedNode),
     BlankNode(OwnedBlankNode),
     Literal(OwnedLiteral),
-    #[cfg(feature = "star")]
     Triple(Box<OwnedTriple>),
 }
 
@@ -277,7 +272,6 @@ impl fmt::Display for OwnedTerm {
             OwnedTerm::NamedNode(n) => n.fmt(f),
             OwnedTerm::BlankNode(n) => n.fmt(f),
             OwnedTerm::Literal(n) => n.fmt(f),
-            #[cfg(feature = "star")]
             OwnedTerm::Triple(t) => write!(f, "<< {} >>", t),
         }
     }
@@ -289,7 +283,6 @@ impl From<Term<'_>> for OwnedTerm {
             Term::NamedNode(n) => OwnedTerm::NamedNode(n.into()),
             Term::BlankNode(n) => OwnedTerm::BlankNode(n.into()),
             Term::Literal(n) => OwnedTerm::Literal(n.into()),
-            #[cfg(feature = "star")]
             Term::Triple(t) => OwnedTerm::Triple(Box::new(OwnedTriple::from(*t))),
             _ => panic!("Unsupported subject {:?}", t),
         }
@@ -319,7 +312,6 @@ impl From<OwnedSubject> for OwnedTerm {
         match other {
             OwnedSubject::NamedNode(node) => OwnedTerm::NamedNode(node),
             OwnedSubject::BlankNode(node) => OwnedTerm::BlankNode(node),
-            #[cfg(feature = "star")]
             OwnedSubject::Triple(triple) => OwnedTerm::Triple(triple),
         }
     }
@@ -331,7 +323,6 @@ impl PartialEq<OwnedTerm> for Term<'_> {
             (Term::NamedNode(n1), OwnedTerm::NamedNode(n2)) => n1 == n2,
             (Term::BlankNode(n1), OwnedTerm::BlankNode(n2)) => n1 == n2,
             (Term::Literal(n1), OwnedTerm::Literal(n2)) => n1 == n2,
-            #[cfg(feature = "star")]
             (Term::Triple(t1), OwnedTerm::Triple(t2)) => *t1 == &**t2,
             _ => false,
         }

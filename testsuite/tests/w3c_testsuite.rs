@@ -58,13 +58,11 @@ fn rdf_xml_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("http://www.w3.org/2013/RDFXMLTests/manifest.ttl")
 }
 
-#[cfg(feature = "star")]
 #[test]
 fn ntriples_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("https://w3c.github.io/rdf-star/tests/nt/syntax/manifest.ttl")
 }
 
-#[cfg(feature = "star")]
 #[test]
 fn nquads_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     let test_path = get_test_path();
@@ -74,7 +72,6 @@ fn nquads_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     )
 }
 
-#[cfg(feature = "star")]
 #[test]
 fn turtle_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("https://w3c.github.io/rdf-star/tests/turtle/syntax/manifest.ttl")?;
@@ -82,7 +79,6 @@ fn turtle_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[cfg(feature = "star")]
 #[test]
 fn trig_star_w3c_testsuite() -> Result<(), Box<dyn Error>> {
     run_testsuite("https://w3c.github.io/rdf-star/tests/trig/syntax/manifest.ttl")?;

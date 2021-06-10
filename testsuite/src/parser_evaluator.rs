@@ -177,7 +177,6 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
 
 /// Use NQuads instead of NTriples parser
 /// (in order to test the NQuads parser with NT files)
-#[cfg(feature = "star")]
 pub fn parse_w3c_rdf_test_file_for_nquads(
     url: &str,
     tests_path: &Path,
