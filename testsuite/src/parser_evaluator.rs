@@ -143,7 +143,7 @@ pub fn parse_w3c_rdf_test_file(
     }
 }
 
-/// Use GTrig instead of TriG parser
+/// Use GTrig instead of Turtle and TriG parser
 #[cfg(feature = "generalized")]
 pub fn parse_w3c_rdf_test_file_for_gtrig(
     url: &str,
@@ -160,11 +160,7 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
         NQuadsParser::new(read)
             .into_iter(|t| Ok(t.into()))
             .collect()
-    } else if url.ends_with(".ttl") {
-        TurtleParser::new(read, Some(base_iri))
-            .into_iter(|t| Ok(t.into()))
-            .collect()
-    } else if url.ends_with(".trig") {
+    } else if url.ends_with(".ttl") || url.ends_with(".trig") {
         GTriGParser::new(read, Some(base_iri))
             .into_iter(|t| Ok(Quad::try_from(t)?.into()))
             .collect()
@@ -184,11 +180,7 @@ pub fn parse_w3c_rdf_test_file_for_nquads(
     let read = read_w3c_rdf_test_file(url, tests_path)?;
     let base_iri = Iri::parse(url.to_owned())?;
 
-    if url.ends_with(".nt") {
-        NQuadsParser::new(read)
-            .into_iter(|t| Ok(t.into()))
-            .collect()
-    } else if url.ends_with(".nq") {
+    if url.ends_with(".nt") || url.ends_with(".nq") {
         NQuadsParser::new(read)
             .into_iter(|t| Ok(t.into()))
             .collect()
@@ -197,6 +189,34 @@ pub fn parse_w3c_rdf_test_file_for_nquads(
             .into_iter(|t| Ok(t.into()))
             .collect()
     } else if url.ends_with(".trig") {
+        TriGParser::new(read, Some(base_iri))
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else {
+        Err(Box::new(TestEvaluationError::UnsupportedFormat(
+            url.to_owned(),
+        )))
+    }
+}
+
+/// Use TriG instead of Turtle parser
+/// (in order to test the TriG parser with Turtle files)
+pub fn parse_w3c_rdf_test_file_for_trig(
+    url: &str,
+    tests_path: &Path,
+) -> Result<OwnedDataset, Box<dyn Error>> {
+    let read = read_w3c_rdf_test_file(url, tests_path)?;
+    let base_iri = Iri::parse(url.to_owned())?;
+
+    if url.ends_with(".nt") {
+        NTriplesParser::new(read)
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".nq") {
+        NQuadsParser::new(read)
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".ttl") || url.ends_with(".trig") {
         TriGParser::new(read, Some(base_iri))
             .into_iter(|t| Ok(t.into()))
             .collect()

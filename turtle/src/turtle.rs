@@ -266,7 +266,20 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     parser: &mut TriGParser<R>,
     on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
-    // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
+    // [3g] 	triplesOrGraph 	::= 	labelOrSubject ( wrappedGraph | predicateObjectList '.' ) | embTriple predicateObjectList '.'
+
+    #[cfg(feature = "star")]
+    if parser.inner.read.starts_with(b"<<") {
+        parse_embedded_triple(&mut parser.inner)?;
+        parser.inner.triple_alloc.push_subject_triple();
+        skip_whitespace(&mut parser.inner.read)?;
+        parse_predicate_object_list(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))?;
+        parser.inner.read.check_is_current(b'.')?;
+        parser.inner.read.consume()?;
+        parser.inner.triple_alloc.pop_subject();
+        return Ok(());
+    }
+
     let TriGParser {
         inner,
         graph_name_buf,
