@@ -177,7 +177,6 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
                 // can't factorize embedded triple as subject for the moment
                 self.current_subject_type = None;
             }
-            _ => return Err(io::Error::from(io::ErrorKind::InvalidData)),
         }
         self.current_predicate.clear();
         self.current_predicate.push_str(triple.predicate.iri);
@@ -330,7 +329,6 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
                 // can't factorize embedded triple as subject for the moment
                 self.current_subject_type = None;
             }
-            _ => return Err(io::Error::from(io::ErrorKind::InvalidData)),
         }
         self.current_predicate.clear();
         self.current_predicate.push_str(quad.predicate.iri);

@@ -51,7 +51,6 @@ pub mod model {
     ///
     /// Using it requires to enable the `generalized` feature.
     #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
-    #[non_exhaustive]
     pub enum GeneralizedTerm<'a> {
         NamedNode(NamedNode<'a>),
         BlankNode(BlankNode<'a>),
