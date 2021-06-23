@@ -130,7 +130,6 @@ impl<'a> fmt::Display for Literal<'a> {
 pub enum Subject<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
-    #[cfg(feature = "star")]
     Triple(&'a Triple<'a>),
 }
 
@@ -140,7 +139,6 @@ impl<'a> fmt::Display for Subject<'a> {
         match self {
             Subject::NamedNode(node) => node.fmt(f),
             Subject::BlankNode(node) => node.fmt(f),
-            #[cfg(feature = "star")]
             Subject::Triple(triple) => write!(
                 f,
                 "<< {} {} {} >>",
@@ -164,7 +162,6 @@ impl<'a> From<BlankNode<'a>> for Subject<'a> {
     }
 }
 
-#[cfg(feature = "star")]
 impl<'a> From<&'a Triple<'a>> for Subject<'a> {
     #[inline]
     fn from(triple: &'a Triple<'a>) -> Self {
@@ -193,7 +190,6 @@ pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
     Literal(Literal<'a>),
-    #[cfg(feature = "star")]
     Triple(&'a Triple<'a>),
 }
 
@@ -204,7 +200,6 @@ impl<'a> fmt::Display for Term<'a> {
             Term::NamedNode(node) => node.fmt(f),
             Term::BlankNode(node) => node.fmt(f),
             Term::Literal(literal) => literal.fmt(f),
-            #[cfg(feature = "star")]
             Term::Triple(triple) => write!(
                 f,
                 "<< {} {} {} >>",
@@ -241,7 +236,6 @@ impl<'a> From<Subject<'a>> for Term<'a> {
         match resource {
             Subject::NamedNode(node) => Term::NamedNode(node),
             Subject::BlankNode(node) => Term::BlankNode(node),
-            #[cfg(feature = "star")]
             Subject::Triple(triple) => Term::Triple(triple),
         }
     }

@@ -204,19 +204,13 @@ fn parse_triple(
 ) -> Result<(), TurtleError> {
     triple_alloc.push_triple_start();
 
-    #[cfg(not(feature = "star"))]
-    triple_alloc.try_push_subject(|b| parse_subject(read, b))?;
-    #[cfg(feature = "star")]
-    parse_subject_star(read, triple_alloc)?;
+    parse_subject(read, triple_alloc)?;
     skip_whitespace(read)?;
 
     triple_alloc.try_push_predicate(|b| parse_iriref(read, b))?;
     skip_whitespace(read)?;
 
-    #[cfg(not(feature = "star"))]
-    triple_alloc.try_push_object(|b1, b2| parse_term(read, b1, b2))?;
-    #[cfg(feature = "star")]
-    parse_object_star(read, triple_alloc)?;
+    parse_object(read, triple_alloc)?;
     skip_whitespace(read)?;
 
     Ok(())
@@ -259,34 +253,7 @@ fn parse_quad_line<'a>(
     Ok(Some(opt_graph_name))
 }
 
-#[cfg(not(feature = "star"))]
-fn parse_term<'a>(
-    read: &mut impl LookAheadByteRead,
-    buffer: &'a mut String,
-    annotation_buffer: &'a mut String,
-) -> Result<Term<'a>, TurtleError> {
-    match read.required_current()? {
-        b'<' => Ok(parse_iriref(read, buffer)?.into()),
-        b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
-        b'"' => Ok(parse_literal(read, buffer, annotation_buffer)?.into()),
-        _ => read.unexpected_char_error(),
-    }
-}
-
-#[cfg(not(feature = "star"))]
-fn parse_subject<'a>(
-    read: &mut impl LookAheadByteRead,
-    buffer: &'a mut String,
-) -> Result<Subject<'a>, TurtleError> {
-    match read.required_current()? {
-        b'<' => Ok(parse_iriref(read, buffer)?.into()),
-        b'_' => Ok(parse_blank_node_label(read, buffer)?.into()),
-        _ => read.unexpected_char_error(),
-    }
-}
-
-#[cfg(feature = "star")]
-fn parse_subject_star(
+fn parse_subject(
     read: &mut impl LookAheadByteRead,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {
@@ -306,8 +273,7 @@ fn parse_subject_star(
     }
 }
 
-#[cfg(feature = "star")]
-fn parse_object_star(
+fn parse_object(
     read: &mut impl LookAheadByteRead,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {
@@ -328,7 +294,6 @@ fn parse_object_star(
     }
 }
 
-#[cfg(feature = "star")]
 fn parse_embedded_triple(
     read: &mut impl LookAheadByteRead,
     triple_alloc: &mut TripleAllocator,
@@ -422,7 +387,6 @@ fn parse_iriref<'a>(
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "star")]
     #[test]
     fn nquads_star_valid_quad() -> Result<(), Box<dyn std::error::Error>> {
         // adding this test because there is currenly no testsuite specific to N-Quads star
@@ -438,7 +402,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "star")]
     #[test]
     fn nquads_star_invalid_graph_name() {
         // adding this test because there is currenly no testsuite specific to N-Quads star

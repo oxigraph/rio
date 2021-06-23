@@ -74,8 +74,7 @@ impl TripleAllocator {
     ///
     /// # Pre-condition
     /// In standard RDF, any subject is acceptable.
-    /// In RDF* (with the `star` feature),
-    /// embedded triples [`Subject::Triple`] are *not allowed*.
+    /// In RDF* embedded triples [`Subject::Triple`] are *not allowed*.
     /// For adding an embedded triple, use [`TripleAllocator::push_subject_triple`] instead.
     pub fn try_push_subject<E, F>(&mut self, subject_factory: F) -> Result<(), E>
     where
@@ -119,8 +118,7 @@ impl TripleAllocator {
     ///
     /// # Pre-condition
     /// In standard RDF, any object is acceptable.
-    /// In RDF* (with the `star` feature),
-    /// embedded triples [`Subject::Triple`] are *not allowed*.
+    /// In RDF* embedded triples [`Subject::Triple`] are *not allowed*.
     /// For adding an embedded triple, use [`TripleAllocator::push_object_triple`] instead.
     pub fn try_push_object<E, F>(&mut self, object_factory: F) -> Result<(), E>
     where
@@ -144,7 +142,6 @@ impl TripleAllocator {
     }
 
     /// Use the [top](TripleAllocator::top) triple of this stash as the subject of the current triple.
-    #[cfg(feature = "star")]
     pub fn push_subject_triple(&mut self) {
         debug_assert!(dummy(self.current().subject));
         debug_assert!(self.complete_len > 0);
@@ -161,7 +158,6 @@ impl TripleAllocator {
     ///
     /// # Pre-condition
     /// The top triple must not have been pushed already as the subject.
-    #[cfg(feature = "star")]
     pub fn push_object_triple(&mut self) {
         debug_assert!(!dummy(self.current().predicate));
         debug_assert!(dummy(self.current().object));
@@ -204,7 +200,6 @@ impl TripleAllocator {
                 self.string_stack.pop();
                 self.string_stack.pop()
             }
-            #[cfg(feature = "star")]
             Term::Triple(_) => self.pop_top_triple(),
             _ => (),
         }
@@ -229,7 +224,6 @@ impl TripleAllocator {
         debug_assert!(!dummy(self.current().subject));
         match self.current().subject {
             Subject::NamedNode(_) | Subject::BlankNode(_) => self.string_stack.pop(),
-            #[cfg(feature = "star")]
             Subject::Triple(_) => self.pop_top_triple(),
             _ => (),
         }
@@ -264,7 +258,6 @@ impl TripleAllocator {
     /// and that subject is an embedded triple.
     ///
     /// The goal is to remove this triple *without* freeing the subject triple.
-    #[cfg(feature = "star")]
     #[inline(always)]
     pub fn pop_annotation_triple(&mut self) {
         debug_assert!(self.incomplete_len > 0);
@@ -487,7 +480,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "star")]
     #[test]
     fn nested_triple_as_subject() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
@@ -506,7 +498,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "star")]
     #[test]
     fn nested_triple_as_object() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
@@ -525,7 +516,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "star")]
     #[test]
     fn nested_triple_as_both() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
@@ -554,7 +544,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "star")]
     #[test]
     fn nested_triple_deep() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();

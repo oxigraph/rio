@@ -268,7 +268,6 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
 ) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject ( wrappedGraph | predicateObjectList '.' ) | embTriple predicateObjectList '.'
 
-    #[cfg(feature = "star")]
     if parser.inner.read.starts_with(b"<<") {
         parse_embedded_triple(&mut parser.inner)?;
         parser.inner.triple_alloc.push_subject_triple();
@@ -540,7 +539,6 @@ fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
         }
         match parser.read.current() {
             Some(b'.') | Some(b']') | Some(b'}') | None => return Ok(()),
-            #[cfg(feature = "star")]
             Some(b'|') => return Ok(()),
             _ => (), //continue
         }
@@ -559,7 +557,6 @@ fn parse_object_list<R: BufRead, E: From<TurtleError>>(
         parse_object(parser, on_triple)?;
         skip_whitespace(&mut parser.read)?;
 
-        #[cfg(feature = "star")]
         if parser.read.current() == Some(b'{') {
             parser.read.check_is_next(b'|')?;
             parser.read.consume_many(2)?;
@@ -629,17 +626,9 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
                 .try_push_subject(|b| allocate_collection(collec, b))?;
         }
         _ => {
-            if cfg!(feature = "star")
-                && parser.read.required_current()? == b'<'
-                && parser.read.required_next()? == b'<'
-            {
-                #[cfg(feature = "star")]
-                {
-                    parse_embedded_triple(parser)?;
-                    parser.triple_alloc.push_subject_triple();
-                }
-                #[cfg(not(feature = "star"))]
-                unreachable!()
+            if parser.read.required_current()? == b'<' && parser.read.required_next()? == b'<' {
+                parse_embedded_triple(parser)?;
+                parser.triple_alloc.push_subject_triple();
             } else {
                 let TurtleParser {
                     read,
@@ -679,14 +668,9 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
 
     match parser.read.required_current()? {
         b'<' => {
-            if cfg!(feature = "star") && parser.read.required_next()? == b'<' {
-                #[cfg(feature = "star")]
-                {
-                    parse_embedded_triple(parser)?;
-                    parser.triple_alloc.push_object_triple();
-                }
-                #[cfg(not(feature = "star"))]
-                unreachable!()
+            if parser.read.required_next()? == b'<' {
+                parse_embedded_triple(parser)?;
+                parser.triple_alloc.push_object_triple();
             } else {
                 let TurtleParser {
                     read,
@@ -1403,7 +1387,6 @@ fn on_triple_in_graph<'a, E>(
     }
 }
 
-#[cfg(feature = "star")]
 pub(crate) fn parse_embedded_triple<R: BufRead>(
     parser: &mut TurtleParser<R>,
 ) -> Result<(), TurtleError> {
@@ -1429,7 +1412,6 @@ pub(crate) fn parse_embedded_triple<R: BufRead>(
     Ok(())
 }
 
-#[cfg(feature = "star")]
 pub(crate) fn parse_emb_subject<R: BufRead>(
     parser: &mut TurtleParser<R>,
 ) -> Result<(), TurtleError> {
@@ -1477,7 +1459,6 @@ pub(crate) fn parse_emb_subject<R: BufRead>(
     }
 }
 
-#[cfg(feature = "star")]
 pub(crate) fn parse_emb_object<R: BufRead>(
     parser: &mut TurtleParser<R>,
 ) -> Result<(), TurtleError> {
