@@ -16,7 +16,6 @@ all-features = true
 
 [features]
 default = []
-star = []
 generalized = []
 sophia = ["sophia_api"]
 

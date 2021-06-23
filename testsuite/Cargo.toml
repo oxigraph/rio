@@ -12,8 +12,8 @@ edition = "2018"
 publish = false
 
 [dependencies]
-rio_api = { version = "0.5", path="../api", features=["star"] }
-rio_turtle = { version = "0.5", path="../turtle", features=["star"] }
+rio_api = { version = "0.5", path="../api" }
+rio_turtle = { version = "0.5", path="../turtle" }
 rio_xml = { version = "0.5", path="../xml" }
 chrono = "0.4"
 oxiri = "0.1"

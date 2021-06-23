@@ -57,7 +57,6 @@ pub mod model {
         BlankNode(BlankNode<'a>),
         Literal(Literal<'a>),
         Variable(Variable<'a>),
-        #[cfg(feature = "star")]
         Triple(&'a Triple<'a>),
     }
 
@@ -95,7 +94,6 @@ pub mod model {
             match other {
                 Subject::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
                 Subject::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
-                #[cfg(feature = "star")]
                 Subject::Triple(inner) => GeneralizedTerm::Triple(inner),
             }
         }
@@ -118,7 +116,6 @@ pub mod model {
                 Term::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
                 Term::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
                 Term::Literal(inner) => GeneralizedTerm::Literal(inner),
-                #[cfg(feature = "star")]
                 Term::Triple(inner) => GeneralizedTerm::Triple(inner),
             }
         }
@@ -140,7 +137,6 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
-                #[cfg(feature = "star")]
                 GeneralizedTerm::Triple(_) => Err(StrictRdfError {
                     message: "Triple cannot be used as predicate",
                 }),
@@ -162,7 +158,6 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
-                #[cfg(feature = "star")]
                 GeneralizedTerm::Triple(triple) => Ok(Subject::Triple(triple)),
             }
         }
@@ -182,7 +177,6 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
-                #[cfg(feature = "star")]
                 GeneralizedTerm::Triple(_) => Err(StrictRdfError {
                     message: "Triple cannot be used as a graph name",
                 }),
@@ -202,7 +196,6 @@ pub mod model {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to Term",
                 }),
-                #[cfg(feature = "star")]
                 GeneralizedTerm::Triple(inner) => Ok(Term::Triple(inner)),
             }
         }
@@ -216,7 +209,6 @@ pub mod model {
                 GeneralizedTerm::BlankNode(node) => node.fmt(f),
                 GeneralizedTerm::Literal(literal) => literal.fmt(f),
                 GeneralizedTerm::Variable(variable) => variable.fmt(f),
-                #[cfg(feature = "star")]
                 GeneralizedTerm::Triple(triple) => triple.fmt(f),
             }
         }

@@ -173,7 +173,6 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
                 self.current_subject.push_str(n.id);
                 self.current_subject_type = Some(SubjectType::BlankNode);
             }
-            #[cfg(feature = "star")]
             Subject::Triple(_) => {
                 // can't factorize embedded triple as subject for the moment
                 self.current_subject_type = None;
@@ -327,7 +326,6 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
                 self.current_subject.push_str(n.id);
                 self.current_subject_type = Some(SubjectType::BlankNode);
             }
-            #[cfg(feature = "star")]
             Subject::Triple(_) => {
                 // can't factorize embedded triple as subject for the moment
                 self.current_subject_type = None;
