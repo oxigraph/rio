@@ -170,7 +170,6 @@ impl From<Subject<'_>> for OwnedSubject {
             Subject::NamedNode(n) => OwnedSubject::NamedNode(n.into()),
             Subject::BlankNode(n) => OwnedSubject::BlankNode(n.into()),
             Subject::Triple(t) => OwnedSubject::Triple(Box::new(OwnedTriple::from(*t))),
-            _ => panic!("Unsupported subject {:?}", t),
         }
     }
 }
@@ -284,7 +283,6 @@ impl From<Term<'_>> for OwnedTerm {
             Term::BlankNode(n) => OwnedTerm::BlankNode(n.into()),
             Term::Literal(n) => OwnedTerm::Literal(n.into()),
             Term::Triple(t) => OwnedTerm::Triple(Box::new(OwnedTriple::from(*t))),
-            _ => panic!("Unsupported subject {:?}", t),
         }
     }
 }

@@ -126,7 +126,6 @@ impl<'a> fmt::Display for Literal<'a> {
 ///
 /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
-#[non_exhaustive]
 pub enum Subject<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
@@ -185,7 +184,6 @@ impl<'a> From<GraphName<'a>> for Subject<'a> {
 ///
 /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
-#[non_exhaustive]
 pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),

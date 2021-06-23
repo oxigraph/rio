@@ -201,7 +201,6 @@ impl TripleAllocator {
                 self.string_stack.pop()
             }
             Term::Triple(_) => self.pop_top_triple(),
-            _ => (),
         }
         #[cfg(debug_assertions)] // to ensure that dummy() assertions work
         {
@@ -225,7 +224,6 @@ impl TripleAllocator {
         match self.current().subject {
             Subject::NamedNode(_) | Subject::BlankNode(_) => self.string_stack.pop(),
             Subject::Triple(_) => self.pop_top_triple(),
-            _ => (),
         }
         #[cfg(debug_assertions)] // to ensure that dummy() assertions work
         {
