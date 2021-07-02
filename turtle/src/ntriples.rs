@@ -8,16 +8,16 @@ use rio_api::model::*;
 use rio_api::parser::*;
 use std::io::BufRead;
 
-/// A [N-Triples](https://www.w3.org/TR/n-triples/) streaming parser.
+/// A [N-Triples](https://www.w3.org/TR/n-triples/) and [N-Triples-star](https://w3c.github.io/rdf-star/cg-spec/#n-triples-star) streaming parser.
 ///
-/// It implements the `TriplesParser` trait.
+/// It implements the [`TriplesParser`] trait.
 ///
 /// Its memory consumption is linear in the size of the longest line of the file.
 /// It does not do any allocation during parsing except buffer resizing
 /// if a line significantly longer than the previous is encountered.
 ///
 ///
-/// Count the number of people using the `TriplesParser` API:
+/// Count the number of people using the [`TriplesParser`] API:
 /// ```
 /// use rio_turtle::{NTriplesParser, TurtleError};
 /// use rio_api::parser::TriplesParser;
@@ -86,7 +86,7 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
     }
 }
 
-/// A [N-Quads](https://www.w3.org/TR/n-quads/) streaming parser.
+/// A [N-Quads](https://www.w3.org/TR/n-quads/) and [N-Quads-star](https://w3c.github.io/rdf-star/cg-spec/#n-quads-star) streaming parser.
 ///
 /// It implements the `QuadsParser` trait.
 ///

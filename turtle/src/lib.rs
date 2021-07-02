@@ -1,5 +1,7 @@
 //! Implementation of [N-Triples](https://www.w3.org/TR/n-triples/), [N-Quads](https://www.w3.org/TR/n-quads/), [Turtle](https://www.w3.org/TR/turtle/) and [TriG](https://www.w3.org/TR/trig/) parsers.
 //!
+//! [RDF-star](https://w3c.github.io/rdf-star/cg-spec/) syntaxes are also supported, i.e. [Turtle-star](https://w3c.github.io/rdf-star/cg-spec/#turtle-star), [TriG-star](https://w3c.github.io/rdf-star/cg-spec/#trig-star), [N-Triples-star](https://w3c.github.io/rdf-star/cg-spec/#n-triples-star) and [N-Quads-star](https://w3c.github.io/rdf-star/cg-spec/#n-quads-star).
+//!
 //! All the provided parsers work in streaming from a `BufRead` implementation.
 //! They do not rely on any dependencies outside of Rust standard library.
 //! The parsers are not protected against memory overflows.

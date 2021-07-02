@@ -15,9 +15,9 @@ use quick_xml::escape::unescape_with;
 use quick_xml::events::attributes::Attribute;
 use std::collections::{HashMap, HashSet};
 
-/// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
+/// A [RDF/XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 ///
-/// It implements the `TriplesParser` trait.
+/// It implements the [`TriplesParser`] trait.
 /// It reads the file in streaming.
 /// It does not keep data in memory except a stack for handling nested XML tags, and a set of all
 /// seen `rdf:ID`s to detect duplicate ids and fail according to the specification.
@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 /// Its performances are not optimized yet and hopefully could be significantly enhanced by reducing the
 /// number of allocations and copies done by the parser.
 ///
-/// Count the number of people using the `TriplesParser` API without proper error management:
+/// Count the number of people using the [`TriplesParser`] API without proper error management:
 /// ```
 /// use rio_xml::{RdfXmlParser, RdfXmlError};
 /// use rio_api::parser::TriplesParser;

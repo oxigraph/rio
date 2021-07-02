@@ -1,4 +1,4 @@
-//! Implementation of an [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
+//! Implementation of an [RDF/XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 //!
 //! How to read a file `foo.rdf` and count the number of `rdf:type` triples:
 //! ```no_run
@@ -20,7 +20,7 @@
 //! # Result::<_,RdfXmlError>::Ok(())
 //! ```
 //!
-//! Write some triples in RDF XML into a `Vec` buffer:
+//! Write some triples in RDF/XML into a `Vec` buffer:
 //! ```
 //! use rio_xml::RdfXmlFormatter;
 //! use rio_api::formatter::TriplesFormatter;

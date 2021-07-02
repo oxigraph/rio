@@ -1,5 +1,17 @@
 # Changelog
 
+## master
+
+## Added
+- Support of [RDF-star](https://w3c.github.io/rdf-star/cg-spec/) model.
+- Support of [RDF-star concrete syntaxes](https://w3c.github.io/rdf-star/cg-spec/#concrete-syntaxes). All parsers derived from Turtle now support RDF-star by default.
+
+## Changed
+- The `Triple`s and `Quad` subject has the type `Subject` (union of `NamedNode`, `BlankNode` and `Triple`).
+- The `Quad` graph name has the type `Option<GraphName>` (union of `NamedNode`, `BlankNode` and the default graph).
+- Small optimization in formatters.
+- RDF/XML parser keeps spaces at the beginning and the end of parsed values (literals...).
+
 ## [0.5.3] - 2022-03-10
 
 ### Changed
@@ -63,7 +75,7 @@
 ## [0.3.0] - 2019-08-28
 
 ### Added
-- `TriplesFormatter` and `QuadsFormatter` with implementations for NTriples, NQuads, Turtle, TriG and RDF XML.
+- `TriplesFormatter` and `QuadsFormatter` with implementations for NTriples, NQuads, Turtle, TriG and RDF/XML.
 - `Iri` to `rio_api` that allows to do partial IRI validation and resolution.
 - `ParseError::textual_position` that allows to get the error position from a `TurtleError` or a `RdfXmlError`.
 
@@ -80,7 +92,7 @@
 ### Added
 - `Quad` struct and `QuadParser` trait to `rio_api`.
 - N-Quads (`NQuadsParser`) and TriG (`TriGParser`) parsers to `rio_turtle`.
-- `rdf_xml` crate with an RDF XML parser.
+- `rdf_xml` crate with an RDF/XML parser.
 
 ### Changed
 - `\r` characters could also end comments in Turtle/TriG.

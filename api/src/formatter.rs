@@ -1,4 +1,6 @@
 //! Interfaces for RDF formatters.
+//!
+//! The main types are [`TriplesFormatter`] for triples parsing and [`QuadsFormatter`] for quads parsing.
 
 use crate::model::{Quad, Triple};
 use std::error::Error;

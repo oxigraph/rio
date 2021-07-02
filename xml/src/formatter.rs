@@ -8,7 +8,7 @@ use std::convert::TryInto;
 use std::io;
 use std::io::Write;
 
-/// A [RDF XML](https://www.w3.org/TR/rdf-syntax-grammar/) formatter.
+/// A [RDF/XML](https://www.w3.org/TR/rdf-syntax-grammar/) formatter.
 ///
 /// It implements the `TriplesFormatter` trait.
 ///

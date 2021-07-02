@@ -3,7 +3,7 @@
 use sophia_api::quad::stream::*;
 use std::error::Error;
 
-/// Implement Sophia's `TripleSource` for a Rio `TriplesParser`.
+/// Implement Sophia's `TripleSource` for a Rio [`TriplesParser`].
 macro_rules! impl_triple_source {
     ($parser:ident) => {
         mod as_sophia_triple_source {

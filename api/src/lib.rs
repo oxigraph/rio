@@ -1,4 +1,4 @@
-//! This crate provides basic interfaces and data structures for building RDF parsers.
+//! This crate provides basic interfaces and data structures for building [RDF 1.1](https://www.w3.org/TR/rdf11-concepts/) and [RDF-star](https://w3c.github.io/rdf-star/cg-spec/) parsers.
 //!
 //! It is currently used by the `rio_turtle` and `rio_xml` crates.
 //!

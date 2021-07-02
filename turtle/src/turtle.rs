@@ -11,12 +11,12 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::str;
 
-/// A [Turtle](https://www.w3.org/TR/turtle/) streaming parser.
+/// A [Turtle](https://www.w3.org/TR/turtle/) and [Turtle-star](https://w3c.github.io/rdf-star/cg-spec/#turtle-star) streaming parser.
 ///
-/// It implements the `TriplesParser` trait.
+/// It implements the [`TriplesParser`] trait.
 ///
 ///
-/// Count the number of people using the `TriplesParser` API:
+/// Count the number of people using the [`TriplesParser`] API:
 /// ```
 /// use rio_turtle::{TurtleParser, TurtleError};
 /// use rio_api::parser::TriplesParser;
@@ -80,7 +80,7 @@ impl<R: BufRead> TriplesParser for TurtleParser<R> {
     }
 }
 
-/// A [TriG](https://www.w3.org/TR/trig/) streaming parser.
+/// A [TriG](https://www.w3.org/TR/trig/) and [TriG-star](https://w3c.github.io/rdf-star/cg-spec/#trig-star) streaming parser.
 ///
 /// It implements the `QuadsParser` trait.
 ///

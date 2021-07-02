@@ -1,4 +1,6 @@
 //! Interfaces for RDF parsers.
+//!
+//! The main types are [`TriplesParser`] for triples parsing and [`QuadsParser`] for quads parsing.
 
 #[cfg(feature = "generalized")]
 pub use crate::generalized::parser::*;

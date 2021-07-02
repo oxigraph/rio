@@ -1,4 +1,4 @@
-//! Data structures for [RDF 1.1 Concepts](https://www.w3.org/TR/rdf11-concepts/) like IRI, literal or triples.
+//! Data structures for [RDF 1.1](https://www.w3.org/TR/rdf11-concepts/) and [RDF-star](https://w3c.github.io/rdf-star/cg-spec/) concepts like IRI, literal or triples.
 //!
 //! If the `sophia` feature is enabled, the types defined in [`model`](super::model) implement the appropriate trait from [Sophia]( https://crates.io/crates/sophia_api).
 
@@ -107,6 +107,7 @@ pub enum Literal<'a> {
 }
 
 impl<'a> fmt::Display for Literal<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Literal::Simple { value } => fmt_quoted_str(value, f),
@@ -290,6 +291,7 @@ pub enum GraphName<'a> {
 }
 
 impl<'a> fmt::Display for GraphName<'a> {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GraphName::NamedNode(node) => node.fmt(f),
@@ -299,12 +301,14 @@ impl<'a> fmt::Display for GraphName<'a> {
 }
 
 impl<'a> From<NamedNode<'a>> for GraphName<'a> {
+    #[inline]
     fn from(node: NamedNode<'a>) -> Self {
         GraphName::NamedNode(node)
     }
 }
 
 impl<'a> From<BlankNode<'a>> for GraphName<'a> {
+    #[inline]
     fn from(node: BlankNode<'a>) -> Self {
         GraphName::BlankNode(node)
     }
