@@ -825,7 +825,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                     Some(NodeOrText::Text(text)) => {
                         self.new_literal(text, &language, &datatype_attr).into()
                     }
-                    None => self.new_literal(&"", &language, &datatype_attr).into(),
+                    None => self.new_literal("", &language, &datatype_attr).into(),
                 };
                 let triple = Triple {
                     subject: (&subject).into(),
@@ -896,7 +896,7 @@ impl<R: BufRead> RdfXmlReader<R> {
                         subject: (&subject).into(),
                         predicate: NamedNode { iri: &iri },
                         object: Literal::Typed {
-                            value: &str::from_utf8(&object).map_err(|_| {
+                            value: str::from_utf8(&object).map_err(|_| {
                                 RdfXmlError::msg("The XML literal is not in valid UTF-8".to_owned())
                             })?,
                             datatype: NamedNode {

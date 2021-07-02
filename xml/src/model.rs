@@ -76,15 +76,12 @@ impl From<Literal<'_>> for OwnedLiteral {
 impl<'a> From<&'a OwnedLiteral> for Literal<'a> {
     fn from(n: &'a OwnedLiteral) -> Self {
         match n {
-            OwnedLiteral::Simple { value } => Literal::Simple { value: &value },
+            OwnedLiteral::Simple { value } => Literal::Simple { value },
             OwnedLiteral::LanguageTaggedString { value, language } => {
-                Literal::LanguageTaggedString {
-                    value: &value,
-                    language: &language,
-                }
+                Literal::LanguageTaggedString { value, language }
             }
             OwnedLiteral::Typed { value, datatype } => Literal::Typed {
-                value: &value,
+                value,
                 datatype: datatype.into(),
             },
         }

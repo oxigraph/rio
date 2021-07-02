@@ -147,7 +147,7 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
                 .write_event(Event::Start(property_open))
                 .map_err(map_err)?;
             self.writer
-                .write_event(Event::Text(BytesText::from_plain_str(&content)))
+                .write_event(Event::Text(BytesText::from_plain_str(content)))
                 .map_err(map_err)?;
             self.writer
                 .write_event(Event::End(BytesEnd::borrowed(prop_qname.as_bytes())))

@@ -77,7 +77,7 @@ fn parse_bench(
     let mut group = c.benchmark_group(parser_name);
     group.throughput(Throughput::Bytes(data.len() as u64));
     group.bench_with_input(BenchmarkId::from_parameter(data_name), &data, |b, data| {
-        b.iter(|| bench(&data))
+        b.iter(|| bench(data))
     });
     group.finish();
 }

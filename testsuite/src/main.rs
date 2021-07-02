@@ -35,9 +35,9 @@ fn main() {
     }
 
     let test_path = Path::new(&args[1]);
-    let manifest = TestManifest::new(manifest_url.to_string(), |url| parse_func(url, &test_path));
+    let manifest = TestManifest::new(manifest_url.to_string(), |url| parse_func(url, test_path));
 
-    match evaluate_parser_tests(manifest, |url| parse_func(url, &test_path)) {
+    match evaluate_parser_tests(manifest, |url| parse_func(url, test_path)) {
         Ok(results) => {
             for result in results {
                 match result.outcome {

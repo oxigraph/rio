@@ -254,7 +254,7 @@ impl<'a> Iterator for RdfListIterator<'a> {
                     .graph
                     .object_for_subject_predicate(&current, &rdf::REST)
                 {
-                    Some(OwnedTerm::NamedNode(ref n)) if NamedNode::from(n) == rdf::NIL => None,
+                    Some(OwnedTerm::NamedNode(n)) if NamedNode::from(n) == rdf::NIL => None,
                     Some(OwnedTerm::NamedNode(n)) => Some(n.clone().into()),
                     Some(OwnedTerm::BlankNode(n)) => Some(n.clone().into()),
                     _ => None,
