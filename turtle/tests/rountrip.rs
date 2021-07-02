@@ -6,7 +6,7 @@ use std::io::Cursor;
 
 #[test]
 fn ntriples_roundtrip() -> Result<(), TurtleError> {
-    let graph = example_graph();
+    let graph = example_graph(true);
 
     let mut formatter = NTriplesFormatter::new(Vec::default());
     for t in &graph {
@@ -27,7 +27,7 @@ fn ntriples_roundtrip() -> Result<(), TurtleError> {
 
 #[test]
 fn nquads_roundtrip() -> Result<(), TurtleError> {
-    let dataset = example_dataset();
+    let dataset = example_dataset(true);
 
     let mut formatter = NQuadsFormatter::new(Vec::default());
     for q in &dataset {
@@ -48,7 +48,7 @@ fn nquads_roundtrip() -> Result<(), TurtleError> {
 
 #[test]
 fn turtle_roundtrip() -> Result<(), TurtleError> {
-    let graph = example_graph();
+    let graph = example_graph(true);
 
     let mut formatter = TurtleFormatter::new(Vec::default());
     for t in &graph {
@@ -69,7 +69,7 @@ fn turtle_roundtrip() -> Result<(), TurtleError> {
 
 #[test]
 fn trig_roundtrip() -> Result<(), TurtleError> {
-    let dataset = example_dataset();
+    let dataset = example_dataset(true);
 
     let mut formatter = TriGFormatter::new(Vec::default());
     for q in &dataset {
@@ -91,13 +91,14 @@ fn trig_roundtrip() -> Result<(), TurtleError> {
 #[cfg(feature = "generalized")]
 #[test]
 fn gtrig_roundtrip() -> Result<(), TurtleError> {
-    let dataset = example_dataset();
+    let dataset = example_dataset(false);
 
     let mut formatter = TriGFormatter::new(Vec::default());
     for q in &dataset {
         formatter.format(q)?;
     }
     let trig = formatter.finish()?;
+    println!("{}", ::std::str::from_utf8(&trig).unwrap());
 
     let mut count = 0;
     GTriGParser::new(Cursor::new(&trig), None).parse_all(&mut |_| {
@@ -110,8 +111,20 @@ fn gtrig_roundtrip() -> Result<(), TurtleError> {
     Ok(())
 }
 
+const TRIPLE: Triple<'static> = Triple {
+    subject: Subject::NamedNode(NamedNode {
+        iri: "http://example.com/s",
+    }),
+    predicate: NamedNode {
+        iri: "http://example.com/p",
+    },
+    object: Term::NamedNode(NamedNode {
+        iri: "http://example.com/o",
+    }),
+};
+
 #[allow(clippy::blacklisted_name)]
-fn example_graph() -> Vec<Triple<'static>> {
+fn example_graph(rdf_star: bool) -> Vec<Triple<'static>> {
     let foo = NamedNode {
         iri: "http://example.com/foo",
     };
@@ -130,7 +143,7 @@ fn example_graph() -> Vec<Triple<'static>> {
             iri: "http://example.com/dt",
         },
     };
-    vec![
+    let mut triples = vec![
         Triple {
             subject: foo.into(),
             predicate: bar,
@@ -161,16 +174,24 @@ fn example_graph() -> Vec<Triple<'static>> {
             predicate: bar,
             object: bar.into(),
         },
-        Triple {
-            subject: bnode.into(),
+    ];
+    if rdf_star {
+        triples.push(Triple {
+            subject: (&TRIPLE).into(),
             predicate: bar,
-            object: bar.into(),
-        },
-    ]
+            object: simple.into(),
+        });
+        triples.push(Triple {
+            subject: foo.into(),
+            predicate: bar,
+            object: (&TRIPLE).into(),
+        });
+    }
+    triples
 }
 
-fn example_dataset() -> Vec<Quad<'static>> {
-    example_graph()
+fn example_dataset(rdf_star: bool) -> Vec<Quad<'static>> {
+    example_graph(rdf_star)
         .into_iter()
         .flat_map(|t| {
             vec![

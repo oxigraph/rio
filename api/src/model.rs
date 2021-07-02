@@ -139,11 +139,7 @@ impl<'a> fmt::Display for Subject<'a> {
         match self {
             Subject::NamedNode(node) => node.fmt(f),
             Subject::BlankNode(node) => node.fmt(f),
-            Subject::Triple(triple) => write!(
-                f,
-                "<< {} {} {} >>",
-                triple.subject, triple.predicate, triple.object
-            ),
+            Subject::Triple(triple) => write!(f, "<< {} >>", triple),
         }
     }
 }
@@ -199,11 +195,7 @@ impl<'a> fmt::Display for Term<'a> {
             Term::NamedNode(node) => node.fmt(f),
             Term::BlankNode(node) => node.fmt(f),
             Term::Literal(literal) => literal.fmt(f),
-            Term::Triple(triple) => write!(
-                f,
-                "<< {} {} {} >>",
-                triple.subject, triple.predicate, triple.object
-            ),
+            Term::Triple(triple) => write!(f, "<< {} >>", triple),
         }
     }
 }
@@ -226,6 +218,13 @@ impl<'a> From<Literal<'a>> for Term<'a> {
     #[inline]
     fn from(literal: Literal<'a>) -> Self {
         Term::Literal(literal)
+    }
+}
+
+impl<'a> From<&'a Triple<'a>> for Term<'a> {
+    #[inline]
+    fn from(triple: &'a Triple<'a>) -> Self {
+        Term::Triple(triple)
     }
 }
 
@@ -259,7 +258,7 @@ impl<'a> From<GraphName<'a>> for Term<'a> {
 /// use rio_api::model::Triple;
 ///
 /// assert_eq!(
-///     "<http://example.com/foo> <http://schema.org/sameAs> <http://example.com/foo> .",
+///     "<http://example.com/foo> <http://schema.org/sameAs> <http://example.com/foo>",
 ///     Triple {
 ///         subject: NamedNode { iri: "http://example.com/foo" }.into(),
 ///         predicate: NamedNode { iri: "http://schema.org/sameAs" },
@@ -277,7 +276,7 @@ pub struct Triple<'a> {
 impl<'a> fmt::Display for Triple<'a> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} {} .", self.subject, self.predicate, self.object)
+        write!(f, "{} {} {}", self.subject, self.predicate, self.object)
     }
 }
 
@@ -323,7 +322,7 @@ impl<'a> From<BlankNode<'a>> for GraphName<'a> {
 /// use rio_api::model::Quad;
 ///
 /// assert_eq!(
-///     "<http://example.com/foo> <http://schema.org/sameAs> <http://example.com/foo> <http://example.com/> .",
+///     "<http://example.com/foo> <http://schema.org/sameAs> <http://example.com/foo> <http://example.com/>",
 ///     Quad {
 ///         subject: NamedNode { iri: "http://example.com/foo" }.into(),
 ///         predicate: NamedNode { iri: "http://schema.org/sameAs" },
@@ -343,13 +342,14 @@ pub struct Quad<'a> {
 impl<'a> fmt::Display for Quad<'a> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.graph_name {
-            Some(graph_name) => write!(
+        if let Some(graph_name) = self.graph_name {
+            write!(
                 f,
-                "{} {} {} {} .",
+                "{} {} {} {}",
                 self.subject, self.predicate, self.object, graph_name
-            ),
-            None => write!(f, "{} {} {} .", self.subject, self.predicate, self.object),
+            )
+        } else {
+            write!(f, "{} {} {}", self.subject, self.predicate, self.object)
         }
     }
 }

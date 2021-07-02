@@ -380,7 +380,7 @@ mod test {
         ta.try_push_subject(|b| iri(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b, _| iri(b, "c"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c>"#);
         Ok(())
     }
 
@@ -391,7 +391,7 @@ mod test {
         ta.try_push_subject(|b| bn(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b, _| bn(b, "c"))?;
-        assert_eq!(format!("{}", ta.top()), r#"_:a <b> _:c ."#);
+        assert_eq!(format!("{}", ta.top()), r#"_:a <b> _:c"#);
         Ok(())
     }
 
@@ -402,7 +402,7 @@ mod test {
         ta.try_push_subject(|b| bn(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b, _| sl(b, "c"))?;
-        assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c" ."#);
+        assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c""#);
         Ok(())
     }
 
@@ -413,7 +413,7 @@ mod test {
         ta.try_push_subject(|b| bn(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b1, b2| lt(b1, b2, "c", "en"))?;
-        assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c"@en ."#);
+        assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c"@en"#);
         Ok(())
     }
 
@@ -424,7 +424,7 @@ mod test {
         ta.try_push_subject(|b| bn(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b1, b2| dt(b1, b2, "c", "d"))?;
-        assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c"^^<d> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c"^^<d>"#);
         Ok(())
     }
 
@@ -435,25 +435,25 @@ mod test {
         ta.try_push_subject(|b| iri(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b, _| iri(b, "c"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c>"#);
         ta.pop_object();
         ta.try_push_object(|b, _| iri(b, "d"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <d> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <d>"#);
         ta.pop_object();
         ta.pop_predicate();
         ta.try_push_predicate(|b| iri(b, "e"))?;
         ta.try_push_object(|b, _| iri(b, "f"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<a> <e> <f> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <e> <f>"#);
         ta.pop_object();
         ta.try_push_object(|b, _| iri(b, "g"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<a> <e> <g> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <e> <g>"#);
         ta.pop_object();
         ta.pop_predicate();
         ta.pop_subject();
         ta.try_push_subject(|b| iri(b, "h"))?;
         ta.try_push_predicate(|b| iri(b, "i"))?;
         ta.try_push_object(|b, _| iri(b, "j"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<h> <i> <j> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<h> <i> <j>"#);
         Ok(())
     }
 
@@ -464,14 +464,14 @@ mod test {
         ta.try_push_subject(|b| iri(b, "a"))?;
         ta.try_push_predicate(|b| iri(b, "b"))?;
         ta.try_push_object(|b, _| iri(b, "c"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c>"#);
         ta.push_triple_start();
         ta.try_push_subject(|b| iri(b, "d"))?;
         ta.try_push_predicate(|b| iri(b, "e"))?;
         ta.try_push_object(|b, _| iri(b, "f"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<d> <e> <f> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<d> <e> <f>"#);
         ta.pop_top_triple();
-        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<a> <b> <c>"#);
         ta.pop_top_triple();
         assert_eq!(ta.complete_len, 0);
         assert_eq!(ta.incomplete_len, 0);
@@ -487,12 +487,12 @@ mod test {
             ta.try_push_subject(|b| bn(b, "a"))?;
             ta.try_push_predicate(|b| iri(b, "b"))?;
             ta.try_push_object(|b, _| sl(b, "c"))?;
-            assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c" ."#);
+            assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c""#);
         }
         ta.push_subject_triple();
         ta.try_push_predicate(|b| iri(b, "d"))?;
         ta.try_push_object(|b, _| sl(b, "e"))?;
-        assert_eq!(format!("{}", ta.top()), r#"<< _:a <b> "c" >> <d> "e" ."#);
+        assert_eq!(format!("{}", ta.top()), r#"<< _:a <b> "c" >> <d> "e""#);
         Ok(())
     }
 
@@ -507,10 +507,10 @@ mod test {
             ta.try_push_subject(|b| bn(b, "c"))?;
             ta.try_push_predicate(|b| iri(b, "d"))?;
             ta.try_push_object(|b, _| sl(b, "e"))?;
-            assert_eq!(format!("{}", ta.top()), r#"_:c <d> "e" ."#);
+            assert_eq!(format!("{}", ta.top()), r#"_:c <d> "e""#);
         }
         ta.push_object_triple();
-        assert_eq!(format!("{}", ta.top()), r#"_:a <b> << _:c <d> "e" >> ."#);
+        assert_eq!(format!("{}", ta.top()), r#"_:a <b> << _:c <d> "e" >>"#);
         Ok(())
     }
 
@@ -523,7 +523,7 @@ mod test {
             ta.try_push_subject(|b| bn(b, "a"))?;
             ta.try_push_predicate(|b| iri(b, "b"))?;
             ta.try_push_object(|b, _| sl(b, "c"))?;
-            assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c" ."#);
+            assert_eq!(format!("{}", ta.top()), r#"_:a <b> "c""#);
         }
         ta.push_subject_triple();
         ta.try_push_predicate(|b| iri(b, "d"))?;
@@ -532,12 +532,12 @@ mod test {
             ta.try_push_subject(|b| bn(b, "e"))?;
             ta.try_push_predicate(|b| iri(b, "f"))?;
             ta.try_push_object(|b, _| sl(b, "g"))?;
-            assert_eq!(format!("{}", ta.top()), r#"_:e <f> "g" ."#);
+            assert_eq!(format!("{}", ta.top()), r#"_:e <f> "g""#);
         }
         ta.push_object_triple();
         assert_eq!(
             format!("{}", ta.top()),
-            r#"<< _:a <b> "c" >> <d> << _:e <f> "g" >> ."#
+            r#"<< _:a <b> "c" >> <d> << _:e <f> "g" >>"#
         );
         Ok(())
     }
@@ -555,10 +555,10 @@ mod test {
                 ta.try_push_subject(|b| bn(b, "c"))?;
                 ta.try_push_predicate(|b| iri(b, "d"))?;
                 ta.try_push_object(|b, _| sl(b, "e"))?;
-                assert_eq!(format!("{}", ta.top()), r#"_:c <d> "e" ."#);
+                assert_eq!(format!("{}", ta.top()), r#"_:c <d> "e""#);
             }
             ta.push_object_triple();
-            assert_eq!(format!("{}", ta.top()), r#"_:a <b> << _:c <d> "e" >> ."#);
+            assert_eq!(format!("{}", ta.top()), r#"_:a <b> << _:c <d> "e" >>"#);
         }
         ta.push_subject_triple();
         ta.try_push_predicate(|b| iri(b, "f"))?;
@@ -569,17 +569,17 @@ mod test {
                 ta.try_push_subject(|b| bn(b, "g"))?;
                 ta.try_push_predicate(|b| iri(b, "h"))?;
                 ta.try_push_object(|b, _| sl(b, "i"))?;
-                assert_eq!(format!("{}", ta.top()), r#"_:g <h> "i" ."#);
+                assert_eq!(format!("{}", ta.top()), r#"_:g <h> "i""#);
             }
             ta.push_subject_triple();
             ta.try_push_predicate(|b| iri(b, "j"))?;
             ta.try_push_object(|b, _| sl(b, "k"))?;
-            assert_eq!(format!("{}", ta.top()), r#"<< _:g <h> "i" >> <j> "k" ."#);
+            assert_eq!(format!("{}", ta.top()), r#"<< _:g <h> "i" >> <j> "k""#);
         }
         ta.push_object_triple();
         assert_eq!(
             format!("{}", ta.top()),
-            r#"<< _:a <b> << _:c <d> "e" >> >> <f> << << _:g <h> "i" >> <j> "k" >> ."#
+            r#"<< _:a <b> << _:c <d> "e" >> >> <f> << << _:g <h> "i" >> <j> "k" >>"#
         );
 
         ta.pop_top_triple();

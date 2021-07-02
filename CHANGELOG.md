@@ -10,6 +10,7 @@
 - The `Triple`s and `Quad` subject has the type `Subject` (union of `NamedNode`, `BlankNode` and `Triple`).
 - The `Quad` graph name has the type `Option<GraphName>` (union of `NamedNode`, `BlankNode` and the default graph).
 - Small optimization in formatters.
+- `Triple` and `Quad` formatting do not output training dot.
 - RDF/XML parser keeps spaces at the beginning and the end of parsed values (literals...).
 
 ## [0.5.3] - 2022-03-10

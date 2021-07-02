@@ -42,7 +42,7 @@ impl<W: Write> TriplesFormatter for NTriplesFormatter<W> {
     type Error = io::Error;
 
     fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
-        writeln!(self.write, "{}", triple)
+        writeln!(self.write, "{} .", triple)
     }
 }
 
@@ -86,7 +86,7 @@ impl<W: Write> QuadsFormatter for NQuadsFormatter<W> {
     type Error = io::Error;
 
     fn format(&mut self, quad: &Quad<'_>) -> Result<(), io::Error> {
-        writeln!(self.write, "{}", quad)
+        writeln!(self.write, "{} .", quad)
     }
 }
 
@@ -142,7 +142,7 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
     fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
         if let Some(current_subject_type) = self.current_subject_type {
             let current_subject = current_subject_type.with_value(&self.current_subject);
-            if current_subject == triple.subject {
+            if current_subject == Some(triple.subject) {
                 if self.current_predicate == *triple.predicate.iri {
                     write!(self.write, " , {}", triple.object)?;
                 } else {
@@ -175,7 +175,7 @@ impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
             }
             Subject::Triple(_) => {
                 // can't factorize embedded triple as subject for the moment
-                self.current_subject_type = None;
+                self.current_subject_type = Some(SubjectType::Triple);
             }
         }
         self.current_predicate.clear();
@@ -249,7 +249,7 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
             if current_graph_name == quad.graph_name {
                 if let Some(current_subject_type) = self.current_subject_type {
                     let current_subject = current_subject_type.with_value(&self.current_subject);
-                    if current_subject == quad.subject {
+                    if current_subject == Some(quad.subject) {
                         if self.current_predicate == *quad.predicate.iri {
                             write!(self.write, " , {}", quad.object)?;
                         } else {
@@ -326,8 +326,7 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
                 self.current_subject_type = Some(SubjectType::BlankNode);
             }
             Subject::Triple(_) => {
-                // can't factorize embedded triple as subject for the moment
-                self.current_subject_type = None;
+                self.current_subject_type = Some(SubjectType::Triple);
             }
         }
         self.current_predicate.clear();
@@ -341,13 +340,15 @@ impl<W: Write> QuadsFormatter for TriGFormatter<W> {
 enum SubjectType {
     NamedNode,
     BlankNode,
+    Triple,
 }
 
 impl SubjectType {
-    fn with_value<'a>(&self, value: &'a str) -> Subject<'a> {
+    fn with_value<'a>(&self, value: &'a str) -> Option<Subject<'a>> {
         match self {
-            SubjectType::NamedNode => NamedNode { iri: value }.into(),
-            SubjectType::BlankNode => BlankNode { id: value }.into(),
+            SubjectType::NamedNode => Some(NamedNode { iri: value }.into()),
+            SubjectType::BlankNode => Some(BlankNode { id: value }.into()),
+            SubjectType::Triple => None,
         }
     }
 }
