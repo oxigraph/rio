@@ -1,6 +1,6 @@
 [package]
 name = "rio_api"
-version = "0.5.3"
+version = "0.6.0"
 authors = ["Tpt <thomas@pellissier-tanon.fr>", "Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
@@ -20,4 +20,4 @@ generalized = []
 sophia = ["sophia_api"]
 
 [dependencies]
-sophia_api = { version = "0.6.1", optional = true }
+sophia_api = { version = "0.6", optional = true }

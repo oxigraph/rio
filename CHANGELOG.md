@@ -1,10 +1,10 @@
 # Changelog
 
-## master
+## [0.6.0] - 2021-07-01
 
 ## Added
 - Support of [RDF-star](https://w3c.github.io/rdf-star/cg-spec/) model.
-- Support of [RDF-star concrete syntaxes](https://w3c.github.io/rdf-star/cg-spec/#concrete-syntaxes). All parsers derived from Turtle now support RDF-star by default.
+- Support of [RDF-star concrete syntaxes](https://w3c.github.io/rdf-star/cg-spec/#concrete-syntaxes): NTriples, NQuads, Turtle and TriG now support RDF-star by default.
 
 ## Changed
 - The `Triple`s and `Quad` subject has the type `Subject` (union of `NamedNode`, `BlankNode` and `Triple`).
@@ -13,14 +13,14 @@
 - `Triple` and `Quad` formatting do not output training dot.
 - RDF/XML parser keeps spaces at the beginning and the end of parsed values (literals...).
 
-## [0.5.3] - 2022-03-10
+## [0.5.3] - 2021-03-10
 
 ### Changed
 - RDF/XML parser now resolves custom XML entities
 - Upgrades `quick_xml` dependency to 0.22. This release fixes wasm compilation problems
 
 
-## [0.5.2] - 2022-02-19
+## [0.5.2] - 2021-02-19
 
 ### Added
 - `RdfXmlSerializer::with_indentation` to format RDF/XML with indentation

@@ -1,6 +1,6 @@
 [package]
 name = "rio_turtle"
-version = "0.5.3"
+version = "0.6.0"
 authors = ["Tpt <thomas@pellissier-tanon.fr>", "Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
@@ -22,9 +22,9 @@ sophia = ["rio_api/sophia", "sophia_api"]
 [dependencies]
 oxilangtag = "0.1"
 oxiri = "0.1"
-rio_api = { version = "0.5", path="../api" }
-sophia_api = { version = "0.6.1", optional = true }
+rio_api = { version = "0.6", path="../api" }
+sophia_api = { version = "0.6", optional = true }
 
-[dev-dependencies.sophia_api]
-version = "0.6.1"
-features = ["test_macro"]
+[dev-dependencies]
+sophia_api = { version = "0.6", features = ["test_macro"] }
+
