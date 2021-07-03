@@ -98,7 +98,6 @@ fn gtrig_roundtrip() -> Result<(), TurtleError> {
         formatter.format(q)?;
     }
     let trig = formatter.finish()?;
-    println!("{}", ::std::str::from_utf8(&trig).unwrap());
 
     let mut count = 0;
     GTriGParser::new(Cursor::new(&trig), None).parse_all(&mut |_| {

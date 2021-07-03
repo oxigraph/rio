@@ -1,7 +1,6 @@
 use crate::model::*;
 use crate::vocab::*;
 use rio_api::model::Literal;
-use rio_api::model::NamedNode;
 use std::error::Error;
 use std::fmt;
 
@@ -254,7 +253,7 @@ impl<'a> Iterator for RdfListIterator<'a> {
                     .graph
                     .object_for_subject_predicate(&current, &rdf::REST)
                 {
-                    Some(OwnedTerm::NamedNode(n)) if NamedNode::from(n) == rdf::NIL => None,
+                    Some(OwnedTerm::NamedNode(n)) if n.iri == rdf::NIL.iri => None,
                     Some(OwnedTerm::NamedNode(n)) => Some(n.clone().into()),
                     Some(OwnedTerm::BlankNode(n)) => Some(n.clone().into()),
                     _ => None,
