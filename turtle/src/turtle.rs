@@ -1532,3 +1532,35 @@ pub(crate) fn parse_emb_object<R: BufRead>(
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn issue_46() -> Result<(), TurtleError> {
+        let bnid = crate::utils::BlankNodeIdGenerator::default().generate();
+
+        let ttl = format!(
+            r#"PREFIX : <tag:>
+            :alice :knows [ :name "bob" ].
+            _:{} :name "charlie".
+            "#,
+            bnid.as_ref()
+        );
+
+        let mut blank_subjects = vec![];
+        TurtleParser::new(std::io::Cursor::new(&ttl), None).parse_all(&mut |t| -> Result<
+            (),
+            TurtleError,
+        > {
+            if let Subject::BlankNode(b) = t.subject {
+                blank_subjects.push(b.id.to_string());
+            }
+            Ok(())
+        })?;
+        assert_eq!(blank_subjects.len(), 2);
+        assert_ne!(&blank_subjects[0], &blank_subjects[1]);
+        Ok(())
+    }
+}
