@@ -1129,6 +1129,7 @@ pub(crate) fn parse_blank_node<'a>(
     match read.current() {
         Some(b'_') => {
             parse_blank_node_label(read, buffer)?;
+            bnode_id_generator.disambiguate(buffer);
         }
         Some(b'[') => {
             parse_anon(read, buffer, bnode_id_generator)?;
