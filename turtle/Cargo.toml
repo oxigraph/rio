@@ -23,8 +23,8 @@ sophia = ["rio_api/sophia", "sophia_api"]
 oxilangtag = "0.1"
 oxiri = "0.1"
 rio_api = { version = "0.6", path="../api" }
-sophia_api = { version = "0.7", optional = true }
+sophia_api = { version = ">=0.6,<=0.7", optional = true }
 
 [dev-dependencies]
-sophia_api = { version = "0.7", features = ["test_macro"] }
+sophia_api = { version = ">=0.6,<=0.7", features = ["test_macro"] }
 

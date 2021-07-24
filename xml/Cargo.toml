@@ -23,7 +23,7 @@ oxilangtag = "0.1"
 oxiri = "0.1"
 rio_api = { version = "0.6", path="../api" }
 quick-xml = "0.22"
-sophia_api = { version = "0.7", optional = true }
+sophia_api = { version = ">=0.6,<=0.7", optional = true }
 
 [dev-dependencies]
-sophia_api = { version = "0.7", features = ["test_macro"] }
+sophia_api = { version = ">=0.6,<=0.7", features = ["test_macro"] }
