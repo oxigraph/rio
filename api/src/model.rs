@@ -123,7 +123,7 @@ impl<'a> fmt::Display for Literal<'a> {
     }
 }
 
-/// A restriction of [Term] that can be used in the subject position.
+/// A restriction of [Term] that can be used as the [subject of an RDF triple](https://www.w3.org/TR/rdf11-concepts/#dfn-subject).
 ///
 /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
