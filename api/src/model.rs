@@ -123,13 +123,14 @@ impl<'a> fmt::Display for Literal<'a> {
     }
 }
 
-/// A restriction of [Term] that can be used in the subject position.
+/// A restriction of [Term] that can be used as the [subject of an RDF triple](https://www.w3.org/TR/rdf11-concepts/#dfn-subject).
 ///
 /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
 #[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum Subject<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
+    /// Rio does support [RDF-star](https://w3c.github.io/rdf-star/cg-spec/2021-07-01.html#dfn-triple), which allows triples to be the subject of other triples.
     Triple(&'a Triple<'a>),
 }
 
@@ -185,6 +186,7 @@ pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
     Literal(Literal<'a>),
+    /// Rio does support [RDF-star](https://w3c.github.io/rdf-star/cg-spec/2021-07-01.html#dfn-rdf-star-terms), which allows triples to be terms inside of other triples.
     Triple(&'a Triple<'a>),
 }
 
