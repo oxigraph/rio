@@ -130,6 +130,7 @@ impl<'a> fmt::Display for Literal<'a> {
 pub enum Subject<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
+    /// Rio does support [RDF-star](https://w3c.github.io/rdf-star/cg-spec/2021-07-01.html#dfn-triple), which allows triples to be the subject of other triples.
     Triple(&'a Triple<'a>),
 }
 
@@ -185,6 +186,7 @@ pub enum Term<'a> {
     NamedNode(NamedNode<'a>),
     BlankNode(BlankNode<'a>),
     Literal(Literal<'a>),
+    /// Rio does support [RDF-star](https://w3c.github.io/rdf-star/cg-spec/2021-07-01.html#dfn-rdf-star-terms), which allows triples to be terms inside of other triples.
     Triple(&'a Triple<'a>),
 }
 
