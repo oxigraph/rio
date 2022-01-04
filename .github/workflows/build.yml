@@ -33,3 +33,9 @@ jobs:
       - run: cargo test --verbose --all --all-features
         env:
           RUST_BACKTRACE: 1
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: EmbarkStudios/cargo-deny-action@v1
