@@ -2,7 +2,6 @@ use crate::isomorphism::are_datasets_isomorphic;
 use crate::manifest::{Test, TestManifestError};
 use crate::model::OwnedDataset;
 use crate::report::{TestOutcome, TestResult};
-use chrono::Utc;
 use oxiri::Iri;
 #[cfg(feature = "generalized")]
 use rio_api::model::*;
@@ -81,7 +80,6 @@ pub fn evaluate_parser_tests(
             Ok(TestResult {
                 test: test.id,
                 outcome,
-                date: Utc::now(),
             })
         })
         .collect()

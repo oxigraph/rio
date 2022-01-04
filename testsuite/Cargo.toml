@@ -15,7 +15,6 @@ publish = false
 rio_api = { version = "0.6", path="../api" }
 rio_turtle = { version = "0.6", path="../turtle" }
 rio_xml = { version = "0.6", path="../xml" }
-chrono = "0.4"
 oxiri = "0.1"
 permutohedron = "0.2"
 
