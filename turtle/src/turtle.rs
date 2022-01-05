@@ -150,8 +150,8 @@ pub(crate) const XSD_DECIMAL: &str = "http://www.w3.org/2001/XMLSchema#decimal";
 pub(crate) const XSD_DOUBLE: &str = "http://www.w3.org/2001/XMLSchema#double";
 pub(crate) const XSD_INTEGER: &str = "http://www.w3.org/2001/XMLSchema#integer";
 
-fn parse_statement<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_statement<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     skip_whitespace(&mut parser.read)?;
@@ -197,8 +197,8 @@ fn parse_statement<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TriGParser<R>,
+fn parse_block_or_directive<E: From<TurtleError>>(
+    parser: &mut TriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [1g] 	trigDoc 	::= 	(directive | block)*
@@ -262,8 +262,8 @@ fn parse_block_or_directive<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TriGParser<R>,
+fn parse_triples_or_graph<E: From<TurtleError>>(
+    parser: &mut TriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(Quad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject ( wrappedGraph | predicateObjectList '.' ) | embTriple predicateObjectList '.'
@@ -311,8 +311,8 @@ fn parse_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_triples2<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_triples2<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
@@ -345,8 +345,8 @@ fn parse_triples2<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_wrapped_graph<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
@@ -377,9 +377,9 @@ fn parse_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_label_or_subject<'a, R: BufRead>(
+fn parse_label_or_subject<'a>(
     buffer: &'a mut String,
-    parser: &mut TurtleParser<R>,
+    parser: &mut TurtleParser<impl BufRead>,
 ) -> Result<GraphName<'a>, TurtleError> {
     //[7g] 	labelOrSubject 	::= 	iri | BlankNode
     // (split in two for the case of TriG*)
@@ -399,7 +399,7 @@ fn parse_label_or_subject<'a, R: BufRead>(
 }
 
 fn parse_prefix_id(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
@@ -424,7 +424,7 @@ fn parse_prefix_id(
 }
 
 pub(crate) fn parse_base(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     base_iri: &Option<Iri<String>>,
 ) -> Result<Iri<String>, TurtleError> {
@@ -442,7 +442,7 @@ pub(crate) fn parse_base(
 }
 
 pub(crate) fn parse_sparql_base(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     base_iri: &Option<Iri<String>>,
 ) -> Result<Iri<String>, TurtleError> {
@@ -454,7 +454,7 @@ pub(crate) fn parse_sparql_base(
 }
 
 fn parse_base_iriref(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
 ) -> Result<Iri<String>, TurtleError> {
@@ -468,7 +468,7 @@ fn parse_base_iriref(
 }
 
 fn parse_sparql_prefix(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
@@ -489,8 +489,8 @@ fn parse_sparql_prefix(
     Ok(())
 }
 
-fn parse_triples<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_triples<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
@@ -517,8 +517,8 @@ fn parse_triples<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_predicate_object_list<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
@@ -545,8 +545,8 @@ fn parse_predicate_object_list<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_object_list<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_object_list<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [8] 	objectList 	::= 	object (',' object)*
@@ -582,7 +582,7 @@ fn parse_object_list<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_verb<R: BufRead>(parser: &mut TurtleParser<R>) -> Result<(), TurtleError> {
+fn parse_verb(parser: &mut TurtleParser<impl BufRead>) -> Result<(), TurtleError> {
     // [9] 	verb 	::= 	predicate | 'a'
     if parser.read.current() == Some(b'a') {
         match parser.read.next()? {
@@ -602,8 +602,8 @@ fn parse_verb<R: BufRead>(parser: &mut TurtleParser<R>) -> Result<(), TurtleErro
     }
 }
 
-fn parse_subject<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_subject<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
@@ -647,7 +647,7 @@ fn parse_subject<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_predicate<R: BufRead>(parser: &mut TurtleParser<R>) -> Result<(), TurtleError> {
+fn parse_predicate(parser: &mut TurtleParser<impl BufRead>) -> Result<(), TurtleError> {
     //[11] 	predicate 	::= 	iri
     let TurtleParser {
         read,
@@ -660,8 +660,8 @@ fn parse_predicate<R: BufRead>(parser: &mut TurtleParser<R>) -> Result<(), Turtl
     triple_alloc.try_push_predicate(|b| parse_iri(read, b, temp_buf, base_iri, namespaces))
 }
 
-fn parse_object<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_object<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     //[12] 	object 	::= 	iri | BlankNode | collection | blankNodePropertyList | literal
@@ -750,8 +750,8 @@ fn parse_object<R: BufRead, E: From<TurtleError>>(
     on_triple(*parser.triple_alloc.top())
 }
 
-fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_blank_node_property_list<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<BlankNodeId, E> {
     // [14] 	blankNodePropertyList 	::= 	'[' predicateObjectList ']'
@@ -781,8 +781,8 @@ fn parse_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     Ok(id)
 }
 
-fn parse_collection<R: BufRead, E: From<TurtleError>>(
-    parser: &mut TurtleParser<R>,
+fn parse_collection<E: From<TurtleError>>(
+    parser: &mut TurtleParser<impl BufRead>,
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<Option<BlankNodeId>, E> {
     // [15] 	collection 	::= 	'(' object* ')'
@@ -856,7 +856,7 @@ fn allocate_collection(
 }
 
 pub(crate) fn parse_numeric_literal<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<Literal<'a>, TurtleError> {
     // [16] 	NumericLiteral 	::= 	INTEGER | DECIMAL | DOUBLE
@@ -951,7 +951,7 @@ pub(crate) fn parse_numeric_literal<'a>(
 }
 
 pub(crate) fn parse_rdf_literal<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     annotation_buffer: &'a mut String,
     temp_buffer: &mut String,
@@ -988,7 +988,7 @@ pub(crate) fn parse_rdf_literal<'a>(
 }
 
 pub(crate) fn parse_boolean_literal<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<Literal<'a>, TurtleError> {
     if read.starts_with(b"true") {
@@ -1006,7 +1006,10 @@ pub(crate) fn parse_boolean_literal<'a>(
     })
 }
 
-fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
+fn parse_string(
+    read: &mut LookAheadByteReader<impl BufRead>,
+    buffer: &mut String,
+) -> Result<(), TurtleError> {
     match read.current() {
         Some(b'"') => {
             if read.starts_with(b"\"\"\"") {
@@ -1027,7 +1030,7 @@ fn parse_string(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Resul
 }
 
 pub(crate) fn parse_iri<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
@@ -1042,7 +1045,7 @@ pub(crate) fn parse_iri<'a>(
 }
 
 pub(crate) fn parse_prefixed_name<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     namespaces: &HashMap<String, String>,
 ) -> Result<NamedNode<'a>, TurtleError> {
@@ -1106,7 +1109,7 @@ pub(crate) fn parse_prefixed_name<'a>(
 }
 
 fn has_future_char_valid_pname_local(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
 ) -> Result<bool, TurtleError> {
     let mut i = 1;
     loop {
@@ -1121,7 +1124,7 @@ fn has_future_char_valid_pname_local(
 }
 
 pub(crate) fn parse_blank_node<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<BlankNode<'a>, TurtleError> {
@@ -1140,7 +1143,7 @@ pub(crate) fn parse_blank_node<'a>(
 }
 
 pub(crate) fn parse_pname_ns(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [139s] 	PNAME_NS 	::= 	PN_PREFIX? ':'
@@ -1154,7 +1157,7 @@ pub(crate) fn parse_pname_ns(
 }
 
 fn parse_exponent(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [154s] 	EXPONENT 	::= 	[eE] [+-]? [0-9]+
@@ -1194,7 +1197,7 @@ fn parse_exponent(
 }
 
 fn parse_string_literal_single_quote(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [23] 	STRING_LITERAL_SINGLE_QUOTE 	::= 	"'" ([^#x27#x5C#xA#xD] | ECHAR | UCHAR)* "'" /* #x27=' #x5C=\ #xA=new line #xD=carriage return */
@@ -1202,7 +1205,7 @@ fn parse_string_literal_single_quote(
 }
 
 fn parse_string_literal_long_single_quote(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [24] 	STRING_LITERAL_LONG_SINGLE_QUOTE 	::= 	"'''" (("'" | "''")? ([^'\] | ECHAR | UCHAR))* "'''"
@@ -1210,7 +1213,7 @@ fn parse_string_literal_long_single_quote(
 }
 
 fn parse_string_literal_long_quote(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [25] 	STRING_LITERAL_LONG_QUOTE 	::= 	'"""' (('"' | '""')? ([^"\] | ECHAR | UCHAR))* '"""'
@@ -1218,7 +1221,7 @@ fn parse_string_literal_long_quote(
 }
 
 fn parse_string_literal_long_quote_inner(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     quote: u8,
 ) -> Result<(), TurtleError> {
@@ -1242,7 +1245,7 @@ fn parse_string_literal_long_quote_inner(
 }
 
 fn parse_anon(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     bnode_id_generator: &mut BlankNodeIdGenerator,
 ) -> Result<(), TurtleError> {
@@ -1258,7 +1261,7 @@ fn parse_anon(
 }
 
 fn parse_pn_prefix(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [167s] 	PN_PREFIX 	::= 	PN_CHARS_BASE ((PN_CHARS | '.')* PN_CHARS)?
@@ -1301,7 +1304,7 @@ fn parse_pn_prefix(
 }
 
 fn parse_percent(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [170s] 	PERCENT 	::= 	'%' HEX HEX
@@ -1314,7 +1317,10 @@ fn parse_percent(
     Ok(())
 }
 
-fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(), TurtleError> {
+fn parse_hex(
+    read: &mut LookAheadByteReader<impl BufRead>,
+    buffer: &mut String,
+) -> Result<(), TurtleError> {
     // [171s] 	HEX 	::= 	[0-9] | [A-F] | [a-f]
     let c = read.required_current()?;
     match c {
@@ -1327,7 +1333,7 @@ fn parse_hex(read: &mut impl LookAheadByteRead, buffer: &mut String) -> Result<(
 }
 
 fn parse_pn_local_esc(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [172s] 	PN_LOCAL_ESC 	::= 	'\' ('_' | '~' | '.' | '-' | '!' | '$' | '&' | "'" | '(' | ')' | '*' | '+' | ',' | ';' | '=' | '/' | '?' | '#' | '@' | '%')
@@ -1344,7 +1350,9 @@ fn parse_pn_local_esc(
     }
 }
 
-pub(crate) fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
+pub(crate) fn skip_whitespace(
+    read: &mut LookAheadByteReader<impl BufRead>,
+) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\r') => read.consume()?,
@@ -1362,7 +1370,7 @@ pub(crate) fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), T
 }
 
 pub(crate) fn is_followed_by_space_and_closing_bracket(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
 ) -> Result<bool, TurtleError> {
     for i in 1.. {
         match read.ahead(i)? {
@@ -1388,8 +1396,8 @@ fn on_triple_in_graph<'a, E>(
     }
 }
 
-pub(crate) fn parse_embedded_triple<R: BufRead>(
-    parser: &mut TurtleParser<R>,
+pub(crate) fn parse_embedded_triple(
+    parser: &mut TurtleParser<impl BufRead>,
 ) -> Result<(), TurtleError> {
     // [27t] 	embTriple 	::= 	'<<' embSubject verb embObject '>>'
     parser.read.consume_many(2)?;
@@ -1413,8 +1421,8 @@ pub(crate) fn parse_embedded_triple<R: BufRead>(
     Ok(())
 }
 
-pub(crate) fn parse_emb_subject<R: BufRead>(
-    parser: &mut TurtleParser<R>,
+pub(crate) fn parse_emb_subject(
+    parser: &mut TurtleParser<impl BufRead>,
 ) -> Result<(), TurtleError> {
     // [28t] 	embSubject 	::= 	iri | BlankNode | embTriple
     match parser.read.current() {
@@ -1460,9 +1468,7 @@ pub(crate) fn parse_emb_subject<R: BufRead>(
     }
 }
 
-pub(crate) fn parse_emb_object<R: BufRead>(
-    parser: &mut TurtleParser<R>,
-) -> Result<(), TurtleError> {
+pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Result<(), TurtleError> {
     // [29t] 	embObject 	::= 	iri | BlankNode | literal | embTriple
     match parser.read.required_current()? {
         b'<' => {

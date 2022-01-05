@@ -4,12 +4,13 @@ use oxilangtag::LanguageTag;
 use oxiri::Iri;
 use rio_api::model::*;
 use std::char;
+use std::io::BufRead;
 use std::u8;
 
 pub const MAX_ASCII: u8 = 0x7F;
 
 pub fn parse_iriref_absolute<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<NamedNode<'a>, TurtleError> {
     parse_iriref(read, buffer)?;
@@ -23,7 +24,7 @@ pub fn parse_iriref_absolute<'a>(
 }
 
 pub fn parse_iriref_relative<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
@@ -44,7 +45,7 @@ pub fn parse_iriref_relative<'a>(
 }
 
 pub fn parse_iriref(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [18] 	IRIREF 	::= 	'<' ([^#x00-#x20<>"{}|^`\] | UCHAR)* '>' /* #x00=NULL #01-#x1F=control codes #x20=space */
@@ -76,7 +77,7 @@ pub fn parse_iriref(
 }
 
 pub fn parse_blank_node_label<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<BlankNode<'a>, TurtleError> {
     // [141s] 	BLANK_NODE_LABEL 	::= 	'_:' (PN_CHARS_U | [0-9]) ((PN_CHARS | '.')* PN_CHARS)?
@@ -120,7 +121,7 @@ pub fn parse_blank_node_label<'a>(
 }
 
 pub fn parse_langtag(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [144s] 	LANGTAG 	::= 	'@' [a-zA-Z]+ ('-' [a-zA-Z0-9]+)*
@@ -148,7 +149,7 @@ pub fn parse_langtag(
 }
 
 pub fn parse_string_literal_quote(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     // [22] 	STRING_LITERAL_QUOTE 	::= 	'"' ([^#x22#x5C#xA#xD] | ECHAR | UCHAR)* '"' /* #x22=" #x5C=\ #xA=new line #xD=carriage return */
@@ -156,7 +157,7 @@ pub fn parse_string_literal_quote(
 }
 
 pub fn parse_string_literal_quote_inner(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     quote: u8,
 ) -> Result<(), TurtleError> {
@@ -180,7 +181,7 @@ pub fn parse_string_literal_quote_inner(
 }
 
 pub fn parse_echar_or_uchar(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     read.check_is_current(b'\\')?;
@@ -202,7 +203,7 @@ pub fn parse_echar_or_uchar(
 }
 
 pub(crate) fn read_hexa_char(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     len: usize,
 ) -> Result<char, TurtleError> {
     let point = read_hexa_u32(read, len)?;
@@ -210,7 +211,7 @@ pub(crate) fn read_hexa_char(
         .ok_or_else(|| read.parse_error(TurtleErrorKind::InvalidUnicodeCodePoint(point)))
 }
 
-fn read_hexa_u32(read: &mut impl LookAheadByteRead, len: usize) -> Result<u32, TurtleError> {
+fn read_hexa_u32(read: &mut LookAheadByteReader<impl BufRead>, len: usize) -> Result<u32, TurtleError> {
     let mut value = 0;
     for _ in 0..len {
         read.consume()?;
@@ -279,7 +280,7 @@ pub fn is_possible_pn_chars_unicode(c: char) -> bool {
 }
 
 /// Algorithm from https://encoding.spec.whatwg.org/#utf-8-decoder
-pub fn read_utf8_char(read: &mut impl LookAheadByteRead) -> Result<char, TurtleError> {
+pub fn read_utf8_char(read: &mut LookAheadByteReader<impl BufRead>) -> Result<char, TurtleError> {
     let mut code_point: u32;
     let bytes_needed: usize;
     let mut lower_boundary = 0x80;

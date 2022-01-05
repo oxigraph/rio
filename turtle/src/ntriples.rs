@@ -171,7 +171,7 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
 }
 
 fn parse_triple_line(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<bool, TurtleError> {
     skip_whitespace(read)?;
@@ -199,7 +199,7 @@ fn parse_triple_line(
 }
 
 fn parse_triple(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {
     triple_alloc.push_triple_start();
@@ -217,7 +217,7 @@ fn parse_triple(
 }
 
 fn parse_quad_line<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
     graph_name_buf: &'a mut String,
 ) -> Result<Option<Option<GraphName<'a>>>, TurtleError> {
@@ -254,7 +254,7 @@ fn parse_quad_line<'a>(
 }
 
 fn parse_subject(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {
     match read.required_current()? {
@@ -274,7 +274,7 @@ fn parse_subject(
 }
 
 fn parse_object(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {
     match read.required_current()? {
@@ -295,7 +295,7 @@ fn parse_object(
 }
 
 fn parse_embedded_triple(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {
     debug_assert_eq!(read.current(), Some(b'<'));
@@ -314,7 +314,7 @@ fn parse_embedded_triple(
 }
 
 fn parse_graph_name<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<GraphName<'a>, TurtleError> {
     match read.required_current()? {
@@ -325,7 +325,7 @@ fn parse_graph_name<'a>(
 }
 
 fn parse_literal<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     annotation_buffer: &'a mut String,
 ) -> Result<Literal<'a>, TurtleError> {
@@ -354,7 +354,7 @@ fn parse_literal<'a>(
     }
 }
 
-fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
+fn skip_whitespace(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             Some(b' ') | Some(b'\t') => read.consume()?,
@@ -363,7 +363,7 @@ fn skip_whitespace(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError>
     }
 }
 
-fn skip_until_eol(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> {
+fn skip_until_eol(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             None => return Ok(()),
@@ -378,7 +378,7 @@ fn skip_until_eol(read: &mut impl LookAheadByteRead) -> Result<(), TurtleError> 
 }
 
 fn parse_iriref<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<NamedNode<'a>, TurtleError> {
     parse_iriref_absolute(read, buffer)?;

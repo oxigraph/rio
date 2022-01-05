@@ -5,94 +5,6 @@ use std::io::{BufRead, ErrorKind, Read};
 use std::str;
 use std::u8;
 
-/// An interface for the parsers input providing a lot of utilities
-pub trait LookAheadByteRead {
-    /// Returns the current byte if it exists
-    fn current(&self) -> Option<u8>;
-
-    /// Returns the current byte if it exists or fail if it does not
-    fn required_current(&self) -> Result<u8, TurtleError> {
-        self.current()
-            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEof))
-    }
-
-    /// Returns the next byte if it exists
-    fn next(&mut self) -> Result<Option<u8>, TurtleError> {
-        self.ahead(1)
-    }
-
-    /// Returns the next byte if it exists or fail if it does not
-    fn required_next(&mut self) -> Result<u8, TurtleError> {
-        self.ahead(1)?
-            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEof))
-    }
-
-    /// Returns a future byte if it exists
-    fn ahead(&mut self, count: usize) -> Result<Option<u8>, TurtleError>;
-
-    /// Consumes the current char and moves to the next one
-    fn consume(&mut self) -> Result<(), TurtleError>;
-
-    /// Consumes the many chars and moves to the next one
-    fn consume_many(&mut self, count: usize) -> Result<(), TurtleError>;
-
-    /// Returns the line number of the current byte starting at 1
-    fn line_number(&self) -> u64;
-
-    /// Returns the byte number of the current byte in the line starting at 1
-    fn byte_number(&self) -> u64;
-
-    /// Returns if the current buffer starts with a given byte string. Does not work cross line boundaries
-    fn starts_with(&mut self, prefix: &[u8]) -> bool;
-
-    /// Returns if the current buffer starts with a given byte string in an ASCII case insensitive manner.
-    /// Does not work cross line boundaries
-    fn starts_with_ignore_ascii_case(&mut self, prefix: &[u8]) -> bool;
-
-    fn unexpected_char_error<T>(&self) -> Result<T, TurtleError> {
-        Err(self.parse_error(match self.current() {
-            Some(c) => TurtleErrorKind::UnexpectedByte(c),
-            None => TurtleErrorKind::PrematureEof,
-        }))
-    }
-
-    fn check_is_current(&self, expected: u8) -> Result<(), TurtleError> {
-        if self.current() == Some(expected) {
-            Ok(())
-        } else {
-            self.unexpected_char_error()
-        }
-    }
-
-    fn check_is_next(&mut self, expected: u8) -> Result<(), TurtleError> {
-        if self.next()? == Some(expected) {
-            Ok(())
-        } else {
-            self.unexpected_char_error()
-        }
-    }
-
-    fn parse_error(&self, kind: TurtleErrorKind) -> TurtleError {
-        TurtleError {
-            kind,
-            position: Some(LineBytePosition::new(
-                self.line_number(),
-                self.byte_number(),
-            )),
-        }
-    }
-
-    fn consume_line_end(&mut self) -> Result<(), TurtleError> {
-        loop {
-            match self.current() {
-                None => return Ok(()),
-                Some(b'\n') => return self.consume(),
-                _ => self.consume()?,
-            }
-        }
-    }
-}
-
 /// Reads the file in streaming
 pub struct LookAheadByteReader<R: Read> {
     inner: R,
@@ -114,6 +26,137 @@ impl<R: BufRead> LookAheadByteReader<R> {
             current: Some(b'\n'),
             line_number: 0,
             byte_number: 1,
+        }
+    }
+
+    /// Returns the current byte if it exists
+    pub fn current(&self) -> Option<u8> {
+        self.current
+    }
+    /// Returns the current byte if it exists or fail if it does not
+    pub fn required_current(&self) -> Result<u8, TurtleError> {
+        self.current()
+            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEof))
+    }
+
+    /// Returns the next byte if it exists
+    pub fn next(&mut self) -> Result<Option<u8>, TurtleError> {
+        self.ahead(1)
+    }
+
+    /// Returns the next byte if it exists or fail if it does not
+    pub fn required_next(&mut self) -> Result<u8, TurtleError> {
+        self.ahead(1)?
+            .ok_or_else(|| self.parse_error(TurtleErrorKind::PrematureEof))
+    }
+
+    /// Returns a future byte if it exists
+    pub fn ahead(&mut self, count: usize) -> Result<Option<u8>, TurtleError> {
+        loop {
+            let mut position = count;
+            let (first, second) = self.buffer.as_slices();
+            if position < first.len() {
+                return Ok(Some(first[position]));
+            }
+            position -= first.len();
+            if position < second.len() {
+                return Ok(Some(second[position]));
+            }
+            if self.fill_and_is_end()? {
+                return Ok(None);
+            }
+        }
+    }
+
+    /// Consumes the current char and moves to the next one
+    pub fn consume(&mut self) -> Result<(), TurtleError> {
+        self.consume_many(1)
+    }
+
+    /// Consumes the many chars and moves to the next one
+    pub fn consume_many(&mut self, count: usize) -> Result<(), TurtleError> {
+        for _ in 0..count {
+            if self.buffer.is_empty() {
+                self.fill_and_is_end()?;
+            }
+            if let Some(c) = self.buffer.pop_front() {
+                if c == b'\n' {
+                    self.line_number += 1;
+                    self.byte_number = 1;
+                } else {
+                    self.byte_number += 1;
+                }
+            } else {
+                return Err(self.parse_error(TurtleErrorKind::PrematureEof));
+            }
+        }
+        if self.buffer.is_empty() {
+            self.fill_and_is_end()?;
+        }
+        self.current = self.buffer.front().cloned();
+        Ok(())
+    }
+
+    /// Returns the line number of the current byte starting at 1
+    pub fn line_number(&self) -> u64 {
+        self.line_number
+    }
+    /// Returns the byte number of the current byte in the line starting at 1
+    pub fn byte_number(&self) -> u64 {
+        self.byte_number
+    }
+
+    /// Returns if the current buffer starts with a given byte string. Does not work cross line boundaries
+    pub fn starts_with(&mut self, prefix: &[u8]) -> bool {
+        self.starts_with_with_eq(prefix, |a, b| a == b)
+    }
+
+    /// Returns if the current buffer starts with a given byte string in an ASCII case insensitive manner.
+    /// Does not work cross line boundaries
+    pub fn starts_with_ignore_ascii_case(&mut self, prefix: &[u8]) -> bool {
+        self.starts_with_with_eq(prefix, |a, b| a.eq_ignore_ascii_case(b))
+    }
+
+    pub fn unexpected_char_error<T>(&self) -> Result<T, TurtleError> {
+        Err(self.parse_error(match self.current() {
+            Some(c) => TurtleErrorKind::UnexpectedByte(c),
+            None => TurtleErrorKind::PrematureEof,
+        }))
+    }
+
+    pub fn check_is_current(&self, expected: u8) -> Result<(), TurtleError> {
+        if self.current() == Some(expected) {
+            Ok(())
+        } else {
+            self.unexpected_char_error()
+        }
+    }
+
+    pub fn check_is_next(&mut self, expected: u8) -> Result<(), TurtleError> {
+        if self.next()? == Some(expected) {
+            Ok(())
+        } else {
+            self.unexpected_char_error()
+        }
+    }
+
+    pub fn parse_error(&self, kind: TurtleErrorKind) -> TurtleError {
+        TurtleError {
+            kind,
+            position: Some(LineBytePosition::new(
+                self.line_number(),
+                self.byte_number(),
+            )),
+        }
+    }
+
+    pub fn consume_line_end(&mut self) -> Result<(), TurtleError> {
+        loop {
+            match self.current() {
+                None => return Ok(()),
+                Some(b'\n') => return self.consume(),
+                _ => self.consume()?,
+            }
         }
     }
 
@@ -148,72 +191,6 @@ impl<R: BufRead> LookAheadByteReader<R> {
                 return false;
             }
         }
-    }
-}
-
-impl<R: BufRead> LookAheadByteRead for LookAheadByteReader<R> {
-    fn current(&self) -> Option<u8> {
-        self.current
-    }
-
-    fn ahead(&mut self, count: usize) -> Result<Option<u8>, TurtleError> {
-        loop {
-            let mut position = count;
-            let (first, second) = self.buffer.as_slices();
-            if position < first.len() {
-                return Ok(Some(first[position]));
-            }
-            position -= first.len();
-            if position < second.len() {
-                return Ok(Some(second[position]));
-            }
-            if self.fill_and_is_end()? {
-                return Ok(None);
-            }
-        }
-    }
-
-    fn consume(&mut self) -> Result<(), TurtleError> {
-        self.consume_many(1)
-    }
-
-    fn consume_many(&mut self, count: usize) -> Result<(), TurtleError> {
-        for _ in 0..count {
-            if self.buffer.is_empty() {
-                self.fill_and_is_end()?;
-            }
-            if let Some(c) = self.buffer.pop_front() {
-                if c == b'\n' {
-                    self.line_number += 1;
-                    self.byte_number = 1;
-                } else {
-                    self.byte_number += 1;
-                }
-            } else {
-                return Err(self.parse_error(TurtleErrorKind::PrematureEof));
-            }
-        }
-        if self.buffer.is_empty() {
-            self.fill_and_is_end()?;
-        }
-        self.current = self.buffer.front().cloned();
-        Ok(())
-    }
-
-    fn line_number(&self) -> u64 {
-        self.line_number
-    }
-
-    fn byte_number(&self) -> u64 {
-        self.byte_number
-    }
-
-    fn starts_with(&mut self, prefix: &[u8]) -> bool {
-        self.starts_with_with_eq(prefix, |a, b| a == b)
-    }
-
-    fn starts_with_ignore_ascii_case(&mut self, prefix: &[u8]) -> bool {
-        self.starts_with_with_eq(prefix, |a, b| a.eq_ignore_ascii_case(b))
     }
 }
 

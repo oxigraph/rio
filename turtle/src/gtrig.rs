@@ -96,8 +96,8 @@ impl<R: BufRead> GeneralizedQuadsParser for GTriGParser<R> {
     }
 }
 
-fn parse_generalized_block_or_directive<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_block_or_directive<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [1g] 	trigDoc 	::= 	(directive | block)*
@@ -157,7 +157,7 @@ fn parse_generalized_block_or_directive<R: BufRead, E: From<TurtleError>>(
 }
 
 fn parse_generalized_prefix_id(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
@@ -182,7 +182,7 @@ fn parse_generalized_prefix_id(
 }
 
 fn parse_generalized_sparql_prefix(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     namespaces: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
@@ -203,8 +203,8 @@ fn parse_generalized_sparql_prefix(
     Ok(())
 }
 
-fn parse_generalized_wrapped_graph<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_wrapped_graph<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [5g] 	wrappedGraph 	::= 	'{' triplesBlock? '}'
@@ -234,8 +234,8 @@ fn parse_generalized_wrapped_graph<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_generalized_triples<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_triples<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [6] 	triples 	::= 	subject predicateObjectList | blankNodePropertyList predicateObjectList?
@@ -257,8 +257,8 @@ fn parse_generalized_triples<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_generalized_triples2<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_triples2<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [4g] 	triples2 	::= 	blankNodePropertyList predicateObjectList? '.' | collection predicateObjectList '.'
@@ -284,8 +284,8 @@ fn parse_generalized_triples2<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_generalized_triples_or_graph<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_triples_or_graph<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject (wrappedGraph | predicateObjectList '.')
@@ -305,8 +305,8 @@ fn parse_generalized_triples_or_graph<R: BufRead, E: From<TurtleError>>(
     Ok(())
 }
 
-fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_blank_node_property_list<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     parser.read.check_is_current(b'[')?;
@@ -329,8 +329,8 @@ fn parse_generalized_blank_node_property_list<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_collection<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [15] 	collection 	::= 	'(' object* ')'
@@ -395,8 +395,8 @@ fn parse_generalized_collection<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_generalized_predicate_object_list<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_predicate_object_list<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [7] 	predicateObjectList 	::= 	verb objectList (';' (verb objectList)?)*
@@ -420,8 +420,8 @@ fn parse_generalized_predicate_object_list<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_verb<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [9] 	verb 	::= 	predicate | 'a'
@@ -440,8 +440,8 @@ fn parse_generalized_verb<R: BufRead, E: From<TurtleError>>(
     parse_generalized_node(parser, on_quad)
 }
 
-fn parse_generalized_object_list<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_object_list<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     // [8] 	objectList 	::= 	object (',' object)*
@@ -459,8 +459,8 @@ fn parse_generalized_object_list<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_node<E: From<TurtleError>>(
+    parser: &mut GTriGParser<impl BufRead>,
     on_quad: &mut impl FnMut(GeneralizedQuad<'_>) -> Result<(), E>,
 ) -> Result<(), E> {
     //[10] 	subject 	::= 	iri | BlankNode | collection
@@ -483,8 +483,8 @@ fn parse_generalized_node<R: BufRead, E: From<TurtleError>>(
     }
 }
 
-fn parse_generalized_term<R: BufRead>(
-    parser: &mut GTriGParser<R>,
+fn parse_generalized_term(
+    parser: &mut GTriGParser<impl BufRead>,
     graph_name: bool,
 ) -> Result<(), TurtleError> {
     let stack = if graph_name {
@@ -556,7 +556,7 @@ fn parse_generalized_term<R: BufRead>(
 }
 
 pub(crate) fn parse_generalized_iri(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
@@ -571,7 +571,7 @@ pub(crate) fn parse_generalized_iri(
 }
 
 pub fn parse_generalized_iriref(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
@@ -592,7 +592,7 @@ pub fn parse_generalized_iriref(
 }
 
 fn parse_literal<'a>(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     annotation_buffer: &'a mut String,
     temp_buffer: &mut String,
@@ -637,7 +637,7 @@ fn parse_literal<'a>(
 }
 
 pub(crate) fn parse_variable_name(
-    read: &mut impl LookAheadByteRead,
+    read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &mut String,
 ) -> Result<(), TurtleError> {
     let c = read.required_current()?;
