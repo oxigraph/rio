@@ -1,0 +1,37 @@
+[package]
+name = "rio-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rio_api = { path = "../api" }
+rio_turtle = { path = "../turtle" }
+rio_xml = { path = "../xml" }
+
+[workspace]
+
+[[bin]]
+name = "ntriples"
+path = "fuzz_targets/ntriples.rs"
+
+[[bin]]
+name = "nquads"
+path = "fuzz_targets/nquads.rs"
+
+[[bin]]
+name = "turtle"
+path = "fuzz_targets/turtle.rs"
+
+[[bin]]
+name = "trig"
+path = "fuzz_targets/trig.rs"
+
+[[bin]]
+name = "rdf_xml"
+path = "fuzz_targets/rdf_xml.rs"
