@@ -1,3 +1,4 @@
+use crate::MAX_STACK_SIZE;
 use oxilangtag::LanguageTagParseError;
 use oxiri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
@@ -30,6 +31,7 @@ pub enum TurtleErrorKind {
         tag: String,
         error: LanguageTagParseError,
     },
+    StackOverflow,
 }
 
 impl fmt::Display for TurtleError {
@@ -50,6 +52,9 @@ impl fmt::Display for TurtleError {
             }
             TurtleErrorKind::InvalidLanguageTag { tag, error } => {
                 write!(f, "error while parsing language tag '{}': {}", tag, error)
+            }
+            TurtleErrorKind::StackOverflow => {
+                write!(f, "The parser encountered more than {} nested constructions. This number is limited in order to avoid stack overflow OS errors.", MAX_STACK_SIZE)
             }
         }?;
         if let Some(position) = self.position {

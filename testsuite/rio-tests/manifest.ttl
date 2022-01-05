@@ -13,6 +13,7 @@
 		<#language_normalization_xml>
 		<#xml_entities>
 		<#literal_value_space>
+		<#bad_parentheses>
 	) .
 
 <#no_end_line_jump>
@@ -54,3 +55,8 @@
 	mf:name "spaces in literal values" ;
 	mf:action <literal_value_space.rdf> ;
 	mf:result <literal_value_space.nt> .
+
+<#bad_parentheses>
+	rdf:type rdft:TestTurtleNegativeSyntax ;
+	mf:name "a lot of parentheses that might generate a stack overflow" ;
+	mf:action <bad_parentheses.ttl> .

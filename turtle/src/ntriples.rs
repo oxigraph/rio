@@ -300,6 +300,7 @@ fn parse_embedded_triple(
 ) -> Result<(), TurtleError> {
     debug_assert_eq!(read.current(), Some(b'<'));
     debug_assert_eq!(read.next()?, Some(b'<'));
+    read.increment_stack_size()?;
     read.consume_many(2)?;
 
     skip_whitespace(read)?;
@@ -310,6 +311,7 @@ fn parse_embedded_triple(
     read.consume()?;
     read.check_is_current(b'>')?;
     read.consume()?;
+    read.decrement_stack_size();
     skip_whitespace(read)
 }
 

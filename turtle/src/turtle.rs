@@ -755,6 +755,7 @@ fn parse_blank_node_property_list<E: From<TurtleError>>(
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<BlankNodeId, E> {
     // [14] 	blankNodePropertyList 	::= 	'[' predicateObjectList ']'
+    parser.read.increment_stack_size()?;
     parser.read.check_is_current(b'[')?;
     parser.read.consume()?;
     skip_whitespace(&mut parser.read)?;
@@ -778,6 +779,7 @@ fn parse_blank_node_property_list<E: From<TurtleError>>(
 
     parser.triple_alloc.pop_subject();
     parser.triple_alloc.pop_top_empty_triple();
+    parser.read.decrement_stack_size();
     Ok(id)
 }
 
@@ -786,6 +788,7 @@ fn parse_collection<E: From<TurtleError>>(
     on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
 ) -> Result<Option<BlankNodeId>, E> {
     // [15] 	collection 	::= 	'(' object* ')'
+    parser.read.increment_stack_size()?;
     parser.read.check_is_current(b'(')?;
     parser.read.consume()?;
     let mut root: Option<BlankNodeId> = None;
@@ -836,6 +839,7 @@ fn parse_collection<E: From<TurtleError>>(
                 on_triple(*parser.triple_alloc.top())?;
                 parser.triple_alloc.pop_top_triple();
             }
+            parser.read.decrement_stack_size();
             return Ok(root);
         }
     }
@@ -1400,6 +1404,7 @@ pub(crate) fn parse_embedded_triple(
     parser: &mut TurtleParser<impl BufRead>,
 ) -> Result<(), TurtleError> {
     // [27t] 	embTriple 	::= 	'<<' embSubject verb embObject '>>'
+    parser.read.increment_stack_size()?;
     parser.read.consume_many(2)?;
     skip_whitespace(&mut parser.read)?;
 
@@ -1417,7 +1422,7 @@ pub(crate) fn parse_embedded_triple(
     parser.read.check_is_current(b'>')?;
     parser.read.check_is_next(b'>')?;
     parser.read.consume_many(2)?;
-
+    parser.read.decrement_stack_size();
     Ok(())
 }
 

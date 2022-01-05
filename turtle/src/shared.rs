@@ -211,7 +211,10 @@ pub(crate) fn read_hexa_char(
         .ok_or_else(|| read.parse_error(TurtleErrorKind::InvalidUnicodeCodePoint(point)))
 }
 
-fn read_hexa_u32(read: &mut LookAheadByteReader<impl BufRead>, len: usize) -> Result<u32, TurtleError> {
+fn read_hexa_u32(
+    read: &mut LookAheadByteReader<impl BufRead>,
+    len: usize,
+) -> Result<u32, TurtleError> {
     let mut value = 0;
     for _ in 0..len {
         read.consume()?;

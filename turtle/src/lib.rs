@@ -70,3 +70,6 @@ pub use gtrig::GTriGParser;
 
 #[cfg(feature = "sophia_api")]
 mod sophia;
+
+/// Maximal number of nested structures (collections, blank node, quoted triples...).
+const MAX_STACK_SIZE: usize = 128;
