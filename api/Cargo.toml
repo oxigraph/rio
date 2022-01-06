@@ -20,4 +20,4 @@ generalized = []
 sophia = ["sophia_api"]
 
 [dependencies]
-sophia_api = { version = ">=0.6,<=0.7", optional = true }
+sophia_api = { version = ">=0.6, <=0.8", optional = true }
