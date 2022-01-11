@@ -1,6 +1,6 @@
 [package]
 name = "rio_testsuite"
-version = "0.6.1"
+version = "0.6.2"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
