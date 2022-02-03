@@ -20,5 +20,5 @@ generalized = ["rio_api/generalized"]
 
 [dependencies]
 oxilangtag = "0.1"
-oxiri = ">=0.1,<0.3"
+oxiri = "0.2"
 rio_api = { version = "0.6", path="../api" }
