@@ -34,7 +34,7 @@ pub struct RdfXmlFormatter<W: Write> {
 
 impl<W: Write> RdfXmlFormatter<W> {
     /// Builds a new formatter from a `Write` implementation and starts writing
-    pub fn new(write: W) -> Result<Self, io::Error> {
+    pub fn new(write: W) -> io::Result<Self> {
         Self {
             writer: Writer::new(write),
             current_subject: None,
@@ -45,7 +45,7 @@ impl<W: Write> RdfXmlFormatter<W> {
     /// Builds a new formatter from a `Write` implementation and starts writing.
     ///
     /// The output is indented with `indentation_size` spaces.
-    pub fn with_indentation(write: W, indentation_size: usize) -> Result<Self, io::Error> {
+    pub fn with_indentation(write: W, indentation_size: usize) -> io::Result<Self> {
         Self {
             writer: Writer::new_with_indent(write, b' ', indentation_size),
             current_subject: None,
@@ -53,7 +53,7 @@ impl<W: Write> RdfXmlFormatter<W> {
         .write_start()
     }
 
-    fn write_start(mut self) -> Result<Self, io::Error> {
+    fn write_start(mut self) -> io::Result<Self> {
         self.writer
             .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
             .map_err(map_err)?;
@@ -66,7 +66,7 @@ impl<W: Write> RdfXmlFormatter<W> {
     }
 
     /// Finishes writing and returns the underlying `Write`
-    pub fn finish(mut self) -> Result<W, io::Error> {
+    pub fn finish(mut self) -> io::Result<W> {
         if self.current_subject.is_some() {
             self.writer
                 .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
@@ -75,14 +75,16 @@ impl<W: Write> RdfXmlFormatter<W> {
         self.writer
             .write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
             .map_err(map_err)?;
-        Ok(self.writer.into_inner())
+        let mut inner = self.writer.into_inner();
+        inner.flush()?;
+        Ok(inner)
     }
 }
 
 impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
+    fn format(&mut self, triple: &Triple<'_>) -> io::Result<()> {
         // We open a new rdf:Description if useful
         if self.current_subject.as_ref().map(|v| v.into()) != Some(triple.subject) {
             if self.current_subject.is_some() {

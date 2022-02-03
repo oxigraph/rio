@@ -12,7 +12,7 @@ fn ntriples_roundtrip() -> Result<(), TurtleError> {
     for t in &graph {
         formatter.format(t)?;
     }
-    let nt = formatter.finish();
+    let nt = formatter.finish()?;
 
     let mut count = 0;
     NTriplesParser::new(Cursor::new(&nt)).parse_all(&mut |_| {
@@ -33,7 +33,7 @@ fn nquads_roundtrip() -> Result<(), TurtleError> {
     for q in &dataset {
         formatter.format(q)?;
     }
-    let nt = formatter.finish();
+    let nt = formatter.finish()?;
 
     let mut count = 0;
     NQuadsParser::new(Cursor::new(&nt)).parse_all(&mut |_| {

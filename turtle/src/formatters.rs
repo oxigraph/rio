@@ -33,15 +33,16 @@ impl<W: Write> NTriplesFormatter<W> {
     }
 
     /// Finishes writing and returns the underlying `Write`
-    pub fn finish(self) -> W {
-        self.write
+    pub fn finish(mut self) -> io::Result<W> {
+        self.write.flush()?;
+        Ok(self.write)
     }
 }
 
 impl<W: Write> TriplesFormatter for NTriplesFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
+    fn format(&mut self, triple: &Triple<'_>) -> io::Result<()> {
         writeln!(self.write, "{} .", triple)
     }
 }
@@ -77,15 +78,16 @@ impl<W: Write> NQuadsFormatter<W> {
     }
 
     /// Finishes writing and returns the underlying `Write`
-    pub fn finish(self) -> W {
-        self.write
+    pub fn finish(mut self) -> io::Result<W> {
+        self.write.flush()?;
+        Ok(self.write)
     }
 }
 
 impl<W: Write> QuadsFormatter for NQuadsFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, quad: &Quad<'_>) -> Result<(), io::Error> {
+    fn format(&mut self, quad: &Quad<'_>) -> io::Result<()> {
         writeln!(self.write, "{} .", quad)
     }
 }
@@ -128,10 +130,11 @@ impl<W: Write> TurtleFormatter<W> {
     }
 
     /// Finishes writing and returns the underlying `Write`
-    pub fn finish(mut self) -> Result<W, io::Error> {
+    pub fn finish(mut self) -> io::Result<W> {
         if self.current_subject_type.is_some() {
             writeln!(self.write, " .")?;
         }
+        self.write.flush()?;
         Ok(self.write)
     }
 }
@@ -139,7 +142,7 @@ impl<W: Write> TurtleFormatter<W> {
 impl<W: Write> TriplesFormatter for TurtleFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, triple: &Triple<'_>) -> Result<(), io::Error> {
+    fn format(&mut self, triple: &Triple<'_>) -> io::Result<()> {
         if let Some(current_subject_type) = self.current_subject_type {
             let current_subject = current_subject_type.with_value(&self.current_subject);
             if current_subject == Some(triple.subject) {
@@ -228,13 +231,14 @@ impl<W: Write> TriGFormatter<W> {
     }
 
     /// Finishes writing and returns the underlying `Write`
-    pub fn finish(mut self) -> Result<W, io::Error> {
+    pub fn finish(mut self) -> io::Result<W> {
         if self.current_subject_type.is_some() {
             writeln!(self.write, " .")?;
         }
         if self.current_graph_name_type.and_then(|t| t).is_some() {
             writeln!(self.write, "}}")?;
         }
+        self.write.flush()?;
         Ok(self.write)
     }
 }
@@ -242,7 +246,7 @@ impl<W: Write> TriGFormatter<W> {
 impl<W: Write> QuadsFormatter for TriGFormatter<W> {
     type Error = io::Error;
 
-    fn format(&mut self, quad: &Quad<'_>) -> Result<(), io::Error> {
+    fn format(&mut self, quad: &Quad<'_>) -> io::Result<()> {
         if let Some(current_graph_name_type) = self.current_graph_name_type {
             let current_graph_name =
                 current_graph_name_type.map(|t| t.with_value(&self.current_graph_name));
