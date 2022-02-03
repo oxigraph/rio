@@ -17,14 +17,8 @@ all-features = true
 [features]
 default = []
 generalized = ["rio_api/generalized"]
-sophia = ["rio_api/sophia", "sophia_api"]
 
 [dependencies]
 oxilangtag = "0.1"
 oxiri = ">=0.1,<0.3"
 rio_api = { version = "0.6", path="../api" }
-sophia_api = { version = ">=0.6, <=0.8", optional = true }
-
-[dev-dependencies]
-sophia_api = { version = ">=0.6, <=0.8", features = ["test_macro"] }
-

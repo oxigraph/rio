@@ -1,6 +1,4 @@
 //! Data structures for [RDF 1.1](https://www.w3.org/TR/rdf11-concepts/) and [RDF-star](https://w3c.github.io/rdf-star/cg-spec/) concepts like IRI, literal or triples.
-//!
-//! If the `sophia` feature is enabled, the types defined in [`model`](super::model) implement the appropriate trait from [Sophia]( https://crates.io/crates/sophia_api).
 
 #[cfg(feature = "generalized")]
 pub use crate::generalized::model::*;

@@ -30,8 +30,6 @@
 //! Replace `TurtleParser` by `NTriplesParser`, `NQuadsParser` or `TriGParser` to read an N-Triples, N-Quads or TriG file instead.
 //!
 //! `NTriplesParser` and `NQuadsParser` do not use the second argument of the `new` function that is the IRI of the file.
-//!
-//! [Sophia](https://crates.io/crates/sophia_api) adapters for Rio parsers are provided if the `sophia` feature is enabled.
 #![deny(
     future_incompatible,
     nonstandard_style,
@@ -67,9 +65,6 @@ pub use turtle::TurtleParser;
 
 #[cfg(feature = "generalized")]
 pub use gtrig::GTriGParser;
-
-#[cfg(feature = "sophia_api")]
-mod sophia;
 
 /// Maximal number of nested structures (collections, blank node, quoted triples...).
 ///
