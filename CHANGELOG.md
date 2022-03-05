@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0] - 2022-03-05
+
+## Removed
+- Adapters for [sophia_api](https://github.com/pchampin/sophia_rs).
+- Support of [oxiri](https://github.com/oxigraph/oxiri) 0.1.
+
+## Changed
+- Formatters now flushes when the `finish` method is called.
+- The `NTriplesFormatter` and `NQuadsFormatter` `finish` method is also now fallible.
+
 
 ## [0.6.2] - 2022-01-11
 
