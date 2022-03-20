@@ -63,6 +63,10 @@ impl<R: BufRead> TurtleParser<R> {
             temp_buf: String::default(),
         }
     }
+
+    pub fn namespaces(&self) -> &HashMap<String, String> {
+        &self.namespaces
+    }
 }
 
 impl<R: BufRead> TriplesParser for TurtleParser<R> {
@@ -1548,6 +1552,27 @@ pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Resul
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn namespaces() -> Result<(), TurtleError> {
+        let ttl = format!(
+            r#"PREFIX : <tag:>
+            :alice :knows [ :name "bob" ].
+            "#,
+        );
+        let mut parser = TurtleParser::new(std::io::Cursor::new(&ttl), None);
+
+        parser.parse_all(&mut |_t| -> Result<(), TurtleError> {
+            // Do Nothing
+            Ok(())
+        })?;
+
+        let namespaces = parser.namespaces();
+        assert_eq!(namespaces.len(), 1);
+        assert_eq!(namespaces[""], "tag:");
+
+        Ok(())
+    }
 
     #[test]
     fn issue_46() -> Result<(), TurtleError> {
