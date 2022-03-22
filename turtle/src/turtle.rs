@@ -64,6 +64,53 @@ impl<R: BufRead> TurtleParser<R> {
         }
     }
 
+    /// The list of namespaces considered at the current step of the parsing.
+    ///
+    /// This method returns the mapping from prefix name to prefix value.
+    /// It is empty at the beginning of the parsing and gets updated when prefixes are encountered.
+    /// It should be full at the end of the parsing (but if a namespace is overridden, only the latest version will be returned).
+    ///
+    /// ```
+    /// use std::collections::HashMap;
+    /// use rio_api::model::NamedNode;
+    /// use rio_api::parser::TriplesParser;
+    /// use rio_turtle::{TurtleError, TurtleParser};
+    ///
+    /// let file = b"@prefix schema: <http://schema.org/> .
+    /// @prefix ex: <http://example.com/> .
+    /// ex: a schema:WebSite .
+    /// @prefix ex: <http://example.org/> .
+    /// ex: a schema:WebSite .";
+    ///
+    /// let mut parser = TurtleParser::new(file.as_ref(), None);
+    /// assert_eq!(parser.namespaces(), &HashMap::new()); // No prefix at the beginning
+    ///
+    /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the first prefix"));
+    /// assert_eq!(parser.namespaces().len(), 1);
+    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
+    ///
+    /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the second prefix"));
+    /// assert_eq!(parser.namespaces().len(), 2);
+    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.namespaces()["ex"], "http://example.com/");
+    ///
+    /// let _: Result<_, TurtleError> = parser.parse_step(&mut |t| {
+    ///     assert_eq!(t.subject, NamedNode { iri: "http://example.com/" }.into()); // We read the first triple
+    ///     Ok(())
+    /// });
+    ///
+    /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the new version of the ex: prefix"));
+    /// assert_eq!(parser.namespaces().len(), 2);
+    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.namespaces()["ex"], "http://example.org/");  
+    ///
+    /// let _: Result<_, TurtleError> = parser.parse_step(&mut |t| {
+    ///     assert_eq!(t.subject, NamedNode { iri: "http://example.org/" }.into()); // We read the second triple
+    ///    Ok(())
+    /// });
+    ///
+    /// # Result::<_,TurtleError>::Ok(())
+    /// ```
     pub fn namespaces(&self) -> &HashMap<String, String> {
         &self.namespaces
     }
@@ -1552,27 +1599,6 @@ pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Resul
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn namespaces() -> Result<(), TurtleError> {
-        let ttl = format!(
-            r#"PREFIX : <tag:>
-            :alice :knows [ :name "bob" ].
-            "#,
-        );
-        let mut parser = TurtleParser::new(std::io::Cursor::new(&ttl), None);
-
-        parser.parse_all(&mut |_t| -> Result<(), TurtleError> {
-            // Do Nothing
-            Ok(())
-        })?;
-
-        let namespaces = parser.namespaces();
-        assert_eq!(namespaces.len(), 1);
-        assert_eq!(namespaces[""], "tag:");
-
-        Ok(())
-    }
 
     #[test]
     fn issue_46() -> Result<(), TurtleError> {
