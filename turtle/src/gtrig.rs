@@ -48,7 +48,7 @@ use std::str;
 pub struct GTriGParser<R: BufRead> {
     read: LookAheadByteReader<R>,
     base_iri: Option<Iri<String>>,
-    namespaces: HashMap<String, String>,
+    prefixes: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
     term_stack: OwnedTermStack,
     graph_stack: OwnedTermStack,
@@ -61,7 +61,7 @@ impl<R: BufRead> GTriGParser<R> {
         Self {
             read: LookAheadByteReader::new(reader),
             base_iri,
-            namespaces: HashMap::default(),
+            prefixes: HashMap::default(),
             bnode_id_generator: BlankNodeIdGenerator::default(),
             graph_stack: OwnedTermStack::new(),
             term_stack: OwnedTermStack::new(),
@@ -109,7 +109,7 @@ fn parse_generalized_block_or_directive<E: From<TurtleError>>(
     } else if parser.read.starts_with(b"@prefix") {
         parse_generalized_prefix_id(
             &mut parser.read,
-            &mut parser.namespaces,
+            &mut parser.prefixes,
             &parser.base_iri,
             &mut parser.temp_buf,
         )?;
@@ -131,7 +131,7 @@ fn parse_generalized_block_or_directive<E: From<TurtleError>>(
     } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX") {
         parse_generalized_sparql_prefix(
             &mut parser.read,
-            &mut parser.namespaces,
+            &mut parser.prefixes,
             &parser.base_iri,
             &mut parser.temp_buf,
         )?;
@@ -158,7 +158,7 @@ fn parse_generalized_block_or_directive<E: From<TurtleError>>(
 
 fn parse_generalized_prefix_id(
     read: &mut LookAheadByteReader<impl BufRead>,
-    namespaces: &mut HashMap<String, String>,
+    prefixes: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
 ) -> Result<(), TurtleError> {
@@ -177,13 +177,13 @@ fn parse_generalized_prefix_id(
     read.check_is_current(b'.')?;
     read.consume()?;
 
-    namespaces.insert(prefix, value);
+    prefixes.insert(prefix, value);
     Ok(())
 }
 
 fn parse_generalized_sparql_prefix(
     read: &mut LookAheadByteReader<impl BufRead>,
-    namespaces: &mut HashMap<String, String>,
+    prefixes: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
 ) -> Result<(), TurtleError> {
@@ -199,7 +199,7 @@ fn parse_generalized_sparql_prefix(
     parse_generalized_iriref(read, &mut value, temp_buffer, base_iri)?;
     skip_whitespace(read)?;
 
-    namespaces.insert(prefix, value);
+    prefixes.insert(prefix, value);
     Ok(())
 }
 
@@ -500,7 +500,7 @@ fn parse_generalized_term(
                 &mut named_node.value,
                 &mut parser.temp_buf,
                 &parser.base_iri,
-                &parser.namespaces,
+                &parser.prefixes,
             )
         }
         b'_' | b'[' => {
@@ -520,7 +520,7 @@ fn parse_generalized_term(
                 &mut literal.extra,
                 &mut parser.temp_buf,
                 &parser.base_iri,
-                &parser.namespaces,
+                &parser.prefixes,
             )?;
             Ok(())
         }
@@ -538,7 +538,7 @@ fn parse_generalized_term(
                     &mut literal.extra,
                     &mut parser.temp_buf,
                     &parser.base_iri,
-                    &parser.namespaces,
+                    &parser.prefixes,
                 )
                 .map(|_| ())
             } else {
@@ -548,7 +548,7 @@ fn parse_generalized_term(
                     &mut named_node.value,
                     &mut parser.temp_buf,
                     &parser.base_iri,
-                    &parser.namespaces,
+                    &parser.prefixes,
                 )
             }
         }
@@ -560,13 +560,13 @@ pub(crate) fn parse_generalized_iri(
     buffer: &mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
+    prefixes: &HashMap<String, String>,
 ) -> Result<(), TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
     if read.current() == Some(b'<') {
         parse_generalized_iriref(read, buffer, temp_buffer, base_iri)
     } else {
-        parse_prefixed_name(read, buffer, namespaces).map(|_| ())
+        parse_prefixed_name(read, buffer, prefixes).map(|_| ())
     }
 }
 
@@ -597,7 +597,7 @@ fn parse_literal<'a>(
     annotation_buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
+    prefixes: &HashMap<String, String>,
 ) -> Result<OwnedTermKind, TurtleError> {
     // [13] 	literal 	::= 	RDFLiteral | NumericLiteral | BooleanLiteral
     match read.required_current()? {
@@ -608,7 +608,7 @@ fn parse_literal<'a>(
                 annotation_buffer,
                 temp_buffer,
                 base_iri,
-                namespaces,
+                prefixes,
             )? {
                 Literal::LanguageTaggedString { .. } => Ok(OwnedTermKind::LiteralLanguage),
                 Literal::Simple { .. } => Ok(OwnedTermKind::LiteralSimple),

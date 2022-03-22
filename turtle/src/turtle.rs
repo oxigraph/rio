@@ -43,7 +43,7 @@ use std::str;
 pub struct TurtleParser<R: BufRead> {
     read: LookAheadByteReader<R>,
     base_iri: Option<Iri<String>>,
-    namespaces: HashMap<String, String>,
+    prefixes: HashMap<String, String>,
     bnode_id_generator: BlankNodeIdGenerator,
     triple_alloc: TripleAllocator,
     temp_buf: String,
@@ -57,18 +57,18 @@ impl<R: BufRead> TurtleParser<R> {
         Self {
             read: LookAheadByteReader::new(reader),
             base_iri,
-            namespaces: HashMap::default(),
+            prefixes: HashMap::default(),
             bnode_id_generator: BlankNodeIdGenerator::default(),
             triple_alloc,
             temp_buf: String::default(),
         }
     }
 
-    /// The list of namespaces considered at the current step of the parsing.
+    /// The list of IRI prefixes considered at the current step of the parsing.
     ///
     /// This method returns the mapping from prefix name to prefix value.
     /// It is empty at the beginning of the parsing and gets updated when prefixes are encountered.
-    /// It should be full at the end of the parsing (but if a namespace is overridden, only the latest version will be returned).
+    /// It should be full at the end of the parsing (but if a prefix is overridden, only the latest version will be returned).
     ///
     /// ```
     /// use std::collections::HashMap;
@@ -83,16 +83,16 @@ impl<R: BufRead> TurtleParser<R> {
     /// ex: a schema:WebSite .";
     ///
     /// let mut parser = TurtleParser::new(file.as_ref(), None);
-    /// assert_eq!(parser.namespaces(), &HashMap::new()); // No prefix at the beginning
+    /// assert_eq!(parser.prefixes(), &HashMap::new()); // No prefix at the beginning
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the first prefix"));
-    /// assert_eq!(parser.namespaces().len(), 1);
-    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.prefixes().len(), 1);
+    /// assert_eq!(parser.prefixes()["schema"], "http://schema.org/");
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the second prefix"));
-    /// assert_eq!(parser.namespaces().len(), 2);
-    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
-    /// assert_eq!(parser.namespaces()["ex"], "http://example.com/");
+    /// assert_eq!(parser.prefixes().len(), 2);
+    /// assert_eq!(parser.prefixes()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.prefixes()["ex"], "http://example.com/");
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |t| {
     ///     assert_eq!(t.subject, NamedNode { iri: "http://example.com/" }.into()); // We read the first triple
@@ -100,9 +100,9 @@ impl<R: BufRead> TurtleParser<R> {
     /// });
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the new version of the ex: prefix"));
-    /// assert_eq!(parser.namespaces().len(), 2);
-    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
-    /// assert_eq!(parser.namespaces()["ex"], "http://example.org/");  
+    /// assert_eq!(parser.prefixes().len(), 2);
+    /// assert_eq!(parser.prefixes()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.prefixes()["ex"], "http://example.org/");  
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |t| {
     ///     assert_eq!(t.subject, NamedNode { iri: "http://example.org/" }.into()); // We read the second triple
@@ -111,8 +111,8 @@ impl<R: BufRead> TurtleParser<R> {
     ///
     /// # Result::<_,TurtleError>::Ok(())
     /// ```
-    pub fn namespaces(&self) -> &HashMap<String, String> {
-        &self.namespaces
+    pub fn prefixes(&self) -> &HashMap<String, String> {
+        &self.prefixes
     }
 }
 
@@ -176,11 +176,11 @@ impl<R: BufRead> TriGParser<R> {
         }
     }
 
-    /// The list of namespaces considered at the current step of the parsing.
+    /// The list of IRI prefixes considered at the current step of the parsing.
     ///
     /// This method returns the mapping from prefix name to prefix value.
     /// It is empty at the beginning of the parsing and gets updated when prefixes are encountered.
-    /// It should be full at the end of the parsing (but if a namespace is overridden, only the latest version will be returned).
+    /// It should be full at the end of the parsing (but if a prefix is overridden, only the latest version will be returned).
     ///
     /// ```
     /// use std::collections::HashMap;
@@ -195,16 +195,16 @@ impl<R: BufRead> TriGParser<R> {
     /// ex: a schema:WebSite .";
     ///
     /// let mut parser = TriGParser::new(file.as_ref(), None);
-    /// assert_eq!(parser.namespaces(), &HashMap::new()); // No prefix at the beginning
+    /// assert_eq!(parser.prefixes(), &HashMap::new()); // No prefix at the beginning
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the first prefix"));
-    /// assert_eq!(parser.namespaces().len(), 1);
-    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.prefixes().len(), 1);
+    /// assert_eq!(parser.prefixes()["schema"], "http://schema.org/");
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the second prefix"));
-    /// assert_eq!(parser.namespaces().len(), 2);
-    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
-    /// assert_eq!(parser.namespaces()["ex"], "http://example.com/");
+    /// assert_eq!(parser.prefixes().len(), 2);
+    /// assert_eq!(parser.prefixes()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.prefixes()["ex"], "http://example.com/");
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |t| {
     ///     assert_eq!(t.subject, NamedNode { iri: "http://example.com/" }.into()); // We read the first triple
@@ -212,9 +212,9 @@ impl<R: BufRead> TriGParser<R> {
     /// });
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |_| panic!("We read the new version of the ex: prefix"));
-    /// assert_eq!(parser.namespaces().len(), 2);
-    /// assert_eq!(parser.namespaces()["schema"], "http://schema.org/");
-    /// assert_eq!(parser.namespaces()["ex"], "http://example.org/");  
+    /// assert_eq!(parser.prefixes().len(), 2);
+    /// assert_eq!(parser.prefixes()["schema"], "http://schema.org/");
+    /// assert_eq!(parser.prefixes()["ex"], "http://example.org/");  
     ///
     /// let _: Result<_, TurtleError> = parser.parse_step(&mut |t| {
     ///     assert_eq!(t.subject, NamedNode { iri: "http://example.org/" }.into()); // We read the second triple
@@ -223,8 +223,8 @@ impl<R: BufRead> TriGParser<R> {
     ///
     /// # Result::<_,TurtleError>::Ok(())
     /// ```
-    pub fn namespaces(&self) -> &HashMap<String, String> {
-        &self.inner.namespaces
+    pub fn prefixes(&self) -> &HashMap<String, String> {
+        &self.inner.prefixes
     }
 }
 
@@ -263,7 +263,7 @@ fn parse_statement<E: From<TurtleError>>(
     } else if parser.read.starts_with(b"@prefix") {
         parse_prefix_id(
             &mut parser.read,
-            &mut parser.namespaces,
+            &mut parser.prefixes,
             &parser.base_iri,
             &mut parser.temp_buf,
         )
@@ -285,7 +285,7 @@ fn parse_statement<E: From<TurtleError>>(
     } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX") {
         parse_sparql_prefix(
             &mut parser.read,
-            &mut parser.namespaces,
+            &mut parser.prefixes,
             &parser.base_iri,
             &mut parser.temp_buf,
         )
@@ -312,7 +312,7 @@ fn parse_block_or_directive<E: From<TurtleError>>(
     } else if parser.inner.read.starts_with(b"@prefix") {
         parse_prefix_id(
             &mut parser.inner.read,
-            &mut parser.inner.namespaces,
+            &mut parser.inner.prefixes,
             &parser.inner.base_iri,
             &mut parser.inner.temp_buf,
         )?;
@@ -334,7 +334,7 @@ fn parse_block_or_directive<E: From<TurtleError>>(
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX") {
         parse_sparql_prefix(
             &mut parser.inner.read,
-            &mut parser.inner.namespaces,
+            &mut parser.inner.prefixes,
             &parser.inner.base_iri,
             &mut parser.inner.temp_buf,
         )?;
@@ -489,20 +489,20 @@ fn parse_label_or_subject<'a>(
     let TurtleParser {
         read,
         base_iri,
-        namespaces,
+        prefixes,
         bnode_id_generator,
         temp_buf,
         ..
     } = parser;
     Ok(match read.current() {
         Some(b'_') | Some(b'[') => parse_blank_node(read, buffer, bnode_id_generator)?.into(),
-        _ => parse_iri(read, buffer, temp_buf, base_iri, namespaces)?.into(),
+        _ => parse_iri(read, buffer, temp_buf, base_iri, prefixes)?.into(),
     })
 }
 
 fn parse_prefix_id(
     read: &mut LookAheadByteReader<impl BufRead>,
-    namespaces: &mut HashMap<String, String>,
+    prefixes: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
 ) -> Result<(), TurtleError> {
@@ -521,7 +521,7 @@ fn parse_prefix_id(
     read.check_is_current(b'.')?;
     read.consume()?;
 
-    namespaces.insert(prefix, value);
+    prefixes.insert(prefix, value);
     Ok(())
 }
 
@@ -571,7 +571,7 @@ fn parse_base_iriref(
 
 fn parse_sparql_prefix(
     read: &mut LookAheadByteReader<impl BufRead>,
-    namespaces: &mut HashMap<String, String>,
+    prefixes: &mut HashMap<String, String>,
     base_iri: &Option<Iri<String>>,
     temp_buffer: &mut String,
 ) -> Result<(), TurtleError> {
@@ -587,7 +587,7 @@ fn parse_sparql_prefix(
     parse_iriref_relative(read, &mut value, temp_buffer, base_iri)?;
     skip_whitespace(read)?;
 
-    namespaces.insert(prefix, value);
+    prefixes.insert(prefix, value);
     Ok(())
 }
 
@@ -735,13 +735,13 @@ fn parse_subject<E: From<TurtleError>>(
                 let TurtleParser {
                     read,
                     base_iri,
-                    namespaces,
+                    prefixes,
                     triple_alloc,
                     temp_buf,
                     ..
                 } = parser;
                 triple_alloc.try_push_subject(|b| {
-                    parse_iri(read, b, temp_buf, base_iri, namespaces).map(Subject::from)
+                    parse_iri(read, b, temp_buf, base_iri, prefixes).map(Subject::from)
                 })?;
             }
         }
@@ -754,12 +754,12 @@ fn parse_predicate(parser: &mut TurtleParser<impl BufRead>) -> Result<(), Turtle
     let TurtleParser {
         read,
         base_iri,
-        namespaces,
+        prefixes,
         triple_alloc,
         temp_buf,
         ..
     } = parser;
-    triple_alloc.try_push_predicate(|b| parse_iri(read, b, temp_buf, base_iri, namespaces))
+    triple_alloc.try_push_predicate(|b| parse_iri(read, b, temp_buf, base_iri, prefixes))
 }
 
 fn parse_object<E: From<TurtleError>>(
@@ -814,13 +814,13 @@ fn parse_object<E: From<TurtleError>>(
             let TurtleParser {
                 read,
                 base_iri,
-                namespaces,
+                prefixes,
                 triple_alloc,
                 temp_buf,
                 ..
             } = parser;
             triple_alloc.try_push_object(|b1, b2| {
-                parse_rdf_literal(read, b1, b2, temp_buf, base_iri, namespaces).map(Term::from)
+                parse_rdf_literal(read, b1, b2, temp_buf, base_iri, prefixes).map(Term::from)
             })?;
         }
         b'+' | b'-' | b'.' | b'0'..=b'9' => {
@@ -839,12 +839,12 @@ fn parse_object<E: From<TurtleError>>(
             } else {
                 let TurtleParser {
                     read,
-                    namespaces,
+                    prefixes,
                     triple_alloc,
                     ..
                 } = parser;
                 triple_alloc.try_push_object(|b, _| {
-                    parse_prefixed_name(read, b, namespaces).map(Term::from)
+                    parse_prefixed_name(read, b, prefixes).map(Term::from)
                 })?;
             }
         }
@@ -1062,7 +1062,7 @@ pub(crate) fn parse_rdf_literal<'a>(
     annotation_buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
+    prefixes: &HashMap<String, String>,
 ) -> Result<Literal<'a>, TurtleError> {
     // [128s] 	RDFLiteral 	::= 	String (LANGTAG | '^^' iri)?
     parse_string(read, buffer)?;
@@ -1081,7 +1081,7 @@ pub(crate) fn parse_rdf_literal<'a>(
             read.check_is_current(b'^')?;
             read.consume()?;
             skip_whitespace(read)?;
-            parse_iri(read, annotation_buffer, temp_buffer, base_iri, namespaces)?;
+            parse_iri(read, annotation_buffer, temp_buffer, base_iri, prefixes)?;
             Ok(Literal::Typed {
                 value: buffer,
                 datatype: NamedNode {
@@ -1140,27 +1140,27 @@ pub(crate) fn parse_iri<'a>(
     buffer: &'a mut String,
     temp_buffer: &mut String,
     base_iri: &Option<Iri<String>>,
-    namespaces: &HashMap<String, String>,
+    prefixes: &HashMap<String, String>,
 ) -> Result<NamedNode<'a>, TurtleError> {
     // [135s] 	iri 	::= 	IRIREF | PrefixedName
     if read.current() == Some(b'<') {
         parse_iriref_relative(read, buffer, temp_buffer, base_iri)
     } else {
-        parse_prefixed_name(read, buffer, namespaces)
+        parse_prefixed_name(read, buffer, prefixes)
     }
 }
 
 pub(crate) fn parse_prefixed_name<'a>(
     read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
-    namespaces: &HashMap<String, String>,
+    prefixes: &HashMap<String, String>,
 ) -> Result<NamedNode<'a>, TurtleError> {
     // [136s] 	PrefixedName 	::= 	PNAME_LN | PNAME_NS
     // It could be written: PNAME_NS PN_LOCAL?
 
     // PNAME_NS
     parse_pname_ns(read, buffer)?;
-    if let Some(value) = namespaces.get(buffer.as_str()) {
+    if let Some(value) = prefixes.get(buffer.as_str()) {
         buffer.clear();
         buffer.push_str(value);
     } else {
@@ -1565,12 +1565,12 @@ pub(crate) fn parse_emb_subject(
         _ => {
             let TurtleParser {
                 read,
-                namespaces,
+                prefixes,
                 triple_alloc,
                 ..
             } = parser;
             triple_alloc
-                .try_push_subject(|b| parse_prefixed_name(read, b, namespaces).map(Subject::from))
+                .try_push_subject(|b| parse_prefixed_name(read, b, prefixes).map(Subject::from))
         }
     }
 }
@@ -1611,13 +1611,13 @@ pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Resul
             let TurtleParser {
                 read,
                 base_iri,
-                namespaces,
+                prefixes,
                 triple_alloc,
                 temp_buf,
                 ..
             } = parser;
             triple_alloc.try_push_object(|b1, b2| {
-                parse_rdf_literal(read, b1, b2, temp_buf, base_iri, namespaces).map(Term::from)
+                parse_rdf_literal(read, b1, b2, temp_buf, base_iri, prefixes).map(Term::from)
             })
         }
         b'+' | b'-' | b'.' | b'0'..=b'9' => {
@@ -1635,13 +1635,12 @@ pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Resul
             } else {
                 let TurtleParser {
                     read,
-                    namespaces,
+                    prefixes,
                     triple_alloc,
                     ..
                 } = parser;
-                triple_alloc.try_push_object(|b, _| {
-                    parse_prefixed_name(read, b, namespaces).map(Term::from)
-                })
+                triple_alloc
+                    .try_push_object(|b, _| parse_prefixed_name(read, b, prefixes).map(Term::from))
             }
         }
     }
