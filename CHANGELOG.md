@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.1] - 2022-03-25
+
+## Added
+- `TurtleParser::prefixes()` and `TriGParser::prefixes()` to fetch the list of IRI prefixes in the parsed file.
+
+
 ## [0.7.0] - 2022-03-05
 
 ## Removed
