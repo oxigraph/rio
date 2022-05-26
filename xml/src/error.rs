@@ -15,6 +15,7 @@ pub struct RdfXmlError {
 #[derive(Debug)]
 pub(crate) enum RdfXmlErrorKind {
     Xml(quick_xml::Error),
+    XmlAttribute(quick_xml::events::attributes::AttrError),
     InvalidIri {
         iri: String,
         error: IriParseError,
@@ -38,6 +39,7 @@ impl fmt::Display for RdfXmlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => error.fmt(f),
+            RdfXmlErrorKind::XmlAttribute(error) => error.fmt(f),
             RdfXmlErrorKind::InvalidIri { iri, error } => {
                 write!(f, "error while parsing IRI '{}': {}", iri, error)
             }
@@ -53,9 +55,10 @@ impl Error for RdfXmlError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
             RdfXmlErrorKind::Xml(error) => Some(error),
+            RdfXmlErrorKind::XmlAttribute(error) => Some(error),
             RdfXmlErrorKind::InvalidIri { error, .. } => Some(error),
             RdfXmlErrorKind::InvalidLanguageTag { error, .. } => Some(error),
-            _ => None,
+            RdfXmlErrorKind::Other(_) => None,
         }
     }
 }
@@ -70,6 +73,14 @@ impl From<quick_xml::Error> for RdfXmlError {
     fn from(error: quick_xml::Error) -> Self {
         Self {
             kind: RdfXmlErrorKind::Xml(error),
+        }
+    }
+}
+
+impl From<quick_xml::events::attributes::AttrError> for RdfXmlError {
+    fn from(error: quick_xml::events::attributes::AttrError) -> Self {
+        Self {
+            kind: RdfXmlErrorKind::XmlAttribute(error),
         }
     }
 }
