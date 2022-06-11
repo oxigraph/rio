@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.2] - 2022-06-11
+
+## Changed
+- Upgrades `quick-xml` dependency of `rio_xml` to 0.23.
+
+
 ## [0.7.1] - 2022-03-25
 
 ## Added
