@@ -77,6 +77,10 @@ impl<R: BufRead> RdfXmlParser<R> {
             is_end: false,
         }
     }
+
+    pub fn buffer_position(&self) -> usize {
+        self.reader.reader.buffer_position()
+    }
 }
 
 impl<R: BufRead> TriplesParser for RdfXmlParser<R> {
