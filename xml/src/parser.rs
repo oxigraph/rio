@@ -78,6 +78,7 @@ impl<R: BufRead> RdfXmlParser<R> {
         }
     }
 
+    /// The current byte position in the input data.
     pub fn buffer_position(&self) -> usize {
         self.reader.reader.buffer_position()
     }

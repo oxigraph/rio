@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.7.3] - 2022-07-09
+
+## Changed
+- Adds `RdfXmlParser::buffer_position`.
+
+
 ## [0.7.2] - 2022-06-11
 
 ## Changed
