@@ -31,6 +31,9 @@ fn main() {
         if manifest_url == "gtrig" {
             manifest_url = "http://w3c.github.io/rdf-tests/trig/manifest.ttl";
             parse_func = parse_w3c_rdf_test_file_for_gtrig;
+        } else if manifest_url == "gnquads" {
+            manifest_url = "http://w3c.github.io/rdf-tests/nquads/manifest.ttl";
+            parse_func = parse_w3c_rdf_test_file_for_gnquads;
         }
     }
 
