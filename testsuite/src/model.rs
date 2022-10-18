@@ -511,3 +511,116 @@ impl fmt::Display for OwnedDataset {
         Ok(())
     }
 }
+
+#[cfg(feature = "generalized")]
+mod generalized {
+    use super::*;
+    use std::convert::{TryFrom, TryInto};
+
+    impl<'a> TryFrom<GeneralizedQuad<'a>> for OwnedQuad {
+        type Error = StrictRdfError;
+
+        #[inline]
+        fn try_from(other: GeneralizedQuad<'a>) -> Result<OwnedQuad, StrictRdfError> {
+            Ok(OwnedQuad {
+                subject: other.subject.try_into()?,
+                predicate: other.predicate.try_into()?,
+                object: other.object.try_into()?,
+                graph_name: other
+                    .graph_name
+                    .map(GeneralizedTerm::try_into)
+                    .transpose()?,
+            })
+        }
+    }
+
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for OwnedSubject {
+        type Error = StrictRdfError;
+
+        #[inline]
+        fn try_from(other: GeneralizedTerm<'a>) -> Result<OwnedSubject, StrictRdfError> {
+            match other {
+                GeneralizedTerm::NamedNode(inner) => Ok(OwnedSubject::NamedNode(inner.into())),
+                GeneralizedTerm::BlankNode(inner) => Ok(OwnedSubject::BlankNode(inner.into())),
+                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
+                    message: "Literal cannot be used as a subject",
+                }),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable cannot be converted to strict RDF term",
+                }),
+                GeneralizedTerm::Triple(triple) => {
+                    Ok(OwnedSubject::Triple(Box::new(OwnedTriple {
+                        subject: triple[0].try_into()?,
+                        predicate: triple[1].try_into()?,
+                        object: triple[2].try_into()?,
+                    })))
+                }
+            }
+        }
+    }
+
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for OwnedNamedNode {
+        type Error = StrictRdfError;
+
+        #[inline]
+        fn try_from(other: GeneralizedTerm<'a>) -> Result<OwnedNamedNode, StrictRdfError> {
+            match other {
+                GeneralizedTerm::NamedNode(inner) => Ok(inner.into()),
+                GeneralizedTerm::BlankNode(inner) => Err(StrictRdfError {
+                    message: "BlankNode cannot be used as a predicate",
+                }),
+                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
+                    message: "Literal cannot be used as a predicate",
+                }),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable cannot be converted to strict RDF term",
+                }),
+                GeneralizedTerm::Triple(triple) => Err(StrictRdfError {
+                    message: "Quoted triple cannot be used as a predicate",
+                }),
+            }
+        }
+    }
+
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for OwnedTerm {
+        type Error = StrictRdfError;
+
+        #[inline]
+        fn try_from(other: GeneralizedTerm<'a>) -> Result<OwnedTerm, StrictRdfError> {
+            match other {
+                GeneralizedTerm::NamedNode(inner) => Ok(OwnedTerm::NamedNode(inner.into())),
+                GeneralizedTerm::BlankNode(inner) => Ok(OwnedTerm::BlankNode(inner.into())),
+                GeneralizedTerm::Literal(inner) => Ok(OwnedTerm::Literal(inner.into())),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable cannot be converted to struct RDF term",
+                }),
+                GeneralizedTerm::Triple(triple) => Ok(OwnedTerm::Triple(Box::new(OwnedTriple {
+                    subject: triple[0].try_into()?,
+                    predicate: triple[1].try_into()?,
+                    object: triple[2].try_into()?,
+                }))),
+            }
+        }
+    }
+
+    impl<'a> TryFrom<GeneralizedTerm<'a>> for OwnedGraphName {
+        type Error = StrictRdfError;
+
+        #[inline]
+        fn try_from(other: GeneralizedTerm<'a>) -> Result<OwnedGraphName, StrictRdfError> {
+            match other {
+                GeneralizedTerm::NamedNode(inner) => Ok(OwnedGraphName::NamedNode(inner.into())),
+                GeneralizedTerm::BlankNode(inner) => Ok(OwnedGraphName::BlankNode(inner.into())),
+                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
+                    message: "Literal cannot be used as a graph name",
+                }),
+                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
+                    message: "Variable cannot be converted to strict RDF term",
+                }),
+                GeneralizedTerm::Triple(triple) => Err(StrictRdfError {
+                    message: "Quoted triple cannot be used as a graph name",
+                }),
+            }
+        }
+    }
+}
