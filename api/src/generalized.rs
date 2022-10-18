@@ -56,7 +56,7 @@ pub mod model {
         BlankNode(BlankNode<'a>),
         Literal(Literal<'a>),
         Variable(Variable<'a>),
-        Triple(&'a Triple<'a>),
+        Triple(&'a [GeneralizedTerm<'a>; 3]),
     }
 
     impl<'a> From<NamedNode<'a>> for GeneralizedTerm<'a> {
@@ -87,35 +87,12 @@ pub mod model {
         }
     }
 
-    impl<'a> From<Subject<'a>> for GeneralizedTerm<'a> {
-        #[inline]
-        fn from(other: Subject<'a>) -> GeneralizedTerm<'a> {
-            match other {
-                Subject::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
-                Subject::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
-                Subject::Triple(inner) => GeneralizedTerm::Triple(inner),
-            }
-        }
-    }
-
     impl<'a> From<GraphName<'a>> for GeneralizedTerm<'a> {
         #[inline]
         fn from(other: GraphName<'a>) -> GeneralizedTerm<'a> {
             match other {
                 GraphName::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
                 GraphName::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
-            }
-        }
-    }
-
-    impl<'a> From<Term<'a>> for GeneralizedTerm<'a> {
-        #[inline]
-        fn from(other: Term<'a>) -> GeneralizedTerm<'a> {
-            match other {
-                Term::NamedNode(inner) => GeneralizedTerm::NamedNode(inner),
-                Term::BlankNode(inner) => GeneralizedTerm::BlankNode(inner),
-                Term::Literal(inner) => GeneralizedTerm::Literal(inner),
-                Term::Triple(inner) => GeneralizedTerm::Triple(inner),
             }
         }
     }
@@ -143,25 +120,6 @@ pub mod model {
         }
     }
 
-    impl<'a> TryFrom<GeneralizedTerm<'a>> for Subject<'a> {
-        type Error = StrictRdfError;
-
-        #[inline]
-        fn try_from(other: GeneralizedTerm<'a>) -> Result<Subject<'a>, StrictRdfError> {
-            match other {
-                GeneralizedTerm::NamedNode(inner) => Ok(Subject::NamedNode(inner)),
-                GeneralizedTerm::BlankNode(inner) => Ok(Subject::BlankNode(inner)),
-                GeneralizedTerm::Literal(_) => Err(StrictRdfError {
-                    message: "Literal cannot be used a subject",
-                }),
-                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
-                    message: "Variable cannot be converted to Term",
-                }),
-                GeneralizedTerm::Triple(triple) => Ok(Subject::Triple(triple)),
-            }
-        }
-    }
-
     impl<'a> TryFrom<GeneralizedTerm<'a>> for GraphName<'a> {
         type Error = StrictRdfError;
 
@@ -183,23 +141,6 @@ pub mod model {
         }
     }
 
-    impl<'a> TryFrom<GeneralizedTerm<'a>> for Term<'a> {
-        type Error = StrictRdfError;
-
-        #[inline]
-        fn try_from(other: GeneralizedTerm<'a>) -> Result<Term<'a>, StrictRdfError> {
-            match other {
-                GeneralizedTerm::NamedNode(inner) => Ok(Term::NamedNode(inner)),
-                GeneralizedTerm::BlankNode(inner) => Ok(Term::BlankNode(inner)),
-                GeneralizedTerm::Literal(inner) => Ok(Term::Literal(inner)),
-                GeneralizedTerm::Variable(_) => Err(StrictRdfError {
-                    message: "Variable cannot be converted to Term",
-                }),
-                GeneralizedTerm::Triple(inner) => Ok(Term::Triple(inner)),
-            }
-        }
-    }
-
     impl<'a> fmt::Display for GeneralizedTerm<'a> {
         #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -208,7 +149,9 @@ pub mod model {
                 GeneralizedTerm::BlankNode(node) => node.fmt(f),
                 GeneralizedTerm::Literal(literal) => literal.fmt(f),
                 GeneralizedTerm::Variable(variable) => variable.fmt(f),
-                GeneralizedTerm::Triple(triple) => triple.fmt(f),
+                GeneralizedTerm::Triple(triple) => {
+                    write!(f, "<< {} {} {} >>", triple[0], triple[1], triple[2])
+                }
             }
         }
     }
@@ -252,53 +195,6 @@ pub mod model {
         pub graph_name: Option<GeneralizedTerm<'a>>,
     }
 
-    impl<'a> From<Quad<'a>> for GeneralizedQuad<'a> {
-        #[inline]
-        fn from(other: Quad<'a>) -> GeneralizedQuad<'a> {
-            GeneralizedQuad {
-                subject: other.subject.into(),
-                predicate: other.predicate.into(),
-                object: other.object.into(),
-                graph_name: other.graph_name.map(GeneralizedTerm::from),
-            }
-        }
-    }
-
-    impl<'a> TryFrom<GeneralizedQuad<'a>> for Quad<'a> {
-        type Error = StrictRdfError;
-
-        #[inline]
-        fn try_from(other: GeneralizedQuad<'a>) -> Result<Quad<'a>, StrictRdfError> {
-            Ok(Quad {
-                subject: other.subject.try_into()?,
-                predicate: other.predicate.try_into()?,
-                object: other.object.try_into()?,
-                graph_name: other
-                    .graph_name
-                    .map(GeneralizedTerm::try_into)
-                    .transpose()?,
-            })
-        }
-    }
-
-    impl<'a> TryFrom<GeneralizedQuad<'a>> for Triple<'a> {
-        type Error = StrictRdfError;
-
-        #[inline]
-        fn try_from(other: GeneralizedQuad<'a>) -> Result<Triple<'a>, StrictRdfError> {
-            match other.graph_name {
-                Some(_) => Err(StrictRdfError {
-                    message: "Quad in named graph cannot be converted to Triple",
-                }),
-                None => Ok(Triple {
-                    subject: other.subject.try_into()?,
-                    predicate: other.predicate.try_into()?,
-                    object: other.object.try_into()?,
-                }),
-            }
-        }
-    }
-
     impl<'a> fmt::Display for GeneralizedQuad<'a> {
         #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -318,7 +214,7 @@ pub mod model {
     /// An error raised when generalized RDF cannot be converted to strict RDF.
     #[derive(Debug, Clone, Copy)]
     pub struct StrictRdfError {
-        message: &'static str,
+        pub message: &'static str,
     }
 
     impl fmt::Display for StrictRdfError {

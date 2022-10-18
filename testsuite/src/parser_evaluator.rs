@@ -147,6 +147,8 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
     url: &str,
     tests_path: &Path,
 ) -> Result<OwnedDataset, Box<dyn Error>> {
+    use std::convert::TryInto;
+
     let read = read_w3c_rdf_test_file(url, tests_path)?;
     let base_iri = Iri::parse(url.to_owned())?;
 
@@ -156,11 +158,11 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
             .collect()
     } else if url.ends_with(".nq") {
         NQuadsParser::new(read)
-            .into_iter(|t| Ok(t.into()))
+            .into_iter(|q| Ok(q.into()))
             .collect()
     } else if url.ends_with(".ttl") || url.ends_with(".trig") {
         GTriGParser::new(read, Some(base_iri))
-            .into_iter(|t| Ok(Quad::try_from(t)?.into()))
+            .into_iter(|q| Ok(q.try_into()?))
             .collect()
     } else {
         Err(Box::new(TestEvaluationError::UnsupportedFormat(
