@@ -3,13 +3,9 @@ use crate::manifest::{Test, TestManifestError};
 use crate::model::OwnedDataset;
 use crate::report::{TestOutcome, TestResult};
 use oxiri::Iri;
-#[cfg(feature = "generalized")]
-use rio_api::model::*;
 use rio_api::parser::*;
 use rio_turtle::*;
 use rio_xml::RdfXmlParser;
-#[cfg(feature = "generalized")]
-use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
@@ -141,7 +137,7 @@ pub fn parse_w3c_rdf_test_file(
     }
 }
 
-/// Use GTrig instead of Turtle and TriG parser
+/// Use Generalized TriG instead of Turtle and TriG parser
 #[cfg(feature = "generalized")]
 pub fn parse_w3c_rdf_test_file_for_gtrig(
     url: &str,

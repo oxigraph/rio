@@ -14,7 +14,8 @@ use std::io::BufRead;
 ///
 /// Its memory consumption is linear in the size of the longest line of the file.
 /// It does not do any allocation during parsing except buffer resizing
-/// if a line significantly longer than the previous is encountered.
+/// if a line significantly longer than the previous is encountered,
+/// or if a line uses deeply nested triples.
 ///
 ///
 /// Count the number of people using the [`TriplesParser`] API:
@@ -92,8 +93,8 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
 ///
 /// Its memory consumption is linear in the size of the longest line of the file.
 /// It does not do any allocation during parsing except buffer resizing
-/// if a line significantly longer than the previous is encountered.
-///
+/// if a line significantly longer than the previous is encountered,
+/// or if a line uses deeply nested triples.
 ///
 /// Count the number of people using the `QuadsParser` API:
 /// ```
@@ -260,7 +261,7 @@ fn parse_subject(
     match read.required_current()? {
         b'<' => match read.required_next()? {
             b'<' => {
-                parse_embedded_triple(read, triple_alloc)?;
+                parse_quoted_triple(read, triple_alloc)?;
                 triple_alloc.push_subject_triple();
                 Ok(())
             }
@@ -280,7 +281,7 @@ fn parse_object(
     match read.required_current()? {
         b'<' => match read.required_next()? {
             b'<' => {
-                parse_embedded_triple(read, triple_alloc)?;
+                parse_quoted_triple(read, triple_alloc)?;
                 triple_alloc.push_object_triple();
                 Ok(())
             }
@@ -294,7 +295,7 @@ fn parse_object(
     }
 }
 
-fn parse_embedded_triple(
+fn parse_quoted_triple(
     read: &mut LookAheadByteReader<impl BufRead>,
     triple_alloc: &mut TripleAllocator,
 ) -> Result<(), TurtleError> {

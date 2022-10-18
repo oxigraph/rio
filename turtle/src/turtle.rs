@@ -371,7 +371,7 @@ fn parse_triples_or_graph<E: From<TurtleError>>(
     // [3g] 	triplesOrGraph 	::= 	labelOrSubject ( wrappedGraph | predicateObjectList '.' ) | embTriple predicateObjectList '.'
 
     if parser.inner.read.starts_with(b"<<") {
-        parse_embedded_triple(&mut parser.inner)?;
+        parse_quoted_triple(&mut parser.inner)?;
         parser.inner.triple_alloc.push_subject_triple();
         skip_whitespace(&mut parser.inner.read)?;
         parse_predicate_object_list(&mut parser.inner, &mut on_triple_in_graph(on_quad, None))?;
@@ -729,7 +729,7 @@ fn parse_subject<E: From<TurtleError>>(
         }
         _ => {
             if parser.read.required_current()? == b'<' && parser.read.required_next()? == b'<' {
-                parse_embedded_triple(parser)?;
+                parse_quoted_triple(parser)?;
                 parser.triple_alloc.push_subject_triple();
             } else {
                 let TurtleParser {
@@ -771,7 +771,7 @@ fn parse_object<E: From<TurtleError>>(
     match parser.read.required_current()? {
         b'<' => {
             if parser.read.required_next()? == b'<' {
-                parse_embedded_triple(parser)?;
+                parse_quoted_triple(parser)?;
                 parser.triple_alloc.push_object_triple();
             } else {
                 let TurtleParser {
@@ -1502,7 +1502,7 @@ fn on_triple_in_graph<'a, E>(
     }
 }
 
-pub(crate) fn parse_embedded_triple(
+pub(crate) fn parse_quoted_triple(
     parser: &mut TurtleParser<impl BufRead>,
 ) -> Result<(), TurtleError> {
     // [27t] 	embTriple 	::= 	'<<' embSubject verb embObject '>>'
@@ -1535,7 +1535,7 @@ pub(crate) fn parse_emb_subject(
     match parser.read.current() {
         Some(b'<') => {
             if parser.read.required_next()? == b'<' {
-                parse_embedded_triple(parser)?;
+                parse_quoted_triple(parser)?;
                 parser.triple_alloc.push_subject_triple();
                 Ok(())
             } else {
@@ -1580,7 +1580,7 @@ pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Resul
     match parser.read.required_current()? {
         b'<' => {
             if parser.read.required_next()? == b'<' {
-                parse_embedded_triple(parser)?;
+                parse_quoted_triple(parser)?;
                 parser.triple_alloc.push_object_triple();
                 Ok(())
             } else {

@@ -566,7 +566,7 @@ mod generalized {
         fn try_from(other: GeneralizedTerm<'a>) -> Result<OwnedNamedNode, StrictRdfError> {
             match other {
                 GeneralizedTerm::NamedNode(inner) => Ok(inner.into()),
-                GeneralizedTerm::BlankNode(inner) => Err(StrictRdfError {
+                GeneralizedTerm::BlankNode(_) => Err(StrictRdfError {
                     message: "BlankNode cannot be used as a predicate",
                 }),
                 GeneralizedTerm::Literal(_) => Err(StrictRdfError {
@@ -575,7 +575,7 @@ mod generalized {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to strict RDF term",
                 }),
-                GeneralizedTerm::Triple(triple) => Err(StrictRdfError {
+                GeneralizedTerm::Triple(_) => Err(StrictRdfError {
                     message: "Quoted triple cannot be used as a predicate",
                 }),
             }
@@ -617,7 +617,7 @@ mod generalized {
                 GeneralizedTerm::Variable(_) => Err(StrictRdfError {
                     message: "Variable cannot be converted to strict RDF term",
                 }),
-                GeneralizedTerm::Triple(triple) => Err(StrictRdfError {
+                GeneralizedTerm::Triple(_) => Err(StrictRdfError {
                     message: "Quoted triple cannot be used as a graph name",
                 }),
             }
