@@ -42,10 +42,11 @@ pub mod model {
     /// A generalized RDF [term](https://www.w3.org/TR/rdf11-concepts/#dfn-rdf-term).
     ///
     /// It is the union of
-    /// * [IRIs](https://www.w3.org/TR/rdf11-concepts/#dfn-iri),
+    /// * [IRI](https://www.w3.org/TR/rdf11-concepts/#dfn-iri) references (absolute *or relative*),
     /// * [blank nodes](https://www.w3.org/TR/rdf11-concepts/#dfn-blank-node)
     /// * [literals](https://www.w3.org/TR/rdf11-concepts/#dfn-literal) and
-    /// * [variable](https://www.w3.org/TR/sparql11-query/#QSynVariables).
+    /// * [variables](https://www.w3.org/TR/sparql11-query/#QSynVariables).
+    /// * [quoted triples](https://www.w3.org/2021/12/rdf-star.html#dfn-quoted)
     ///
     /// The default string formatter is returning an N-Triples, Turtle and SPARQL compatible representation.
     ///

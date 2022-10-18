@@ -42,7 +42,11 @@ mod turtle;
 mod utils;
 
 #[cfg(feature = "generalized")]
+mod gnquads;
+#[cfg(feature = "generalized")]
 mod gtrig;
+#[cfg(feature = "generalized")]
+mod gtriple_allocator;
 
 pub use error::TurtleError;
 pub use formatters::NQuadsFormatter;
@@ -53,6 +57,9 @@ pub use ntriples::NQuadsParser;
 pub use ntriples::NTriplesParser;
 pub use turtle::TriGParser;
 pub use turtle::TurtleParser;
+
+#[cfg(feature = "generalized")]
+pub use gnquads::GeneralizedNQuadsParser;
 
 #[cfg(feature = "generalized")]
 pub use gtrig::GTriGParser;

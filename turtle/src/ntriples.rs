@@ -331,7 +331,7 @@ fn parse_graph_name<'a>(
     }
 }
 
-fn parse_literal<'a>(
+pub(crate) fn parse_literal<'a>(
     read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
     annotation_buffer: &'a mut String,
@@ -361,7 +361,7 @@ fn parse_literal<'a>(
     }
 }
 
-fn skip_whitespace(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
+pub(crate) fn skip_whitespace(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             Some(b' ') | Some(b'\t') => read.consume()?,
@@ -370,7 +370,7 @@ fn skip_whitespace(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), T
     }
 }
 
-fn skip_until_eol(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
+pub(crate) fn skip_until_eol(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             None => return Ok(()),
@@ -384,7 +384,7 @@ fn skip_until_eol(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), Tu
     }
 }
 
-fn parse_iriref<'a>(
+pub(crate) fn parse_iriref<'a>(
     read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,
 ) -> Result<NamedNode<'a>, TurtleError> {

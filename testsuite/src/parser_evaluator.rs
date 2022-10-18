@@ -137,6 +137,36 @@ pub fn parse_w3c_rdf_test_file(
     }
 }
 
+/// Use Generalized N-Quads instead of Turtle and TriG parser
+#[cfg(feature = "generalized")]
+pub fn parse_w3c_rdf_test_file_for_gnquads(
+    url: &str,
+    tests_path: &Path,
+) -> Result<OwnedDataset, Box<dyn Error>> {
+    use std::convert::TryInto;
+
+    let read = read_w3c_rdf_test_file(url, tests_path)?;
+    let base_iri = Iri::parse(url.to_owned())?;
+
+    if url.ends_with(".nt") {
+        NTriplesParser::new(read)
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else if url.ends_with(".nq") {
+        GeneralizedNQuadsParser::new(read)
+            .into_iter(|q| Ok(q.try_into()?))
+            .collect()
+    } else if url.ends_with(".ttl") {
+        TurtleParser::new(read, Some(base_iri))
+            .into_iter(|t| Ok(t.into()))
+            .collect()
+    } else {
+        Err(Box::new(TestEvaluationError::UnsupportedFormat(
+            url.to_owned(),
+        )))
+    }
+}
+
 /// Use Generalized TriG instead of Turtle and TriG parser
 #[cfg(feature = "generalized")]
 pub fn parse_w3c_rdf_test_file_for_gtrig(
