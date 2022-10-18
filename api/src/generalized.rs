@@ -1,10 +1,10 @@
-//! This module contains extensions for generalized RDF.
+//! This module contains extensions for generalized RDF / RDF-star.
 //! Its elements are re-exported by `model` and `parser`, respectively.
 
 /// Data structures for generalized [RDF 1.1 Concepts](https://www.w3.org/TR/rdf11-concepts/),
 /// allowing variables, and any kind of node in any Triple/Quad position.
 pub mod model {
-    use std::convert::{TryFrom, TryInto};
+    use std::convert::TryFrom;
     use std::error::Error;
     use std::fmt;
 

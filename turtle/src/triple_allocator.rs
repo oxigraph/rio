@@ -5,7 +5,7 @@ use crate::utils::StringBufferStack;
 use rio_api::model::*;
 use std::mem::transmute;
 
-/// A stack allocator for storing RDF and RDF* triples.
+/// A stack allocator for storing RDF and RDF-star triples.
 ///
 /// # Implementation
 /// This type uses `&'static str` internally to reference text that it allocates.
@@ -74,8 +74,8 @@ impl TripleAllocator {
     ///
     /// # Pre-condition
     /// In standard RDF, any subject is acceptable.
-    /// In RDF* embedded triples [`Subject::Triple`] are *not allowed*.
-    /// For adding an embedded triple, use [`TripleAllocator::push_subject_triple`] instead.
+    /// In RDF-star quoted triples [`Subject::Triple`] are *not allowed*.
+    /// For adding an quoted triple, use [`TripleAllocator::push_subject_triple`] instead.
     pub fn try_push_subject<E, F>(&mut self, subject_factory: F) -> Result<(), E>
     where
         F: FnOnce(&mut String) -> Result<Subject<'_>, E>,
@@ -118,8 +118,8 @@ impl TripleAllocator {
     ///
     /// # Pre-condition
     /// In standard RDF, any object is acceptable.
-    /// In RDF* embedded triples [`Subject::Triple`] are *not allowed*.
-    /// For adding an embedded triple, use [`TripleAllocator::push_object_triple`] instead.
+    /// In RDF-star quoted triples [`Subject::Triple`] are *not allowed*.
+    /// For adding an quoted triple, use [`TripleAllocator::push_object_triple`] instead.
     pub fn try_push_object<E, F>(&mut self, object_factory: F) -> Result<(), E>
     where
         F: for<'x> FnOnce(&'x mut String, &'x mut String) -> Result<Term<'x>, E>,
@@ -253,7 +253,7 @@ impl TripleAllocator {
 
     /// Pops the top-most annotation triple, i.e.
     /// a triple on the incomplete stack with only its subject pushed,
-    /// and that subject is an embedded triple.
+    /// and that subject is an quoted triple.
     ///
     /// The goal is to remove this triple *without* freeing the subject triple.
     #[inline(always)]
@@ -479,7 +479,7 @@ mod test {
     }
 
     #[test]
-    fn nested_triple_as_subject() -> Result<(), Infallible> {
+    fn quoted_triple_as_subject() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
         ta.push_triple_start();
         {
@@ -497,7 +497,7 @@ mod test {
     }
 
     #[test]
-    fn nested_triple_as_object() -> Result<(), Infallible> {
+    fn quoted_triple_as_object() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
         ta.push_triple_start();
         ta.try_push_subject(|b| bn(b, "a"))?;
@@ -515,7 +515,7 @@ mod test {
     }
 
     #[test]
-    fn nested_triple_as_both() -> Result<(), Infallible> {
+    fn quoted_triple_as_both() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
         ta.push_triple_start();
         {
@@ -543,7 +543,7 @@ mod test {
     }
 
     #[test]
-    fn nested_triple_deep() -> Result<(), Infallible> {
+    fn quoted_triple_deep() -> Result<(), Infallible> {
         let mut ta = TripleAllocator::new();
         ta.push_triple_start();
         {
