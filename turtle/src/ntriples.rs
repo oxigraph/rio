@@ -66,6 +66,8 @@ impl<R: BufRead> TriplesParser for NTriplesParser<R> {
             Ok(true) => match on_triple(*self.triple_alloc.top()) {
                 Ok(()) => {
                     self.triple_alloc.pop_top_triple();
+                    debug_assert_eq!(self.triple_alloc.complete_len(), 0);
+                    debug_assert_eq!(self.triple_alloc.incomplete_len(), 0);
                     Ok(())
                 }
                 Err(err) => {
@@ -150,6 +152,8 @@ impl<R: BufRead> QuadsParser for NQuadsParser<R> {
             Ok(Some(opt_graph_name)) => match on_quad(self.triple_alloc.top_quad(opt_graph_name)) {
                 Ok(()) => {
                     self.triple_alloc.pop_top_triple();
+                    debug_assert_eq!(self.triple_alloc.complete_len(), 0);
+                    debug_assert_eq!(self.triple_alloc.incomplete_len(), 0);
                     Ok(())
                 }
                 Err(err) => {

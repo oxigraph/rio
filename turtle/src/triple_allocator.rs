@@ -31,6 +31,14 @@ impl TripleAllocator {
         }
     }
 
+    pub fn complete_len(&self) -> usize {
+        self.complete_len
+    }
+
+    pub fn incomplete_len(&self) -> usize {
+        self.complete_len
+    }
+
     pub fn top(&self) -> &Triple<'_> {
         debug_assert!(self.complete_len > 0);
         &self.complete_stack[self.complete_len - 1]
