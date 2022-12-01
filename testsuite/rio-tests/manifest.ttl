@@ -12,6 +12,7 @@
 		<#language_normalization_ttl>
 		<#language_normalization_xml>
 		<#xml_entities>
+		<#xml_nested_entities>
 		<#literal_value_space>
 		<#bad_parentheses>
 	) .
@@ -49,6 +50,12 @@
 	mf:name "custom XML entities" ;
 	mf:action <xml_entities.rdf> ;
 	mf:result <xml_entities.nt> .
+
+<#xml_nested_entities>
+	rdf:type rdft:TestXMLEval ;
+	mf:name "custom XML entities with nested definitions" ;
+	mf:action <xml_nested_entities.rdf> ;
+	mf:result <xml_nested_entities.nt> .
 
 <#literal_value_space>
 	rdf:type rdft:TestXMLEval ;
