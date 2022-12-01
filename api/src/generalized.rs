@@ -321,7 +321,7 @@ pub mod model {
         message: &'static str,
     }
 
-    impl<'a> fmt::Display for StrictRdfError {
+    impl fmt::Display for StrictRdfError {
         #[inline]
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             self.message.fmt(f)

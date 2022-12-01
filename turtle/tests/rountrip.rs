@@ -122,7 +122,7 @@ const TRIPLE: Triple<'static> = Triple {
     }),
 };
 
-#[allow(clippy::blacklisted_name)]
+#[allow(clippy::disallowed_names)]
 fn example_graph(rdf_star: bool) -> Vec<Triple<'static>> {
     let foo = NamedNode {
         iri: "http://example.com/foo",

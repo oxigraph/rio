@@ -275,9 +275,8 @@ impl<R: BufRead> RdfXmlReader<R> {
             }
 
             // Resolves custom entities within the current entity definition.
-            let entity_value =
-                quick_xml::escape::unescape_with(entity_value, &self.custom_entities)
-                    .map_err(|e| quick_xml::Error::EscapeError(e))?;
+            let entity_value = unescape_with(entity_value, &self.custom_entities)
+                .map_err(quick_xml::Error::EscapeError)?;
             self.custom_entities
                 .insert(entity_name.to_vec(), entity_value.to_vec());
         }

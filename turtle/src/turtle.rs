@@ -901,7 +901,7 @@ fn parse_collection<E: From<TurtleError>>(
             return Ok(parser.read.unexpected_char_error()?);
         } else if parser.read.current() != Some(b')') {
             let new = parser.bnode_id_generator.generate();
-            if root == None {
+            if root.is_none() {
                 root = Some(new);
                 parser.triple_alloc.push_triple_start();
             } else {
@@ -1043,7 +1043,7 @@ pub(crate) fn parse_numeric_literal<'a>(
         _ => {
             if count_after.is_none() && count_before > 0 {
                 XSD_INTEGER
-            } else if count_after != None && count_after != Some(0) {
+            } else if count_after.is_some() && count_after != Some(0) {
                 XSD_DECIMAL
             } else {
                 return read.unexpected_char_error();
@@ -1465,7 +1465,7 @@ pub(crate) fn skip_whitespace(
             Some(b'#') => {
                 while read.current() != Some(b'\r')
                     && read.current() != Some(b'\n')
-                    && read.current() != None
+                    && read.current().is_some()
                 {
                     read.consume()?;
                 }

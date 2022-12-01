@@ -369,7 +369,7 @@ fn parse_generalized_collection<E: From<TurtleError>>(
             return Ok(());
         } else {
             let new = parser.bnode_id_generator.generate();
-            if root == None {
+            if root.is_none() {
                 root = Some(new);
             } else {
                 parser.term_stack.push(OwnedTermKind::StaticIri(RDF_REST));
