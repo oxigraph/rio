@@ -361,7 +361,9 @@ pub(crate) fn parse_literal<'a>(
     }
 }
 
-pub(crate) fn skip_whitespace(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
+pub(crate) fn skip_whitespace(
+    read: &mut LookAheadByteReader<impl BufRead>,
+) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             Some(b' ') | Some(b'\t') => read.consume()?,
@@ -370,7 +372,9 @@ pub(crate) fn skip_whitespace(read: &mut LookAheadByteReader<impl BufRead>) -> R
     }
 }
 
-pub(crate) fn skip_until_eol(read: &mut LookAheadByteReader<impl BufRead>) -> Result<(), TurtleError> {
+pub(crate) fn skip_until_eol(
+    read: &mut LookAheadByteReader<impl BufRead>,
+) -> Result<(), TurtleError> {
     loop {
         match read.current() {
             None => return Ok(()),
