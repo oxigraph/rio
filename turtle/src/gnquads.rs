@@ -2,7 +2,7 @@
 
 use crate::error::*;
 use crate::gtriple_allocator::GeneralizedTripleAllocator;
-use crate::ntriples::{skip_whitespace, skip_until_eol, parse_literal};
+use crate::ntriples::{parse_literal, skip_until_eol, skip_whitespace};
 use crate::shared::*;
 use crate::utils::*;
 use oxiri::IriRef;
@@ -41,11 +41,9 @@ impl<R: BufRead> GeneralizedQuadsParser for GeneralizedNQuadsParser<R> {
     ) -> Result<(), E> {
         match self.parse_quad_line() {
             Ok(Some(named_graph)) => {
-                match on_quad(
-                    self.triple_alloc.top_quad(
-                        named_graph.then(|| self.graph_name_alloc.current_subject().unwrap()),
-                    ),
-                ) {
+                match on_quad(self.triple_alloc.top_quad(
+                    named_graph.then(|| self.graph_name_alloc.current_subject().unwrap()),
+                )) {
                     Ok(()) => {
                         if named_graph {
                             // named graph is allocated as the subject of an incomplete triple
@@ -80,7 +78,7 @@ impl<R: BufRead> GeneralizedQuadsParser for GeneralizedNQuadsParser<R> {
 }
 
 impl<R: BufRead> GeneralizedNQuadsParser<R> {
-    fn parse_quad_line<'a>(&mut self) -> Result<Option<bool>, TurtleError> {
+    fn parse_quad_line(&mut self) -> Result<Option<bool>, TurtleError> {
         let read = &mut self.read;
         let triple_alloc = &mut &mut self.triple_alloc;
 
@@ -116,7 +114,6 @@ impl<R: BufRead> GeneralizedNQuadsParser<R> {
 
         Ok(Some(named_graph))
     }
-
 }
 
 fn parse_triple(
@@ -132,7 +129,6 @@ fn parse_triple(
     Ok(())
 }
 
-
 fn parse_term(
     pos: usize,
     read: &mut LookAheadByteReader<impl BufRead>,
@@ -145,28 +141,26 @@ fn parse_term(
                 triple_alloc.push_quoted_triple(pos);
                 Ok(())
             }
-            _ => {
-                triple_alloc.try_push_atom(pos, |b, _| {
-                    parse_iriref(read, b)?;
-                    IriRef::parse(b.as_str()).map_err(|error| {
-                        read.parse_error(TurtleErrorKind::InvalidIri {
-                            iri: b.to_owned(),
-                            error,
-                        })
-                    })?;
-                    Ok(NamedNode { iri: b }.into())
-                })
-            }
+            _ => triple_alloc.try_push_atom(pos, |b, _| {
+                parse_iriref(read, b)?;
+                IriRef::parse(b.as_str()).map_err(|error| {
+                    read.parse_error(TurtleErrorKind::InvalidIri {
+                        iri: b.to_owned(),
+                        error,
+                    })
+                })?;
+                Ok(NamedNode { iri: b }.into())
+            }),
         },
-        b'_' => {
-            triple_alloc.try_push_atom(pos, |b, _| parse_blank_node_label(read, b).map(GeneralizedTerm::from))
-        }
-        b'"' => {
-            triple_alloc.try_push_atom(pos, |b1, b2| parse_literal(read, b1, b2).map(GeneralizedTerm::from))
-        }
-        b'?' | b'$' => {
-            triple_alloc.try_push_atom(pos, |b, _| parse_variable(read, b).map(GeneralizedTerm::from))
-        }
+        b'_' => triple_alloc.try_push_atom(pos, |b, _| {
+            parse_blank_node_label(read, b).map(GeneralizedTerm::from)
+        }),
+        b'"' => triple_alloc.try_push_atom(pos, |b1, b2| {
+            parse_literal(read, b1, b2).map(GeneralizedTerm::from)
+        }),
+        b'?' | b'$' => triple_alloc.try_push_atom(pos, |b, _| {
+            parse_variable(read, b).map(GeneralizedTerm::from)
+        }),
         _ => read.unexpected_char_error(),
     }
 }
@@ -230,7 +224,6 @@ pub(crate) fn parse_variable<'a>(
     }
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -244,17 +237,21 @@ mod test {
             (),
             TurtleError,
         > {
-            assert!(matches!(q.subject,
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "#s"}),
+            assert!(matches!(
+                q.subject,
+                GeneralizedTerm::NamedNode(NamedNode { iri: "#s" }),
             ));
-            assert!(matches!(q.predicate,
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "../p"}),
+            assert!(matches!(
+                q.predicate,
+                GeneralizedTerm::NamedNode(NamedNode { iri: "../p" }),
             ));
-            assert!(matches!(q.object,
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "/o"}),
+            assert!(matches!(
+                q.object,
+                GeneralizedTerm::NamedNode(NamedNode { iri: "/o" }),
             ));
-            assert!(matches!(q.graph_name,
-                Some(GeneralizedTerm::NamedNode(NamedNode{ iri : "//g"})),
+            assert!(matches!(
+                q.graph_name,
+                Some(GeneralizedTerm::NamedNode(NamedNode { iri: "//g" })),
             ));
             count += 1;
             Ok(())
@@ -266,32 +263,45 @@ mod test {
     #[test]
     fn nquads_star_valid_quad() -> Result<(), Box<dyn std::error::Error>> {
         // adding this test because there is currenly no testsuite specific to N-Quads star
-        let file = br#"<< "a" _:b <tag:c> >> << "d" ?e <./f> >> << "g" $h <../i> >> << "j" _:k </l> >>."#;
+        let file =
+            br#"<< "a" _:b <tag:c> >> << "d" ?e <./f> >> << "g" $h <../i> >> << "j" _:k </l> >>."#;
         let mut count = 0;
         GeneralizedNQuadsParser::new(file.as_ref()).parse_all(&mut |q| -> Result<
             (),
             TurtleError,
         > {
-            assert!(matches!(q.subject, GeneralizedTerm::Triple([
-                GeneralizedTerm::Literal(Literal::Simple{ value : "a"}),
-                GeneralizedTerm::BlankNode(BlankNode{ id : "b"}),
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "tag:c"}),
-            ])));
-            assert!(matches!(q.predicate, GeneralizedTerm::Triple([
-                GeneralizedTerm::Literal(Literal::Simple{ value : "d"}),
-                GeneralizedTerm::Variable(Variable{ name : "e"}),
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "./f"}),
-            ])));
-            assert!(matches!(q.object, GeneralizedTerm::Triple([
-                GeneralizedTerm::Literal(Literal::Simple{ value : "g"}),
-                GeneralizedTerm::Variable(Variable{ name : "h"}),
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "../i"}),
-            ])));
-            assert!(matches!(q.graph_name, Some(GeneralizedTerm::Triple([
-                GeneralizedTerm::Literal(Literal::Simple{ value : "j"}),
-                GeneralizedTerm::BlankNode(BlankNode{ id : "k"}),
-                GeneralizedTerm::NamedNode(NamedNode{ iri : "/l"}),
-            ]))));
+            assert!(matches!(
+                q.subject,
+                GeneralizedTerm::Triple([
+                    GeneralizedTerm::Literal(Literal::Simple { value: "a" }),
+                    GeneralizedTerm::BlankNode(BlankNode { id: "b" }),
+                    GeneralizedTerm::NamedNode(NamedNode { iri: "tag:c" }),
+                ])
+            ));
+            assert!(matches!(
+                q.predicate,
+                GeneralizedTerm::Triple([
+                    GeneralizedTerm::Literal(Literal::Simple { value: "d" }),
+                    GeneralizedTerm::Variable(Variable { name: "e" }),
+                    GeneralizedTerm::NamedNode(NamedNode { iri: "./f" }),
+                ])
+            ));
+            assert!(matches!(
+                q.object,
+                GeneralizedTerm::Triple([
+                    GeneralizedTerm::Literal(Literal::Simple { value: "g" }),
+                    GeneralizedTerm::Variable(Variable { name: "h" }),
+                    GeneralizedTerm::NamedNode(NamedNode { iri: "../i" }),
+                ])
+            ));
+            assert!(matches!(
+                q.graph_name,
+                Some(GeneralizedTerm::Triple([
+                    GeneralizedTerm::Literal(Literal::Simple { value: "j" }),
+                    GeneralizedTerm::BlankNode(BlankNode { id: "k" }),
+                    GeneralizedTerm::NamedNode(NamedNode { iri: "/l" }),
+                ]))
+            ));
             count += 1;
             Ok(())
         })?;

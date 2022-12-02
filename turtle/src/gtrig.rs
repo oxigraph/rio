@@ -397,7 +397,7 @@ impl<R: BufRead> GTriGParser<R> {
                 unreachable!(); // unexpected_char always errs
             } else if self.read.current() != Some(b')') {
                 let new = self.bnode_id_generator.generate();
-                if root == None {
+                if root.is_none() {
                     root = Some(new);
                     self.triple_alloc.push_triple_start();
                 } else {
@@ -744,19 +744,23 @@ mod test {
 
     #[test]
     fn relative_iri_references() -> Result<(), TurtleError> {
-        let got = parse_gtrig(r#"
+        let got = parse_gtrig(
+            r#"
           <../s1> <#p1> </o1>.
           { <../s2> <#p2> </o2> }
           <//g3> { <../s3> <#p3> </o3> }
           GRAPH <//g4> { <../s4> <#p4> </o4> }
-        "#)?;
+        "#,
+        )?;
 
-        let expected = parse_gnq(r#"
+        let expected = parse_gnq(
+            r#"
           <../s1> <#p1> </o1>.
           <../s2> <#p2> </o2>.
           <../s3> <#p3> </o3> <//g3>.
           <../s4> <#p4> </o4> <//g4>.
-        "#)?;
+        "#,
+        )?;
 
         assert_eq!(expected, got);
         Ok(())
@@ -764,7 +768,8 @@ mod test {
 
     #[test]
     fn relative_prefixes() -> Result<(), TurtleError> {
-        let got = parse_gtrig(r#"
+        let got = parse_gtrig(
+            r#"
           @prefix s: <../>.
           PREFIX p: <#>
           PREFIX o: </>
@@ -774,15 +779,17 @@ mod test {
           { s:s2 p:p2 o:o2 }
           g:g3 { s:s3 p:p3 o:o3 }
           GRAPH g:g4 { s:s4 p:p4 o:o4 }
-        "#)?;
+        "#,
+        )?;
 
-        let expected = parse_gnq(r#"
+        let expected = parse_gnq(
+            r#"
           <../s1> <#p1> </o1>.
           <../s2> <#p2> </o2>.
           <../s3> <#p3> </o3> <//g3>.
           <../s4> <#p4> </o4> <//g4>.
-        "#)?;
-
+        "#,
+        )?;
 
         assert_eq!(expected, got);
         Ok(())
@@ -790,19 +797,24 @@ mod test {
 
     #[test]
     fn all_variables() -> Result<(), TurtleError> {
-        let got = parse_gtrig(r#"
+        let got = parse_gtrig(
+            r#"
           ?s1 ?p1 ?o1.
           { ?s2 ?p2 ?o2 }
           ?g3 { ?s3 ?p3 ?o3 }
           GRAPH ?g4 { ?s4 ?p4 ?o4 }
-        "#)?;
+        "#,
+        )?;
 
-        let expected = parse_gnq(r#"
+        let expected = parse_gnq(
+            r#"
           ?s1 ?p1 ?o1.
           ?s2 ?p2 ?o2.
           ?s3 ?p3 ?o3 ?g3.
           ?s4 ?p4 ?o4 ?g4.
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         assert_eq!(expected, got);
         Ok(())
@@ -810,19 +822,24 @@ mod test {
 
     #[test]
     fn all_literals() -> Result<(), TurtleError> {
-        let got = parse_gtrig(r#"
+        let got = parse_gtrig(
+            r#"
           "s1" "p1" "o1".
           { "s2" "p2" "o2" }
           "g3" { "s3" "p3" "o3" }
           GRAPH "g4" { "s4" "p4" "o4" }
-        "#)?;
+        "#,
+        )?;
 
-        let expected = parse_gnq(r#"
+        let expected = parse_gnq(
+            r#"
           "s1" "p1" "o1".
           "s2" "p2" "o2".
           "s3" "p3" "o3" "g3".
           "s4" "p4" "o4" "g4".
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         assert_eq!(expected, got);
         Ok(())
@@ -830,12 +847,14 @@ mod test {
 
     #[test]
     fn all_quoted_triples() -> Result<(), TurtleError> {
-        let got = parse_gtrig(r#"@prefix : <#>.
+        let got = parse_gtrig(
+            r#"@prefix : <#>.
           << :ss1 _:ps1 "os1" >> << _:sp1 "pp1" ?op1 >> << "so1" ?po1 :oo1 >>.
           { << ?ss2 :ps2  _:os2 >> << :sp2 "pp2" _:op2 >> << "so2" _:po2 ?oo2 >> }
           << _:sg3 ?pg3  :og3 >> { << ?ss3 :ps3 ?os3 >> << :sp3 ?pp3 _:op3 >> << ?so3 _:po3 "oo3" >> }
           GRAPH << _:sg4 "pg4" :og4 >> { << "ss4" :ps4 _:os4 >> << :sp4 _:pp4 ?op4 >> << _:so4 ?po4 "oo4" >> }
-        "#)?;
+        "#,
+        )?;
 
         let expected = parse_gnq(r#"
           << <#ss1> _:ps1 "os1" >> << _:sp1 "pp1" ?op1 >> << "so1" ?po1 <#oo1> >>.
@@ -850,12 +869,14 @@ mod test {
 
     #[test]
     fn deeply_nested_triple() -> Result<(), TurtleError> {
-        let got = parse_gtrig(r#"@prefix : <#>.
+        let got = parse_gtrig(
+            r#"@prefix : <#>.
           << << :a :b :c >> << :d :e :f >> << :g :h :i >> >> {
             << << :j :k :l >> << :m :n :o >> << :p :q :r >> >>
             << << :s :t :u >> << :v :w :x >> << :y :z :A >> >>
             << << :B :C :D >> << :E :F :G >> << :H :I :J >> >>
-        }"#)?;
+        }"#,
+        )?;
         let expected = parse_gnq(r#"
             << << <#j> <#k> <#l> >> << <#m> <#n> <#o> >> << <#p> <#q> <#r> >> >>    << << <#s> <#t> <#u> >> << <#v> <#w> <#x> >> << <#y> <#z> <#A> >> >>    << << <#B> <#C> <#D> >> << <#E> <#F> <#G> >> << <#H> <#I> <#J> >> >>    << << <#a> <#b> <#c> >> << <#d> <#e> <#f> >> << <#g> <#h> <#i> >> >>.
         "#).unwrap();
@@ -895,13 +916,11 @@ mod test {
         Ok(())
     }
 
-    fn parse_gtrig(txt: &str) -> Result<Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)>, TurtleError> {
+    fn parse_gtrig(
+        txt: &str,
+    ) -> Result<Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)>, TurtleError> {
         let mut got = Vec::new();
-        GTriGParser::new(
-            Cursor::new(txt),
-            None,
-        )
-        .parse_all(&mut |quad| {
+        GTriGParser::new(Cursor::new(txt), None).parse_all(&mut |quad| {
             got.push((
                 quad.subject.into(),
                 quad.predicate.into(),
@@ -913,12 +932,11 @@ mod test {
         Ok(got)
     }
 
-    fn parse_gnq(txt: &str) -> Result<Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)>, TurtleError> {
+    fn parse_gnq(
+        txt: &str,
+    ) -> Result<Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)>, TurtleError> {
         let mut got = Vec::new();
-        crate::GeneralizedNQuadsParser::new(
-            Cursor::new(txt),
-        )
-        .parse_all(&mut |quad| {
+        crate::GeneralizedNQuadsParser::new(Cursor::new(txt)).parse_all(&mut |quad| {
             got.push((
                 quad.subject.into(),
                 quad.predicate.into(),
@@ -939,16 +957,19 @@ mod test {
             match other {
                 GeneralizedTerm::NamedNode(n) => OwnedTerm::NamedNode(n.iri.to_string()),
                 GeneralizedTerm::BlankNode(n) => OwnedTerm::BlankNode(n.id.to_string()),
-                GeneralizedTerm::Literal(Literal::Simple { value }) => OwnedTerm::LiteralSimple(value.to_string()),
-                GeneralizedTerm::Literal(Literal::LanguageTaggedString { value, language }) =>
-                    OwnedTerm::LiteralLanguage(value.to_string(), language.to_string()),
-                GeneralizedTerm::Literal(Literal::Typed { value, datatype }) => OwnedTerm::LiteralDatatype(value.to_string(), datatype.iri.to_string()),
+                GeneralizedTerm::Literal(Literal::Simple { value }) => {
+                    OwnedTerm::LiteralSimple(value.to_string())
+                }
+                GeneralizedTerm::Literal(Literal::LanguageTaggedString { value, language }) => {
+                    OwnedTerm::LiteralLanguage(value.to_string(), language.to_string())
+                }
+                GeneralizedTerm::Literal(Literal::Typed { value, datatype }) => {
+                    OwnedTerm::LiteralDatatype(value.to_string(), datatype.iri.to_string())
+                }
                 GeneralizedTerm::Variable(n) => OwnedTerm::Variable(n.name.to_string()),
-                GeneralizedTerm::Triple(t) => OwnedTerm::Triple(Box::new([
-                    t[0].into(),
-                    t[1].into(),
-                    t[2].into(),
-                ]))
+                GeneralizedTerm::Triple(t) => {
+                    OwnedTerm::Triple(Box::new([t[0].into(), t[1].into(), t[2].into()]))
+                }
             }
         }
     }
@@ -961,34 +982,30 @@ mod test {
         LiteralLanguage(String, String),
         LiteralDatatype(String, String),
         Variable(String),
-        Triple(Box<[OwnedTerm; 3]>)
+        Triple(Box<[OwnedTerm; 3]>),
     }
 
     impl<'a> From<&'a OwnedTerm> for GeneralizedTerm<'a> {
         fn from(other: &'a OwnedTerm) -> GeneralizedTerm<'a> {
-            match other{
-                OwnedTerm::NamedNode(name) => {
-                    GeneralizedTerm::NamedNode(NamedNode { iri: &name })
+            match other {
+                OwnedTerm::NamedNode(name) => GeneralizedTerm::NamedNode(NamedNode { iri: &name }),
+                OwnedTerm::BlankNode(ident) => GeneralizedTerm::BlankNode(BlankNode { id: &ident }),
+                OwnedTerm::LiteralSimple(value) => {
+                    GeneralizedTerm::Literal(Literal::Simple { value: &value })
                 }
-                OwnedTerm::BlankNode(ident) => {
-                    GeneralizedTerm::BlankNode(BlankNode { id: &ident })
-                }
-                OwnedTerm::LiteralSimple(value) => GeneralizedTerm::Literal(Literal::Simple {
-                    value: &value,
-                }),
                 OwnedTerm::LiteralLanguage(value, tag) => {
                     GeneralizedTerm::Literal(Literal::LanguageTaggedString {
                         value: &value,
                         language: &tag,
                     })
                 }
-                OwnedTerm::LiteralDatatype(value, datatype) => GeneralizedTerm::Literal(Literal::Typed {
-                    value: &value,
-                    datatype: NamedNode { iri: &datatype },
-                }),
-                OwnedTerm::Variable(name) => {
-                    GeneralizedTerm::Variable(Variable { name: &name })
+                OwnedTerm::LiteralDatatype(value, datatype) => {
+                    GeneralizedTerm::Literal(Literal::Typed {
+                        value: &value,
+                        datatype: NamedNode { iri: &datatype },
+                    })
                 }
+                OwnedTerm::Variable(name) => GeneralizedTerm::Variable(Variable { name: &name }),
                 OwnedTerm::Triple(_) => {
                     unimplemented!()
                 }
