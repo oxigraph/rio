@@ -1,5 +1,5 @@
 use quick_xml::events::*;
-use quick_xml::{Reader, Writer};
+use quick_xml::{NsReader, Writer};
 use rio_api::model::*;
 use rio_api::parser::TriplesParser;
 use std::convert::TryInto;
@@ -13,6 +13,7 @@ use oxilangtag::LanguageTag;
 use oxiri::Iri;
 use quick_xml::escape::unescape_with;
 use quick_xml::events::attributes::Attribute;
+use quick_xml::name::{LocalName, QName, ResolveResult};
 use std::collections::{HashMap, HashSet};
 
 /// A [RDF/XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
@@ -61,13 +62,12 @@ pub struct RdfXmlParser<R: BufRead> {
 impl<R: BufRead> RdfXmlParser<R> {
     /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
-        let mut reader = Reader::from_reader(reader);
+        let mut reader = NsReader::from_reader(reader);
         reader.expand_empty_elements(true);
         Self {
             reader: RdfXmlReader {
                 reader,
                 state: vec![RdfXmlState::Doc { base_iri }],
-                namespace_buffer: Vec::default(),
                 bnode_id_generator: BlankNodeIdGenerator::default(),
                 custom_entities: HashMap::default(),
                 in_literal_depth: 0,
@@ -91,10 +91,10 @@ impl<R: BufRead> TriplesParser for RdfXmlParser<R> {
         &mut self,
         on_triple: &mut impl FnMut(Triple<'_>) -> Result<(), E>,
     ) -> Result<(), E> {
-        let (_, event) = self
+        let event = self
             .reader
             .reader
-            .read_namespaced_event(&mut self.reader_buffer, &mut self.reader.namespace_buffer)
+            .read_event_into(&mut self.reader_buffer)
             .map_err(RdfXmlError::from)?;
         match event {
             Event::DocType(dt) => self.reader.parse_doctype(dt)?,
@@ -232,11 +232,10 @@ impl RdfXmlState {
 }
 
 struct RdfXmlReader<R: BufRead> {
-    reader: Reader<R>,
+    reader: NsReader<R>,
     state: Vec<RdfXmlState>,
-    namespace_buffer: Vec<u8>,
     bnode_id_generator: BlankNodeIdGenerator,
-    custom_entities: HashMap<Vec<u8>, Vec<u8>>,
+    custom_entities: HashMap<String, String>,
     in_literal_depth: usize,
     known_rdf_id: HashSet<String>,
 }
@@ -244,41 +243,38 @@ struct RdfXmlReader<R: BufRead> {
 impl<R: BufRead> RdfXmlReader<R> {
     fn parse_doctype(&mut self, dt: BytesText<'_>) -> Result<(), RdfXmlError> {
         // we extract entities
-        for input in dt.split(|c| *c == b'<').skip(1) {
-            if !input.starts_with(b"!ENTITY") {
-                continue;
-            }
-            let mut input = trim_start(&input[7..]);
-            if input.starts_with(b"%") {
-                input = trim_start(&input[1..]);
-            }
-            let (entity_name, input) = split_once(input, is_whitespace).ok_or_else(|| {
-                RdfXmlError::msg(
-                    "<!ENTITY declarations should contain both an entity name and an entity value",
-                )
-            })?;
-            let input = trim_start(input);
-            if !input.starts_with(b"\"") {
-                return Err(RdfXmlError::msg(
-                    "<!ENTITY values should be enclosed in double quotes",
-                ));
-            }
-            let input = &input[1..];
-            let (entity_value, input) = split_once(input, |c| *c == b'"').ok_or_else(|| {
-                RdfXmlError::msg("<!ENTITY declarations values should be enclosed in double quotes")
-            })?;
-            let input = trim_start(input);
-            if !input.starts_with(b">") {
-                return Err(RdfXmlError::msg(
-                    "<!ENTITY declarations values should end with >",
-                ));
-            }
+        for input in self
+            .reader
+            .decoder()
+            .decode(dt.as_ref())?
+            .split('<')
+            .skip(1)
+        {
+            if let Some(input) = input.strip_prefix("!ENTITY") {
+                let input = input.trim_start().strip_prefix('%').unwrap_or(input);
+                let (entity_name, input) = input.trim_start().split_once(|c: char| c.is_ascii_whitespace()).ok_or_else(|| {
+                    RdfXmlError::msg(
+                        "<!ENTITY declarations should contain both an entity name and an entity value",
+                    )
+                })?;
+                let input = input.trim_start().strip_prefix('\"').ok_or_else(|| {
+                    RdfXmlError::msg("<!ENTITY values should be enclosed in double quotes")
+                })?;
+                let (entity_value, input) = input.split_once('"').ok_or_else(|| {
+                    RdfXmlError::msg(
+                        "<!ENTITY declarations values should be enclosed in double quotes",
+                    )
+                })?;
+                input.trim_start().strip_prefix('>').ok_or_else(|| {
+                    RdfXmlError::msg("<!ENTITY declarations values should end with >")
+                })?;
 
-            // Resolves custom entities within the current entity definition.
-            let entity_value = unescape_with(entity_value, &self.custom_entities)
-                .map_err(quick_xml::Error::EscapeError)?;
-            self.custom_entities
-                .insert(entity_name.to_vec(), entity_value.to_vec());
+                // Resolves custom entities within the current entity definition.
+                let entity_value = unescape_with(entity_value, |e| self.resolve_entity(e))
+                    .map_err(quick_xml::Error::EscapeError)?;
+                self.custom_entities
+                    .insert(entity_name.to_string(), entity_value.to_string());
+            }
         }
         Ok(())
     }
@@ -291,7 +287,13 @@ impl<R: BufRead> RdfXmlReader<R> {
         //Literal case
         if let Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) = self.state.last_mut()
         {
-            let mut clean_event = BytesStart::borrowed_name(event.name());
+            let mut clean_event = BytesStart::new(
+                self.reader
+                    .decoder()
+                    .decode(event.name().as_ref())
+                    .map_err(RdfXmlError::from)?
+                    .to_string(),
+            );
             for attr in event.attributes() {
                 clean_event.push_attribute(attr.map_err(RdfXmlError::from)?);
             }
@@ -341,16 +343,15 @@ impl<R: BufRead> RdfXmlReader<R> {
 
         for attribute in event.attributes() {
             let attribute = attribute.map_err(RdfXmlError::from)?;
-            match attribute.key {
-                b"xml:lang" => {
+            if attribute.key.as_ref().starts_with(b"xml") {
+                if attribute.key.as_ref() == b"xml:lang" {
                     let tag = self.convert_attribute(attribute)?;
                     language = Some(LanguageTag::parse(tag.to_ascii_lowercase()).map_err(
                         |error| RdfXmlError {
                             kind: RdfXmlErrorKind::InvalidLanguageTag { tag, error },
                         },
                     )?);
-                }
-                b"xml:base" => {
+                } else if attribute.key.as_ref() == b"xml:base" {
                     let iri = self.convert_attribute(attribute)?;
                     base_iri = Some(
                         Iri::parse(iri.clone())
@@ -359,68 +360,68 @@ impl<R: BufRead> RdfXmlReader<R> {
                             })?
                             .to_owned(),
                     )
+                } else {
+                    // We ignore other xml attributes
                 }
-                key if !key.starts_with(b"xml") => {
-                    let attribute_url = self.resolve_attribute_name(key)?;
-                    if *attribute_url == *RDF_ID {
-                        let mut id = self.convert_attribute(attribute)?;
-                        if !is_nc_name(&id) {
-                            return Err(RdfXmlError::msg(format!(
-                                "{} is not a valid rdf:ID value",
-                                &id
-                            ))
-                            .into());
-                        }
-                        id.insert(0, '#');
-                        id_attr = Some(id);
-                    } else if *attribute_url == *RDF_BAG_ID {
-                        let bag_id = self.convert_attribute(attribute)?;
-                        if !is_nc_name(&bag_id) {
-                            return Err(RdfXmlError::msg(format!(
-                                "{} is not a valid rdf:bagID value",
-                                &bag_id
-                            ))
-                            .into());
-                        }
-                    } else if *attribute_url == *RDF_NODE_ID {
-                        let id = self.convert_attribute(attribute)?;
-                        if !is_nc_name(&id) {
-                            return Err(RdfXmlError::msg(format!(
-                                "{} is not a valid rdf:nodeID value",
-                                &id
-                            ))
-                            .into());
-                        }
-                        node_id_attr = Some(OwnedBlankNode { id });
-                    } else if *attribute_url == *RDF_ABOUT {
-                        about_attr = Some(attribute);
-                    } else if *attribute_url == *RDF_RESOURCE {
-                        resource_attr = Some(attribute);
-                    } else if *attribute_url == *RDF_DATATYPE {
-                        datatype_attr = Some(attribute);
-                    } else if *attribute_url == *RDF_PARSE_TYPE {
-                        parse_type = match attribute.value.as_ref() {
-                            b"Collection" => RdfXmlParseType::Collection,
-                            b"Literal" => RdfXmlParseType::Literal,
-                            b"Resource" => RdfXmlParseType::Resource,
-                            _ => RdfXmlParseType::Other,
-                        };
-                    } else if *attribute_url == *RDF_TYPE {
-                        type_attr = Some(attribute);
-                    } else if RESERVED_RDF_ATTRIBUTES.contains(&&*attribute_url) {
+            } else {
+                let attribute_url = self.resolve_attribute_name(attribute.key)?;
+                if *attribute_url == *RDF_ID {
+                    let mut id = self.convert_attribute(attribute)?;
+                    if !is_nc_name(&id) {
                         return Err(RdfXmlError::msg(format!(
-                            "{} is not a valid attribute",
-                            &attribute_url
+                            "{} is not a valid rdf:ID value",
+                            &id
                         ))
                         .into());
-                    } else {
-                        property_attrs.push((
-                            OwnedNamedNode { iri: attribute_url },
-                            self.convert_attribute(attribute)?,
-                        ));
                     }
+                    id.insert(0, '#');
+                    id_attr = Some(id);
+                } else if *attribute_url == *RDF_BAG_ID {
+                    let bag_id = self.convert_attribute(attribute)?;
+                    if !is_nc_name(&bag_id) {
+                        return Err(RdfXmlError::msg(format!(
+                            "{} is not a valid rdf:bagID value",
+                            &bag_id
+                        ))
+                        .into());
+                    }
+                } else if *attribute_url == *RDF_NODE_ID {
+                    let id = self.convert_attribute(attribute)?;
+                    if !is_nc_name(&id) {
+                        return Err(RdfXmlError::msg(format!(
+                            "{} is not a valid rdf:nodeID value",
+                            &id
+                        ))
+                        .into());
+                    }
+                    node_id_attr = Some(OwnedBlankNode { id });
+                } else if *attribute_url == *RDF_ABOUT {
+                    about_attr = Some(attribute);
+                } else if *attribute_url == *RDF_RESOURCE {
+                    resource_attr = Some(attribute);
+                } else if *attribute_url == *RDF_DATATYPE {
+                    datatype_attr = Some(attribute);
+                } else if *attribute_url == *RDF_PARSE_TYPE {
+                    parse_type = match attribute.value.as_ref() {
+                        b"Collection" => RdfXmlParseType::Collection,
+                        b"Literal" => RdfXmlParseType::Literal,
+                        b"Resource" => RdfXmlParseType::Resource,
+                        _ => RdfXmlParseType::Other,
+                    };
+                } else if *attribute_url == *RDF_TYPE {
+                    type_attr = Some(attribute);
+                } else if RESERVED_RDF_ATTRIBUTES.contains(&&*attribute_url) {
+                    return Err(RdfXmlError::msg(format!(
+                        "{} is not a valid attribute",
+                        &attribute_url
+                    ))
+                    .into());
+                } else {
+                    property_attrs.push((
+                        OwnedNamedNode { iri: attribute_url },
+                        self.convert_attribute(attribute)?,
+                    ));
                 }
-                _ => (), //We do not fail for unknown tags in the XML namespace
             }
         }
 
@@ -643,7 +644,12 @@ impl<R: BufRead> RdfXmlReader<R> {
                 self.state.last_mut()
             {
                 writer
-                    .write_event(Event::End(BytesEnd::borrowed(event.name())))
+                    .write_event(Event::End(BytesEnd::new(
+                        self.reader
+                            .decoder()
+                            .decode(event.name().as_ref())
+                            .map_err(RdfXmlError::from)?,
+                    )))
                     .map_err(RdfXmlError::from)?;
                 self.in_literal_depth -= 1;
                 return Ok(());
@@ -657,20 +663,16 @@ impl<R: BufRead> RdfXmlReader<R> {
     }
 
     fn parse_text_event(&mut self, event: BytesText<'_>) -> Result<(), RdfXmlError> {
+        let text = event.unescape_with(|e| self.resolve_entity(e))?.to_string();
         match self.state.last_mut() {
             Some(RdfXmlState::PropertyElt { object, .. }) => {
                 if !event.iter().all(is_whitespace) {
-                    *object = Some(NodeOrText::Text(
-                        event.unescape_and_decode_with_custom_entities(
-                            &self.reader,
-                            &self.custom_entities,
-                        )?,
-                    ));
+                    *object = Some(NodeOrText::Text(text));
                 }
                 Ok(())
             }
             Some(RdfXmlState::ParseTypeLiteralPropertyElt { writer, .. }) => {
-                writer.write_event(Event::Text(event))?;
+                writer.write_event(Event::Text(BytesText::new(&text)))?;
                 Ok(())
             }
             _ => {
@@ -678,43 +680,48 @@ impl<R: BufRead> RdfXmlReader<R> {
                     Ok(())
                 } else {
                     Err(RdfXmlError::msg(format!(
-                        "Unexpected text event: {}",
-                        event.unescape_and_decode_with_custom_entities(
-                            &self.reader,
-                            &self.custom_entities
-                        )?
+                        "Unexpected text event: '{}'",
+                        text
                     )))
                 }
             }
         }
     }
 
-    fn resolve_tag_name(&self, qname: &[u8]) -> Result<String, RdfXmlError> {
-        let (namespace, local_name) = self.reader.event_namespace(qname, &self.namespace_buffer);
+    fn resolve_tag_name(&self, qname: QName<'_>) -> Result<String, RdfXmlError> {
+        let (namespace, local_name) = self.reader.resolve_element(qname);
         self.resolve_ns_name(namespace, local_name)
     }
 
-    fn resolve_attribute_name(&self, qname: &[u8]) -> Result<String, RdfXmlError> {
-        let (namespace, local_name) = self
-            .reader
-            .attribute_namespace(qname, &self.namespace_buffer);
+    fn resolve_attribute_name(&self, qname: QName<'_>) -> Result<String, RdfXmlError> {
+        let (namespace, local_name) = self.reader.resolve_attribute(qname);
         self.resolve_ns_name(namespace, local_name)
     }
 
     fn resolve_ns_name(
         &self,
-        namespace: Option<&[u8]>,
-        local_name: &[u8],
+        namespace: ResolveResult,
+        local_name: LocalName<'_>,
     ) -> Result<String, RdfXmlError> {
-        Ok(match namespace {
-            Some(namespace) => {
-                let namespace = unescape_with(namespace, &self.custom_entities)
-                    .map_err(quick_xml::Error::EscapeError)?;
-                let namespace = self.reader.decode(&namespace)?;
-                namespace.to_owned() + self.reader.decode(local_name)?
+        match namespace {
+            ResolveResult::Bound(ns) => {
+                let mut value = Vec::with_capacity(ns.as_ref().len() + local_name.as_ref().len());
+                value.extend_from_slice(ns.as_ref());
+                value.extend_from_slice(local_name.as_ref());
+                Ok(unescape_with(&self.reader.decoder().decode(&value)?, |e| {
+                    self.resolve_entity(e)
+                })
+                .map_err(quick_xml::Error::from)?
+                .to_string())
             }
-            None => self.reader.decode(local_name)?.to_owned(),
-        })
+            ResolveResult::Unbound => {
+                Err(RdfXmlError::msg("XML namespaces are required in RDF/XML"))
+            }
+            ResolveResult::Unknown(v) => Err(RdfXmlError::msg(format!(
+                "Unknown prefix {}:",
+                self.reader.decoder().decode(&v)?
+            ))),
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1011,9 +1018,10 @@ impl<R: BufRead> RdfXmlReader<R> {
         Ok(())
     }
 
-    fn convert_attribute(&self, attribute: Attribute<'_>) -> Result<String, RdfXmlError> {
+    fn convert_attribute(&self, attribute: Attribute) -> Result<String, RdfXmlError> {
         Ok(attribute
-            .unescape_and_decode_value_with_custom_entities(&self.reader, &self.custom_entities)?)
+            .decode_and_unescape_value_with(&self.reader, |e| self.resolve_entity(e))?
+            .to_string())
     }
 
     fn convert_iri_attribute(
@@ -1021,11 +1029,13 @@ impl<R: BufRead> RdfXmlReader<R> {
         base_iri: &Option<Iri<String>>,
         attribute: Attribute<'_>,
     ) -> Result<OwnedNamedNode, RdfXmlError> {
-        let value = attribute.unescaped_value_with_custom_entities(&self.custom_entities)?;
-        let value = self.reader.decode(&value)?;
         Ok(OwnedNamedNode {
-            iri: resolve(base_iri, value)?,
+            iri: resolve(base_iri, self.convert_attribute(attribute)?)?,
         })
+    }
+
+    fn resolve_entity(&self, e: &str) -> Option<&str> {
+        self.custom_entities.get(e).map(|e| e.as_str())
     }
 }
 
@@ -1101,22 +1111,6 @@ impl AsRef<str> for BlankNodeId {
         // We know what id is and it's always valid UTF8
         str::from_utf8(&self.id).unwrap()
     }
-}
-
-fn split_once(input: &[u8], pred: impl FnMut(&u8) -> bool) -> Option<(&[u8], &[u8])> {
-    let mut iter = input.splitn(2, pred);
-    let front = iter.next()?;
-    let tail = iter.next()?;
-    Some((front, tail))
-}
-
-fn trim_start(input: &[u8]) -> &[u8] {
-    for (i, c) in input.iter().enumerate() {
-        if !is_whitespace(c) {
-            return &input[i..];
-        }
-    }
-    b"".as_ref()
 }
 
 fn is_whitespace(c: &u8) -> bool {

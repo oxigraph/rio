@@ -55,9 +55,9 @@ impl<W: Write> RdfXmlFormatter<W> {
 
     fn write_start(mut self) -> io::Result<Self> {
         self.writer
-            .write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))
+            .write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), None)))
             .map_err(map_err)?;
-        let mut rdf_open = BytesStart::borrowed_name(b"rdf:RDF");
+        let mut rdf_open = BytesStart::new("rdf:RDF");
         rdf_open.push_attribute(("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"));
         self.writer
             .write_event(Event::Start(rdf_open))
@@ -69,11 +69,11 @@ impl<W: Write> RdfXmlFormatter<W> {
     pub fn finish(mut self) -> io::Result<W> {
         if self.current_subject.is_some() {
             self.writer
-                .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
+                .write_event(Event::End(BytesEnd::new("rdf:Description")))
                 .map_err(map_err)?;
         }
         self.writer
-            .write_event(Event::End(BytesEnd::borrowed(b"rdf:RDF")))
+            .write_event(Event::End(BytesEnd::new("rdf:RDF")))
             .map_err(map_err)?;
         let mut inner = self.writer.into_inner();
         inner.flush()?;
@@ -89,11 +89,11 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
         if self.current_subject.as_ref().map(|v| v.into()) != Some(triple.subject) {
             if self.current_subject.is_some() {
                 self.writer
-                    .write_event(Event::End(BytesEnd::borrowed(b"rdf:Description")))
+                    .write_event(Event::End(BytesEnd::new("rdf:Description")))
                     .map_err(map_err)?;
             }
 
-            let mut description_open = BytesStart::borrowed_name(b"rdf:Description");
+            let mut description_open = BytesStart::new("rdf:Description");
             match triple.subject {
                 Subject::NamedNode(n) => description_open.push_attribute(("rdf:about", n.iri)),
                 Subject::BlankNode(n) => description_open.push_attribute(("rdf:nodeID", n.id)),
@@ -115,7 +115,7 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
         } else {
             (prop_value, ("xmlns", prop_prefix))
         };
-        let mut property_open = BytesStart::borrowed_name(prop_qname.as_bytes());
+        let mut property_open = BytesStart::new(prop_qname);
         property_open.push_attribute(prop_xmlns);
         let content = match triple.object {
             Term::NamedNode(n) => {
@@ -149,10 +149,10 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
                 .write_event(Event::Start(property_open))
                 .map_err(map_err)?;
             self.writer
-                .write_event(Event::Text(BytesText::from_plain_str(content)))
+                .write_event(Event::Text(BytesText::new(content)))
                 .map_err(map_err)?;
             self.writer
-                .write_event(Event::End(BytesEnd::borrowed(prop_qname.as_bytes())))
+                .write_event(Event::End(BytesEnd::new(prop_qname)))
                 .map_err(map_err)?;
         } else {
             self.writer
@@ -203,7 +203,7 @@ mod test {
 
     #[cfg(feature = "rio_api/star")]
     #[test]
-    fn formmatting_rdf_star_fails_cleanly() {
+    fn formatting_rdf_star_fails_cleanly() {
         use rio_api::formatter::TriplesFormatter;
         let iri = NamedNode { iri: "tag:iri" };
         let triple = Triple {
