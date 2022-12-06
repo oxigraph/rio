@@ -15,8 +15,6 @@ use std::mem::swap;
 
 /// A [TriG](https://www.w3.org/TR/trig/) streaming parser parsing generalized quads.
 ///
-/// Warning: RDF-star is not supported yet.
-///
 /// It implements the `GeneralizedQuadsParser` trait.
 /// Using it requires to enable the `generalized` feature.
 ///

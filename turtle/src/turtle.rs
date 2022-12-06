@@ -293,7 +293,7 @@ fn parse_statement<E: From<TurtleError>>(
     } else {
         parse_triples(parser, on_triple)?;
         debug_assert_eq!(parser.triple_alloc.complete_len(), 0);
-        debug_assert_eq!(parser.triple_alloc.incomplete_len(), 0);
+        debug_assert_eq!(parser.triple_alloc.incomplete_len(), 1);
 
         parser.read.check_is_current(b'.')?;
         parser.read.consume()?;
@@ -411,7 +411,7 @@ fn parse_triples_or_graph<E: From<TurtleError>>(
         parser.inner.read.consume()?;
         parser.inner.triple_alloc.pop_subject();
         debug_assert_eq!(parser.inner.triple_alloc.complete_len(), 0);
-        debug_assert_eq!(parser.inner.triple_alloc.incomplete_len(), 0);
+        debug_assert_eq!(parser.inner.triple_alloc.incomplete_len(), 1);
     }
     parser.graph_name_buf.clear();
     Ok(())
@@ -446,7 +446,7 @@ fn parse_triples2<E: From<TurtleError>>(
 
     parser.triple_alloc.pop_subject();
     debug_assert_eq!(parser.triple_alloc.complete_len(), 0);
-    debug_assert_eq!(parser.triple_alloc.incomplete_len(), 0);
+    debug_assert_eq!(parser.triple_alloc.incomplete_len(), 1);
 
     parser.read.check_is_current(b'.')?;
     parser.read.consume()?;
@@ -471,7 +471,7 @@ fn parse_wrapped_graph<E: From<TurtleError>>(
 
         parse_triples(parser, on_triple)?;
         debug_assert_eq!(parser.triple_alloc.complete_len(), 0);
-        debug_assert_eq!(parser.triple_alloc.incomplete_len(), 0);
+        debug_assert_eq!(parser.triple_alloc.incomplete_len(), 1);
         match parser.read.current() {
             Some(b'.') => {
                 parser.read.consume()?;
