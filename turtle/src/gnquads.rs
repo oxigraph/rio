@@ -1,4 +1,4 @@
-//! Implementation of a generalized RDF / RDF-star version of the Trig syntax
+//! Implementation of a generalized RDF / RDF-star version of the N-Quads syntax
 
 use crate::error::*;
 use crate::gtriple_allocator::GeneralizedTripleAllocator;
@@ -10,9 +10,7 @@ use rio_api::model::*;
 use rio_api::parser::*;
 use std::io::BufRead;
 
-/// A [TriG](https://www.w3.org/TR/trig/) streaming parser parsing generalized quads.
-///
-/// Warning: RDF-star is not supported yet.
+/// A [N-Quads](https://www.w3.org/TR/n-quads/) streaming parser parsing generalized quads.
 ///
 /// It implements the `GeneralizedQuadsParser` trait.
 /// Using it requires to enable the `generalized` feature.

@@ -36,7 +36,7 @@ impl TripleAllocator {
     }
 
     pub fn incomplete_len(&self) -> usize {
-        self.complete_len
+        self.incomplete_len
     }
 
     pub fn top(&self) -> &Triple<'_> {

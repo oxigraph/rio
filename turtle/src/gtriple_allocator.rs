@@ -36,7 +36,7 @@ impl GeneralizedTripleAllocator {
     }
 
     pub fn incomplete_len(&self) -> usize {
-        self.complete_len
+        self.incomplete_len
     }
 
     /// Return the last completed triple
