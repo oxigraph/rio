@@ -740,6 +740,8 @@ mod test {
 
     const OK_TURTLE_ERROR: Result<(), TurtleError> = Ok(());
 
+    type OwnedQuad = (OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>);
+
     #[test]
     fn relative_iri_references() -> Result<(), TurtleError> {
         let got = parse_gtrig(
@@ -889,8 +891,7 @@ mod test {
           ?s [ ?p ?o1 ] ?o2 .
         "#;
 
-        let mut got: Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)> =
-            Vec::with_capacity(2);
+        let mut got: Vec<OwnedQuad> = Vec::with_capacity(2);
 
         GTriGParser::new(
             Cursor::new(gtrig),
@@ -914,9 +915,7 @@ mod test {
         Ok(())
     }
 
-    fn parse_gtrig(
-        txt: &str,
-    ) -> Result<Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)>, TurtleError> {
+    fn parse_gtrig(txt: &str) -> Result<Vec<OwnedQuad>, TurtleError> {
         let mut got = Vec::new();
         GTriGParser::new(Cursor::new(txt), None).parse_all(&mut |quad| {
             got.push((
@@ -930,9 +929,7 @@ mod test {
         Ok(got)
     }
 
-    fn parse_gnq(
-        txt: &str,
-    ) -> Result<Vec<(OwnedTerm, OwnedTerm, OwnedTerm, Option<OwnedTerm>)>, TurtleError> {
+    fn parse_gnq(txt: &str) -> Result<Vec<OwnedQuad>, TurtleError> {
         let mut got = Vec::new();
         crate::GeneralizedNQuadsParser::new(Cursor::new(txt)).parse_all(&mut |quad| {
             got.push((
@@ -986,24 +983,21 @@ mod test {
     impl<'a> From<&'a OwnedTerm> for GeneralizedTerm<'a> {
         fn from(other: &'a OwnedTerm) -> GeneralizedTerm<'a> {
             match other {
-                OwnedTerm::NamedNode(name) => GeneralizedTerm::NamedNode(NamedNode { iri: &name }),
-                OwnedTerm::BlankNode(ident) => GeneralizedTerm::BlankNode(BlankNode { id: &ident }),
+                OwnedTerm::NamedNode(iri) => GeneralizedTerm::NamedNode(NamedNode { iri }),
+                OwnedTerm::BlankNode(id) => GeneralizedTerm::BlankNode(BlankNode { id }),
                 OwnedTerm::LiteralSimple(value) => {
-                    GeneralizedTerm::Literal(Literal::Simple { value: &value })
+                    GeneralizedTerm::Literal(Literal::Simple { value })
                 }
-                OwnedTerm::LiteralLanguage(value, tag) => {
-                    GeneralizedTerm::Literal(Literal::LanguageTaggedString {
-                        value: &value,
-                        language: &tag,
-                    })
+                OwnedTerm::LiteralLanguage(value, language) => {
+                    GeneralizedTerm::Literal(Literal::LanguageTaggedString { value, language })
                 }
-                OwnedTerm::LiteralDatatype(value, datatype) => {
+                OwnedTerm::LiteralDatatype(value, iri) => {
                     GeneralizedTerm::Literal(Literal::Typed {
-                        value: &value,
-                        datatype: NamedNode { iri: &datatype },
+                        value,
+                        datatype: NamedNode { iri },
                     })
                 }
-                OwnedTerm::Variable(name) => GeneralizedTerm::Variable(Variable { name: &name }),
+                OwnedTerm::Variable(name) => GeneralizedTerm::Variable(Variable { name }),
                 OwnedTerm::Triple(_) => {
                     unimplemented!()
                 }

@@ -12,7 +12,7 @@ use std::io::BufReader;
 pub fn parse_rdf_test_file(url: &str) -> Result<OwnedDataset, Box<dyn Error>> {
     let base = env!("CARGO_MANIFEST_DIR").to_owned() + "/serd-tests";
     let read = BufReader::new(
-        File::open(&url.replace("http://drobilla.net/sw/serd/test", &base))
+        File::open(url.replace("http://drobilla.net/sw/serd/test", &base))
             .map_err(|e| TestEvaluationError::Io(url.to_owned(), e))?,
     );
     let base_iri = Iri::parse(url.to_owned())?;
