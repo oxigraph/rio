@@ -1,6 +1,6 @@
 [package]
 name = "rio_xml"
-version = "0.7.3"
+version = "0.8.0"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
@@ -20,5 +20,5 @@ default = []
 [dependencies]
 oxilangtag = "0.1"
 oxiri = "0.2"
-rio_api = { version = "0.7", path="../api" }
+rio_api = { version = "0.8", path="../api" }
 quick-xml = "0.26"
