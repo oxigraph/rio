@@ -87,7 +87,7 @@ pub fn parse_blank_node_label<'a>(
     read.consume()?;
 
     let c = read.required_current()?;
-    if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || (b'0'..=b'9').contains(&c)) {
+    if c <= MAX_ASCII && (is_possible_pn_chars_u_ascii(c) || c.is_ascii_digit()) {
         buffer.push(char::from(c))
     } else {
         let c = read_utf8_char(read)?;
