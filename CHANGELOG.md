@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1] - 2022-01-17
+
+### Changed
+- Upgrades `quick-xml` to 0.27.
+
+
+# Changelog
+
 ## [0.8.0] - 2022-12-18
 
 ### Added
