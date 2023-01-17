@@ -21,4 +21,4 @@ default = []
 oxilangtag = "0.1"
 oxiri = "0.2"
 rio_api = { version = "0.8", path="../api" }
-quick-xml = "0.26"
+quick-xml = "0.27"

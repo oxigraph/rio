@@ -2,6 +2,7 @@ use oxilangtag::LanguageTagParseError;
 use oxiri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
 use std::error::Error;
+use std::sync::Arc;
 use std::{fmt, io};
 
 /// Error that might be returned during parsing.
@@ -88,7 +89,7 @@ impl From<quick_xml::events::attributes::AttrError> for RdfXmlError {
 impl From<io::Error> for RdfXmlError {
     fn from(error: io::Error) -> Self {
         Self {
-            kind: RdfXmlErrorKind::Xml(quick_xml::Error::Io(error)),
+            kind: RdfXmlErrorKind::Xml(quick_xml::Error::Io(Arc::new(error))),
         }
     }
 }
@@ -97,7 +98,7 @@ impl From<RdfXmlError> for io::Error {
     fn from(error: RdfXmlError) -> Self {
         match error.kind {
             RdfXmlErrorKind::Xml(error) => match error {
-                quick_xml::Error::Io(error) => error,
+                quick_xml::Error::Io(error) => io::Error::new(error.kind(), error),
                 quick_xml::Error::UnexpectedEof(error) => {
                     io::Error::new(io::ErrorKind::UnexpectedEof, error)
                 }

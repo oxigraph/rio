@@ -166,7 +166,7 @@ impl<W: Write> TriplesFormatter for RdfXmlFormatter<W> {
 
 fn map_err(error: quick_xml::Error) -> io::Error {
     if let quick_xml::Error::Io(error) = error {
-        error
+        io::Error::new(error.kind(), error)
     } else {
         io::Error::new(io::ErrorKind::Other, error)
     }
