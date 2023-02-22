@@ -135,7 +135,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
                             } else if candidates.len() == 1 {
                                 candidates.drain(0..1).next().unwrap()
                             } else {
-                                return Some(Err(Box::new(TestManifestError::AmbigiousManifest(
+                                return Some(Err(Box::new(TestManifestError::AmbiguousManifest(
                                     manifest,
                                 ))));
                             }
@@ -190,7 +190,7 @@ impl<R: Fn(&str) -> Result<OwnedDataset, Box<dyn Error>>> Iterator for TestManif
 
 #[derive(Debug, Clone)]
 pub enum TestManifestError {
-    AmbigiousManifest(OwnedNamedNode),
+    AmbiguousManifest(OwnedNamedNode),
     InvalidTestType(OwnedNamedNode),
     InvalidTestAction(OwnedNamedNode),
     InvalidTestResult(OwnedNamedNode),
@@ -201,7 +201,7 @@ pub enum TestManifestError {
 impl fmt::Display for TestManifestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            TestManifestError::AmbigiousManifest(t) => {
+            TestManifestError::AmbiguousManifest(t) => {
                 write!(f, "Could not decide what is the manifest IRI in {}", t)
             }
             TestManifestError::InvalidTestType(t) => {
