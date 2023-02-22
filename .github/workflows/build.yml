@@ -28,6 +28,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all --all-targets
 
+  clippy_msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup update && rustup override set 1.58.0 && rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings -D clippy::all
+      - run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::all
+
   test:
     runs-on: ubuntu-latest
     steps:

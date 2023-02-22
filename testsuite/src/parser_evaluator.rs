@@ -143,8 +143,6 @@ pub fn parse_w3c_rdf_test_file_for_gnquads(
     url: &str,
     tests_path: &Path,
 ) -> Result<OwnedDataset, Box<dyn Error>> {
-    use std::convert::TryInto;
-
     let read = read_w3c_rdf_test_file(url, tests_path)?;
     let base_iri = Iri::parse(url.to_owned())?;
 
@@ -173,8 +171,6 @@ pub fn parse_w3c_rdf_test_file_for_gtrig(
     url: &str,
     tests_path: &Path,
 ) -> Result<OwnedDataset, Box<dyn Error>> {
-    use std::convert::TryInto;
-
     let read = read_w3c_rdf_test_file(url, tests_path)?;
     let base_iri = Iri::parse(url.to_owned())?;
 
