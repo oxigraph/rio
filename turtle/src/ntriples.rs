@@ -400,7 +400,7 @@ pub(crate) fn parse_iriref<'a>(
 mod test {
     #[test]
     fn nquads_star_valid_quad() -> Result<(), Box<dyn std::error::Error>> {
-        // adding this test because there is currenly no testsuite specific to N-Quads star
+        // adding this test because there is currently no testsuite specific to N-Quads star
         use crate::{NQuadsParser, TurtleError};
         use rio_api::parser::QuadsParser;
         let file = b"<< <tag:a> <tag:b> <tag:c> >> <tag:d> << <tag:e> <tag:f> <tag:g> >> <tag:h>.";
@@ -415,7 +415,7 @@ mod test {
 
     #[test]
     fn nquads_star_invalid_graph_name() {
-        // adding this test because there is currenly no testsuite specific to N-Quads star
+        // adding this test because there is currently no testsuite specific to N-Quads star
         use crate::{NQuadsParser, TurtleError};
         use rio_api::parser::QuadsParser;
         let file = b"<tag:s> <tag:p> <tag:o> << <tag:a> <tag:b> <tag:c> >> .";

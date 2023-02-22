@@ -228,7 +228,7 @@ mod test {
 
     #[test]
     fn nquads_relative_irirefs() -> Result<(), Box<dyn std::error::Error>> {
-        // adding this test because there is currenly no testsuite specific to N-Quads star
+        // adding this test because there is currently no testsuite specific to N-Quads star
         let file = r#"<#s> <../p> </o> <//g>."#;
         let mut count = 0;
         GeneralizedNQuadsParser::new(file.as_ref()).parse_all(&mut |q| -> Result<
@@ -260,7 +260,7 @@ mod test {
 
     #[test]
     fn nquads_star_valid_quad() -> Result<(), Box<dyn std::error::Error>> {
-        // adding this test because there is currenly no testsuite specific to N-Quads star
+        // adding this test because there is currently no testsuite specific to N-Quads star
         let file =
             br#"<< "a" _:b <tag:c> >> << "d" ?e <./f> >> << "g" $h <../i> >> << "j" _:k </l> >>."#;
         let mut count = 0;
@@ -309,7 +309,7 @@ mod test {
 
     #[test]
     fn nquads_star_invalid_graph_name() {
-        // adding this test because there is currenly no testsuite specific to N-Quads star
+        // adding this test because there is currently no testsuite specific to N-Quads star
         let file = b"<tag:s> <tag:p> << <tag:a> <tag:b> <tag:c> .";
         let mut count = 0;
         let res = GeneralizedNQuadsParser::new(file.as_ref()).parse_all(&mut |_| -> Result<
