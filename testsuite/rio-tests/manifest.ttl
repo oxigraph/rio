@@ -15,6 +15,8 @@
 		<#xml_nested_entities>
 		<#literal_value_space>
 		<#bad_parentheses>
+		<#keyword_vs_prefix_ttl>
+		<#keyword_vs_prefix_trig>
 	) .
 
 <#no_end_line_jump>
@@ -67,3 +69,15 @@
 	rdf:type rdft:TestTurtleNegativeSyntax ;
 	mf:name "a lot of parentheses that might generate a stack overflow" ;
 	mf:action <bad_parentheses.ttl> .
+
+<#keyword_vs_prefix_ttl>
+	rdf:type rdft:TestTurtleEval ;
+	mf:name "usage of keywords as prefix" ;
+	mf:action <keyword_vs_prefix.ttl> ;
+	mf:result <keyword_vs_prefix.nt> .
+
+<#keyword_vs_prefix_trig>
+	rdf:type rdft:TestTrigEval ;
+	mf:name "usage of keywords as prefix" ;
+	mf:action <keyword_vs_prefix.trig> ;
+	mf:result <keyword_vs_prefix.nq> .
