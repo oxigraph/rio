@@ -275,14 +275,18 @@ fn parse_statement<E: From<TurtleError>>(
             &parser.base_iri,
         )?);
         Ok(())
-    } else if parser.read.starts_with_ignore_ascii_case(b"BASE") {
+    } else if parser.read.starts_with_ignore_ascii_case(b"BASE")
+        && !parser.read.starts_with_ignore_ascii_case(b"BASE:")
+    {
         parser.base_iri = Some(parse_sparql_base(
             &mut parser.read,
             &mut parser.temp_buf,
             &parser.base_iri,
         )?);
         Ok(())
-    } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX") {
+    } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX")
+        && !parser.read.starts_with_ignore_ascii_case(b"PREFIX:")
+    {
         parse_sparql_prefix(
             &mut parser.read,
             &mut parser.prefixes,
@@ -326,14 +330,18 @@ fn parse_block_or_directive<E: From<TurtleError>>(
             &parser.inner.base_iri,
         )?);
         Ok(())
-    } else if parser.inner.read.starts_with_ignore_ascii_case(b"BASE") {
+    } else if parser.inner.read.starts_with_ignore_ascii_case(b"BASE")
+        && !parser.inner.read.starts_with_ignore_ascii_case(b"BASE:")
+    {
         parser.inner.base_iri = Some(parse_sparql_base(
             &mut parser.inner.read,
             &mut parser.inner.temp_buf,
             &parser.inner.base_iri,
         )?);
         Ok(())
-    } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX") {
+    } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX")
+        && !parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX:")
+    {
         parse_sparql_prefix(
             &mut parser.inner.read,
             &mut parser.inner.prefixes,
@@ -341,7 +349,9 @@ fn parse_block_or_directive<E: From<TurtleError>>(
             &mut parser.inner.temp_buf,
         )?;
         Ok(())
-    } else if parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH") {
+    } else if parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH")
+        && !parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH:")
+    {
         parser.inner.read.consume_many("GRAPH".len())?;
         skip_whitespace(&mut parser.inner.read)?;
 
@@ -841,7 +851,9 @@ fn parse_object<E: From<TurtleError>>(
             let TurtleParser {
                 read, triple_alloc, ..
             } = parser;
-            if read.starts_with(b"true") || read.starts_with(b"false") {
+            if read.starts_with(b"true") && !read.starts_with(b"true:")
+                || read.starts_with(b"false") && !read.starts_with(b"false:")
+            {
                 triple_alloc
                     .try_push_object(|b, _| parse_boolean_literal(read, b).map(Term::from))?;
             } else {
