@@ -122,12 +122,11 @@ const TRIPLE: Triple<'static> = Triple {
     }),
 };
 
-#[allow(clippy::disallowed_names)]
 fn example_graph(rdf_star: bool) -> Vec<Triple<'static>> {
-    let foo = NamedNode {
+    let foo_node = NamedNode {
         iri: "http://example.com/foo",
     };
-    let bar = NamedNode {
+    let bar_node = NamedNode {
         iri: "http://example.com/bar",
     };
     let bnode = BlankNode { id: "foobar" };
@@ -144,45 +143,45 @@ fn example_graph(rdf_star: bool) -> Vec<Triple<'static>> {
     };
     let mut triples = vec![
         Triple {
-            subject: foo.into(),
-            predicate: bar,
-            object: bar.into(),
+            subject: foo_node.into(),
+            predicate: bar_node,
+            object: bar_node.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: bnode.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: simple.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: language.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: foo,
+            subject: foo_node.into(),
+            predicate: foo_node,
             object: datatype.into(),
         },
         Triple {
-            subject: bar.into(),
-            predicate: bar,
-            object: bar.into(),
+            subject: bar_node.into(),
+            predicate: bar_node,
+            object: bar_node.into(),
         },
     ];
     if rdf_star {
         triples.push(Triple {
             subject: (&TRIPLE).into(),
-            predicate: bar,
+            predicate: bar_node,
             object: simple.into(),
         });
         triples.push(Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: (&TRIPLE).into(),
         });
     }
