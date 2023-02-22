@@ -9,7 +9,8 @@ repository = "https://github.com/oxigraph/rio"
 description = """
 Common data structures for RDF formats parsers and serializers
 """
-edition = "2018"
+edition = "2021"
+rust-version = "1.58"
 
 [package.metadata.docs.rs]
 all-features = true
