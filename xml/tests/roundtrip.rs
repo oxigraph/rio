@@ -5,12 +5,11 @@ use rio_xml::{RdfXmlError, RdfXmlFormatter, RdfXmlParser};
 use std::io::Cursor;
 
 #[test]
-#[allow(clippy::disallowed_names)]
 fn simple_roundtrip() -> Result<(), RdfXmlError> {
-    let foo = NamedNode {
+    let foo_node = NamedNode {
         iri: "http://example.com/foo",
     };
-    let bar = NamedNode {
+    let bar_node = NamedNode {
         iri: "http://example.com/b%adar",
     };
     let bad = NamedNode {
@@ -32,44 +31,44 @@ fn simple_roundtrip() -> Result<(), RdfXmlError> {
 
     let graph = vec![
         Triple {
-            subject: foo.into(),
-            predicate: bar,
-            object: bar.into(),
+            subject: foo_node.into(),
+            predicate: bar_node,
+            object: bar_node.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: bnode.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: simple.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: language.into(),
         },
         Triple {
-            subject: foo.into(),
-            predicate: bar,
+            subject: foo_node.into(),
+            predicate: bar_node,
             object: datatype.into(),
         },
         Triple {
-            subject: bar.into(),
-            predicate: bar,
-            object: bar.into(),
+            subject: bar_node.into(),
+            predicate: bar_node,
+            object: bar_node.into(),
         },
         Triple {
             subject: bnode.into(),
-            predicate: bar,
-            object: bar.into(),
+            predicate: bar_node,
+            object: bar_node.into(),
         },
         Triple {
             subject: bnode.into(),
             predicate: bad,
-            object: foo.into(),
+            object: foo_node.into(),
         },
     ];
 
