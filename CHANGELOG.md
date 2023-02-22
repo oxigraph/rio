@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2] - 2022-02-22
+
+### Changed
+- Sets officially the minimal supported Rust version to 1.58.
+- Turtle and TriG: Fixes parsing of prefixes named like a keyword (`prefix`, `base`, `graph`, `true` and `false`).
+
+
 ## [0.8.1] - 2022-01-17
 
 ### Changed

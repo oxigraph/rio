@@ -1,6 +1,6 @@
 [package]
 name = "rio_turtle"
-version = "0.8.0"
+version = "0.8.2"
 authors = ["Tpt <thomas@pellissier-tanon.fr>", "Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
