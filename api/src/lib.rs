@@ -2,6 +2,7 @@
 //!
 //! It is currently used by the `rio_turtle` and `rio_xml` crates.
 #![deny(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![doc(test(attr(deny(warnings))))]
 
 pub mod formatter;

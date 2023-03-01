@@ -31,6 +31,7 @@
 //!
 //! `NTriplesParser` and `NQuadsParser` do not use the second argument of the `new` function that is the IRI of the file.
 #![deny(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![doc(test(attr(deny(warnings))))]
 
 mod error;
