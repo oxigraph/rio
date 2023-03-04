@@ -1076,6 +1076,7 @@ pub(crate) fn parse_numeric_literal<'a>(
     })
 }
 
+#[allow(clippy::ptr_arg)]
 pub(crate) fn parse_rdf_literal<'a>(
     read: &mut LookAheadByteReader<impl BufRead>,
     buffer: &'a mut String,

@@ -10,7 +10,7 @@ description = """
 RDF Turtle, Trig, N-Triples and N-Quads parsers and serializers
 """
 edition = "2021"
-rust-version = "1.58"
+rust-version = "1.60"
 
 [package.metadata.docs.rs]
 all-features = true

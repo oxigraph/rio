@@ -9,7 +9,6 @@ description = """
 W3C testsuite evaluator for Rio parsers
 """
 edition = "2021"
-rust-version = "1.58"
 publish = false
 
 [dependencies]
