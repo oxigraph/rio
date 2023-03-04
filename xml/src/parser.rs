@@ -106,6 +106,7 @@ impl<R: BufRead> TriplesParser for RdfXmlParser<R> {
             }
             _ => {}
         };
+        self.reader_buffer.clear();
         Ok(())
     }
 
