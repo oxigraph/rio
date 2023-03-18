@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3] - 2022-03-18
+
+### Changed
+- Upgrades the MSRV to 1.60.
+- RDF/XML: properly clear the XML parser buffer during parsing to avoid it to grow indefinitely.
+
+
 ## [0.8.2] - 2022-02-22
 
 ### Changed
