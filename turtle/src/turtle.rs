@@ -1010,6 +1010,7 @@ pub(crate) fn parse_numeric_literal<'a>(
             }
             _ => break,
         }
+        read.check_buffer_size(buffer)?;
     }
 
     // We read the digits after .
@@ -1044,6 +1045,7 @@ pub(crate) fn parse_numeric_literal<'a>(
                 }
                 _ => break,
             }
+            read.check_buffer_size(buffer)?;
         }
         Some(count_after)
     } else {
@@ -1231,6 +1233,7 @@ pub(crate) fn parse_prefixed_name<'a>(
                 }
             }
         }
+        read.check_buffer_size(buffer)?;
     }
     Ok(NamedNode { iri: buffer })
 }
@@ -1320,6 +1323,7 @@ fn parse_exponent(
         } else {
             return Ok(());
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 
@@ -1368,6 +1372,7 @@ fn parse_string_literal_long_quote_inner(
                 read_utf8_char(read)?
             }),
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 
@@ -1427,6 +1432,7 @@ fn parse_pn_prefix(
                 }
             }
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 
