@@ -1,3 +1,6 @@
 <http://example.com/prefix/s> <http://example.com/prefix/p> <http://example.com/true/o> .
 <http://example.com/base/s> <http://example.com/base/p> <http://example.com/false/o> .
 <http://example.com/graph/s> <http://example.com/graph/p> <http://example.com/graph/o> <http://example.com/graph/g> .
+<http://example.com/prefixF/s> <http://example.com/prefixF/p> <http://example.com/trueF/o> .
+<http://example.com/baseF/s> <http://example.com/baseF/p> <http://example.com/falseF/o> .
+<http://example.com/graphF/s> <http://example.com/graphF/p> <http://example.com/graphF/o> <http://example.com/graphF/g> .
