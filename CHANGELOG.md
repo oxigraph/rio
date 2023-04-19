@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.4] - 2022-04-19
+
+### Changed
+- Turtle and TriG: Hopefully actually fixes parsing of prefixes named like a keyword (`prefix`, `base`, `graph`, `true` and `false`).
+
+
 ## [0.8.3] - 2022-03-18
 
 ### Changed
