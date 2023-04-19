@@ -4,7 +4,15 @@ prefix base: <base/>
 prefix graph: <graph/>
 prefix true: <true/>
 prefix false: <false/>
+prefix prefixF: <prefixF/>
+prefix baseF: <baseF/>
+prefix graphF: <graphF/>
+prefix trueF: <trueF/>
+prefix falseF: <falseF/>
 
 prefix:s prefix:p true:o .
 base:s base:p false:o .
 graph:g { graph:s graph:p graph:o . }
+prefixF:s prefixF:p trueF:o .
+baseF:s baseF:p falseF:o .
+graphF:g { graphF:s graphF:p graphF:o . }

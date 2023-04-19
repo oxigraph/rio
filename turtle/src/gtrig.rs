@@ -111,17 +111,32 @@ impl<R: BufRead> GTriGParser<R> {
                 &self.base_iri,
             )?);
             Ok(())
-        } else if self.read.starts_with_ignore_ascii_case(b"BASE") {
+        } else if self.read.starts_with_ignore_ascii_case(b"BASE")
+            && self
+                .read
+                .ahead(4)?
+                .map_or(true, |c| c.is_ascii_whitespace() || c == b'<')
+        {
             self.base_iri = Some(parse_sparql_base(
                 &mut self.read,
                 &mut self.temp_buf,
                 &self.base_iri,
             )?);
             Ok(())
-        } else if self.read.starts_with_ignore_ascii_case(b"PREFIX") {
+        } else if self.read.starts_with_ignore_ascii_case(b"PREFIX")
+            && self
+                .read
+                .ahead(6)?
+                .map_or(true, |c| c.is_ascii_whitespace())
+        {
             self.parse_generalized_sparql_prefix()?;
             Ok(())
-        } else if self.read.starts_with_ignore_ascii_case(b"GRAPH") {
+        } else if self.read.starts_with_ignore_ascii_case(b"GRAPH")
+            && self
+                .read
+                .ahead(5)?
+                .map_or(true, |c| c.is_ascii_whitespace() || c == b'<')
+        {
             self.read.consume_many("GRAPH".len())?;
             skip_whitespace(&mut self.read)?;
             self.graph_name_alloc.push_triple_start();
@@ -617,7 +632,15 @@ impl<R: BufRead> GTriGParser<R> {
             _ => {
                 let base_iri = &self.base_iri;
                 let prefixes = &self.prefixes;
-                if read.starts_with(b"true") || read.starts_with(b"false") {
+                if read.starts_with(b"true")
+                    && read.ahead(4)?.map_or(true, |c| {
+                        c < MAX_ASCII && !is_possible_pn_chars_ascii(c) && c != b':'
+                    })
+                    || read.starts_with(b"false")
+                        && read.ahead(5)?.map_or(true, |c| {
+                            c < MAX_ASCII && !is_possible_pn_chars_ascii(c) && c != b':'
+                        })
+                {
                     let temp_buf = &mut &mut self.temp_buf;
                     alloc.try_push_atom(pos, |b1, b2| {
                         parse_literal(read, b1, b2, temp_buf, base_iri, prefixes)

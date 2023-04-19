@@ -276,7 +276,10 @@ fn parse_statement<E: From<TurtleError>>(
         )?);
         Ok(())
     } else if parser.read.starts_with_ignore_ascii_case(b"BASE")
-        && !parser.read.starts_with_ignore_ascii_case(b"BASE:")
+        && parser
+            .read
+            .ahead(4)?
+            .map_or(true, |c| c.is_ascii_whitespace() || c == b'<')
     {
         parser.base_iri = Some(parse_sparql_base(
             &mut parser.read,
@@ -285,7 +288,10 @@ fn parse_statement<E: From<TurtleError>>(
         )?);
         Ok(())
     } else if parser.read.starts_with_ignore_ascii_case(b"PREFIX")
-        && !parser.read.starts_with_ignore_ascii_case(b"PREFIX:")
+        && parser
+            .read
+            .ahead(6)?
+            .map_or(true, |c| c.is_ascii_whitespace())
     {
         parse_sparql_prefix(
             &mut parser.read,
@@ -331,7 +337,11 @@ fn parse_block_or_directive<E: From<TurtleError>>(
         )?);
         Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"BASE")
-        && !parser.inner.read.starts_with_ignore_ascii_case(b"BASE:")
+        && parser
+            .inner
+            .read
+            .ahead(4)?
+            .map_or(true, |c| c.is_ascii_whitespace() || c == b'<')
     {
         parser.inner.base_iri = Some(parse_sparql_base(
             &mut parser.inner.read,
@@ -340,7 +350,11 @@ fn parse_block_or_directive<E: From<TurtleError>>(
         )?);
         Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX")
-        && !parser.inner.read.starts_with_ignore_ascii_case(b"PREFIX:")
+        && parser
+            .inner
+            .read
+            .ahead(6)?
+            .map_or(true, |c| c.is_ascii_whitespace())
     {
         parse_sparql_prefix(
             &mut parser.inner.read,
@@ -350,7 +364,11 @@ fn parse_block_or_directive<E: From<TurtleError>>(
         )?;
         Ok(())
     } else if parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH")
-        && !parser.inner.read.starts_with_ignore_ascii_case(b"GRAPH:")
+        && parser
+            .inner
+            .read
+            .ahead(5)?
+            .map_or(true, |c| c.is_ascii_whitespace() || c == b'<')
     {
         parser.inner.read.consume_many("GRAPH".len())?;
         skip_whitespace(&mut parser.inner.read)?;
@@ -851,8 +869,14 @@ fn parse_object<E: From<TurtleError>>(
             let TurtleParser {
                 read, triple_alloc, ..
             } = parser;
-            if read.starts_with(b"true") && !read.starts_with(b"true:")
-                || read.starts_with(b"false") && !read.starts_with(b"false:")
+            if read.starts_with(b"true")
+                && read.ahead(4)?.map_or(true, |c| {
+                    c < MAX_ASCII && !is_possible_pn_chars_ascii(c) && c != b':'
+                })
+                || read.starts_with(b"false")
+                    && read.ahead(5)?.map_or(true, |c| {
+                        c < MAX_ASCII && !is_possible_pn_chars_ascii(c) && c != b':'
+                    })
             {
                 triple_alloc
                     .try_push_object(|b, _| parse_boolean_literal(read, b).map(Term::from))?;
@@ -1651,7 +1675,15 @@ pub(crate) fn parse_emb_object(parser: &mut TurtleParser<impl BufRead>) -> Resul
             let TurtleParser {
                 read, triple_alloc, ..
             } = parser;
-            if read.starts_with(b"true") || read.starts_with(b"false") {
+            if read.starts_with(b"true")
+                && read.ahead(4)?.map_or(true, |c| {
+                    c < MAX_ASCII && !is_possible_pn_chars_ascii(c) && c != b':'
+                })
+                || read.starts_with(b"false")
+                    && read.ahead(5)?.map_or(true, |c| {
+                        c < MAX_ASCII && !is_possible_pn_chars_ascii(c) && c != b':'
+                    })
+            {
                 triple_alloc.try_push_object(|b, _| parse_boolean_literal(read, b).map(Term::from))
             } else {
                 let TurtleParser {
