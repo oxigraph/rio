@@ -5,7 +5,7 @@
 use crate::model::{Quad, Triple};
 use std::error::Error;
 
-/// A formatter for [`Triple`](super::model::Triple).
+/// A formatter for [`Triple`].
 pub trait TriplesFormatter {
     type Error: Error;
 
@@ -13,7 +13,7 @@ pub trait TriplesFormatter {
     fn format(&mut self, triple: &Triple<'_>) -> Result<(), Self::Error>;
 }
 
-/// A formatter for [`Quad`](super::model::Quad).
+/// A formatter for [`Quad`].
 pub trait QuadsFormatter {
     type Error: Error;
 
