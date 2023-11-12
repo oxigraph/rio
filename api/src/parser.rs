@@ -7,7 +7,7 @@ pub use crate::generalized::parser::*;
 use crate::model::{Quad, Triple};
 use std::error::Error;
 
-/// A parser returning [`Triple`](super::model::Triple).
+/// A parser returning [`Triple`].
 pub trait TriplesParser: Sized {
     type Error: Error;
 
@@ -40,7 +40,7 @@ pub trait TriplesParser: Sized {
 
     /// Converts the parser into a `Result<T, E>` iterator.
     ///
-    /// `convert_triple` is a function converting Rio [`Triple`](super::model::Triple) to `T`.
+    /// `convert_triple` is a function converting Rio [`Triple`] to `T`.
     fn into_iter<T, E: From<Self::Error>, F: FnMut(Triple<'_>) -> Result<T, E>>(
         self,
         convert_triple: F,
@@ -91,7 +91,7 @@ impl<T, E: From<P::Error>, F: FnMut(Triple<'_>) -> Result<T, E>, P: TriplesParse
     }
 }
 
-/// A parser returning [`Quad`](super::model::Quad).
+/// A parser returning [`Quad`].
 pub trait QuadsParser: Sized {
     type Error: Error;
 
@@ -124,7 +124,7 @@ pub trait QuadsParser: Sized {
 
     /// Converts the parser into a `Result<T, E>` iterator.
     ///
-    /// `convert_triple` is a function converting Rio [`Triple`](super::model::Triple) to `T`.
+    /// `convert_triple` is a function converting Rio [`Triple`] to `T`.
     fn into_iter<T, E: From<Self::Error>, F: FnMut(Quad<'_>) -> Result<T, E>>(
         self,
         convert_quad: F,
