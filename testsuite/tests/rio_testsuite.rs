@@ -46,9 +46,9 @@ pub fn parse_rdf_test_file(url: &str) -> Result<OwnedDataset, Box<dyn Error>> {
 }
 
 fn run_testsuite(manifest_uri: String) -> Result<(), Box<dyn Error>> {
-    let manifest = TestManifest::new(manifest_uri, |url| parse_rdf_test_file(url));
+    let manifest = TestManifest::new(manifest_uri, parse_rdf_test_file);
 
-    let results = evaluate_parser_tests(manifest, |url| parse_rdf_test_file(url))?;
+    let results = evaluate_parser_tests(manifest, parse_rdf_test_file)?;
 
     let mut errors = Vec::default();
     for result in results {
