@@ -19,7 +19,7 @@ oxiri = "0.2"
 permutohedron = "0.2"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.5"
 
 [features]
 default = []
