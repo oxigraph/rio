@@ -15,7 +15,7 @@ publish = false
 rio_api = { version = "0.8", path="../api" }
 rio_turtle = { version = "0.8", path="../turtle" }
 rio_xml = { version = "0.8", path="../xml" }
-oxiri = "0.2"
+oxiri = "0.2.3-alpha.1"
 permutohedron = "0.2"
 
 [dev-dependencies]
