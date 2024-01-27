@@ -1,5 +1,5 @@
 use crate::error::*;
-use crate::MAX_STACK_SIZE;
+use crate::{MAX_BUFFER_SIZE, MAX_STACK_SIZE};
 use rio_api::parser::LineBytePosition;
 use std::collections::VecDeque;
 use std::io::{BufRead, ErrorKind, Read};
@@ -175,6 +175,9 @@ impl<R: BufRead> LookAheadByteReader<R> {
                 Err(e) if e.kind() == ErrorKind::Interrupted => {}
                 Err(e) => return Err(e.into()),
             }
+            if self.buffer.len() > MAX_BUFFER_SIZE {
+                return Err(self.parse_error(TurtleErrorKind::BufferOverflow));
+            }
         }
     }
 
@@ -207,6 +210,14 @@ impl<R: BufRead> LookAheadByteReader<R> {
 
     pub fn decrement_stack_size(&mut self) {
         self.stack_size -= 1;
+    }
+
+    pub fn check_buffer_size(&self, buffer: &str) -> Result<(), TurtleError> {
+        if buffer.len() > MAX_BUFFER_SIZE {
+            Err(self.parse_error(TurtleErrorKind::BufferOverflow))
+        } else {
+            Ok(())
+        }
     }
 }
 

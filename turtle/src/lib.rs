@@ -70,3 +70,6 @@ pub use gtrig::GTriGParser;
 /// This limit is set in order to avoid stack overflow error when parsing such structures due to too many recursive calls.
 /// The actual limit value is a wet finger compromise between not failing to parse valid files and avoiding to trigger stack overflow errors.
 const MAX_STACK_SIZE: usize = 128;
+
+/// Maximal size of a buffer (useful to limit memory consumption).
+const MAX_BUFFER_SIZE: usize = 10_000_000;
