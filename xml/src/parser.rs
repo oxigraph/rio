@@ -1,20 +1,20 @@
-use quick_xml::events::*;
-use quick_xml::{NsReader, Writer};
-use rio_api::model::*;
-use rio_api::parser::TriplesParser;
-use std::convert::TryInto;
-use std::io::BufRead;
-use std::str;
-
 use crate::error::{RdfXmlError, RdfXmlErrorKind};
 use crate::model::*;
 use crate::utils::*;
 use oxilangtag::LanguageTag;
 use oxiri::Iri;
+use quick_xml::escape::resolve_xml_entity;
 use quick_xml::escape::unescape_with;
 use quick_xml::events::attributes::Attribute;
+use quick_xml::events::*;
 use quick_xml::name::{LocalName, QName, ResolveResult};
+use quick_xml::{NsReader, Writer};
+use rio_api::model::*;
+use rio_api::parser::TriplesParser;
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
+use std::io::BufRead;
+use std::str;
 
 /// A [RDF/XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 ///
@@ -63,7 +63,7 @@ impl<R: BufRead> RdfXmlParser<R> {
     /// Builds the parser from a `BufRead` implementation, and a base IRI for relative IRI resolution.
     pub fn new(reader: R, base_iri: Option<Iri<String>>) -> Self {
         let mut reader = NsReader::from_reader(reader);
-        reader.expand_empty_elements(true);
+        reader.config_mut().expand_empty_elements = true;
         Self {
             reader: RdfXmlReader {
                 reader,
@@ -80,7 +80,7 @@ impl<R: BufRead> RdfXmlParser<R> {
 
     /// The current byte position in the input data.
     pub fn buffer_position(&self) -> usize {
-        self.reader.reader.buffer_position()
+        self.reader.reader.buffer_position().try_into().unwrap()
     }
 }
 
@@ -1021,7 +1021,7 @@ impl<R: BufRead> RdfXmlReader<R> {
 
     fn convert_attribute(&self, attribute: Attribute) -> Result<String, RdfXmlError> {
         Ok(attribute
-            .decode_and_unescape_value_with(&self.reader, |e| self.resolve_entity(e))?
+            .decode_and_unescape_value_with(self.reader.decoder(), |e| self.resolve_entity(e))?
             .to_string())
     }
 
@@ -1036,7 +1036,7 @@ impl<R: BufRead> RdfXmlReader<R> {
     }
 
     fn resolve_entity(&self, e: &str) -> Option<&str> {
-        self.custom_entities.get(e).map(|e| e.as_str())
+        resolve_xml_entity(e).or_else(|| self.custom_entities.get(e).map(String::as_str))
     }
 }
 

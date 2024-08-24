@@ -99,9 +99,6 @@ impl From<RdfXmlError> for io::Error {
         match error.kind {
             RdfXmlErrorKind::Xml(error) => match error {
                 quick_xml::Error::Io(error) => io::Error::new(error.kind(), error),
-                quick_xml::Error::UnexpectedEof(error) => {
-                    io::Error::new(io::ErrorKind::UnexpectedEof, error)
-                }
                 error => io::Error::new(io::ErrorKind::InvalidData, error),
             },
             RdfXmlErrorKind::Other(error) => io::Error::new(io::ErrorKind::InvalidData, error),

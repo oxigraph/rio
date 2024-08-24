@@ -5,7 +5,6 @@ use oxiri::Iri;
 use rio_api::model::*;
 use std::char;
 use std::io::BufRead;
-use std::u8;
 
 pub const MAX_ASCII: u8 = 0x7F;
 
