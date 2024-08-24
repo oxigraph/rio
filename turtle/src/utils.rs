@@ -4,7 +4,6 @@ use rio_api::parser::LineBytePosition;
 use std::collections::VecDeque;
 use std::io::{BufRead, ErrorKind, Read};
 use std::str;
-use std::u8;
 
 /// Reads the file in streaming
 pub struct LookAheadByteReader<R: Read> {

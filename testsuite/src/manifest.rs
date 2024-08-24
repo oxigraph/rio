@@ -16,10 +16,10 @@ pub struct Test {
 impl fmt::Display for Test {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.kind)?;
-        for name in &self.name {
+        if let Some(name) = &self.name {
             write!(f, " named \"{}\"", name)?;
         }
-        for comment in &self.comment {
+        if let Some(comment) = &self.comment {
             write!(f, " with comment \"{}\"", comment)?;
         }
         write!(f, " on file \"{}\"", self.action)?;

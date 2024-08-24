@@ -5,6 +5,7 @@ members = [
     "testsuite",
     "xml"
 ]
+resolver = "2"
 
 [patch.crates-io]
 rio_api = { path = "api" }
