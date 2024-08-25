@@ -5,6 +5,8 @@ Rio
 
 Rio is a low level library which provides conformant and fast parsers and formatters for RDF related file formats.
 
+These libraries are going to be replaced by the [oxttl](https://crates.io/crates/oxttl) and [oxrdfxml](https://crates.io/crates/oxrdfxml) libraries.
+
 It currently provides [N-Triples](https://docs.rs/rio_turtle/latest/rio_turtle/struct.NTriplesParser.html), [N-Quads](https://docs.rs/rio_turtle/latest/rio_turtle/struct.NQuadsParser.html), [Turtle](https://docs.rs/rio_turtle/latest/rio_turtle/struct.TurtleParser.html), [TriG](https://docs.rs/rio_turtle/latest/rio_turtle/struct.TrigParser.html) and [RDF/XML](https://docs.rs/rio_xml/latest/rio_xml/struct.RdfXmlParser.html) parsers and formatters.
 
 It is split into multiple crates:

@@ -1,6 +1,6 @@
 [package]
 name = "rio_testsuite"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["Tpt <thomas@pellissier-tanon.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
@@ -12,9 +12,9 @@ edition = "2021"
 publish = false
 
 [dependencies]
-rio_api = { version = "0.8", path="../api" }
-rio_turtle = { version = "0.8", path="../turtle" }
-rio_xml = { version = "0.8", path="../xml" }
+rio_api = { version = "0.8", path = "../api" }
+rio_turtle = { version = "0.8", path = "../turtle" }
+rio_xml = { version = "0.8", path = "../xml" }
 oxiri = "0.2"
 permutohedron = "0.2"
 

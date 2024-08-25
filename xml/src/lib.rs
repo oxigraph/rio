@@ -1,5 +1,11 @@
 //! Implementation of an [RDF/XML](https://www.w3.org/TR/rdf-syntax-grammar/) streaming parser.
 //!
+//! <strong style="font-size: 150%">
+//!
+//! This library is going to be deprecated.
+//! [oxrdfxml](https://crates.io/crates/oxrdfxml) is currently in development to replace it.
+//! </strong>
+//!
 //! How to read a file `foo.rdf` and count the number of `rdf:type` triples:
 //! ```no_run
 //! use rio_xml::{RdfXmlParser, RdfXmlError};

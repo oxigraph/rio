@@ -1,12 +1,9 @@
 [licenses]
-unlicensed = "deny"
 allow = [
-    "MIT",
     "Apache-2.0",
-    "Unicode-DFS-2016"
+    "MIT",
 ]
-default = "deny"
 
-[bans]
-multiple-versions = "warn"
-wildcards = "deny"
+[sources]
+unknown-registry = "deny"
+

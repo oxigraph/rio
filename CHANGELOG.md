@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.5] - 2024-08-28
+
+### Changed
+- Bump MSRV to 1.75
+- Bump quick-xml to 0.36
+
+
 ## [0.8.4] - 2022-04-19
 
 ### Changed
