@@ -3,6 +3,13 @@ Rio
 
 [![actions status](https://github.com/oxigraph/rio/workflows/build/badge.svg)](https://github.com/oxigraph/rio/actions)
 
+<strong>
+
+Warning: Rio is deprecated.
+Please use instead [oxrdfio](https://docs.rs/oxrdfio)
+or the more specific crates [oxttl](https://docs.rs/oxttl) and [oxrdfxml](https://docs.rs/oxrdfxml).
+</strong>
+
 Rio is a low level library which provides conformant and fast parsers and formatters for RDF related file formats.
 
 These libraries are going to be replaced by the [oxttl](https://crates.io/crates/oxttl) and [oxrdfxml](https://crates.io/crates/oxrdfxml) libraries.
