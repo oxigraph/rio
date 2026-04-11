@@ -1,13 +1,13 @@
 [package]
 name = "rio_turtle"
-version = "0.8.5"
+version = "0.8.6"
 authors = ["Tpt <thomas@pellissier-tanon.fr>", "Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
 keywords = ["RDF", "Turtle", "TriG", "N-Triples", "N-Quads"]
 repository = "https://github.com/oxigraph/rio"
 description = """
-RDF Turtle, Trig, N-Triples and N-Quads parsers and serializers
+Unmaintained crate, use oxttl
 """
 edition = "2021"
 rust-version = "1.75"

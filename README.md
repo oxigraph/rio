@@ -5,7 +5,7 @@ Rio
 
 <strong>
 
-Warning: Rio is deprecated.
+Warning: Rio is unmaintained.
 Please use instead [oxrdfio](https://docs.rs/oxrdfio)
 or the more specific crates [oxttl](https://docs.rs/oxttl) and [oxrdfxml](https://docs.rs/oxrdfxml).
 </strong>

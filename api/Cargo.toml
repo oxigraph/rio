@@ -1,13 +1,13 @@
 [package]
 name = "rio_api"
-version = "0.8.5"
+version = "0.8.6"
 authors = ["Tpt <thomas@pellissier-tanon.fr>", "Pierre-Antoine Champin <pchampin@liris.cnrs.fr>"]
 license = "Apache-2.0"
 readme = "../README.md"
 keywords = ["RDF", "parser"]
 repository = "https://github.com/oxigraph/rio"
 description = """
-Common data structures for RDF formats parsers and serializers
+Unmaintained crate, use oxrdf
 """
 edition = "2021"
 rust-version = "1.75"
