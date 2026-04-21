@@ -72,6 +72,7 @@ pub fn parse_iriref(
                 read_utf8_char(read)?
             }),
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 
@@ -116,6 +117,7 @@ pub fn parse_blank_node_label<'a>(
                 }
             }
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 
@@ -137,6 +139,7 @@ pub fn parse_langtag(
                 break;
             }
         }
+        read.check_buffer_size(buffer)?;
     }
     LanguageTag::parse(buffer.as_str()).map_err(|error| {
         read.parse_error(TurtleErrorKind::InvalidLanguageTag {
@@ -176,6 +179,7 @@ pub fn parse_string_literal_quote_inner(
                 read_utf8_char(read)?
             }),
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 

@@ -43,3 +43,22 @@ fn nquads_error_recovery() {
     assert_eq!(count, 3);
     assert_eq!(count_err, 2);
 }
+
+#[test]
+fn very_big_literal() {
+    let mut data = String::with_capacity(12_000_000);
+    data.push_str("<http://example.com/s> <http://example.com/p> \"");
+    for _ in 0..11_000_000 {
+        data.push('0');
+    }
+    data.push_str("\" .");
+    let mut parser = NTriplesParser::new(Cursor::new(&data));
+    assert!(parser
+        .parse_step(&mut |_| Ok(()) as Result<(), TurtleError>)
+        .is_ok());
+    assert!(parser
+        .parse_step(&mut |_| Ok(()) as Result<(), TurtleError>)
+        .unwrap_err()
+        .to_string()
+        .contains("out of memory"));
+}

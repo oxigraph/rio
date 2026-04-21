@@ -1,4 +1,4 @@
-use crate::MAX_STACK_SIZE;
+use crate::{MAX_BUFFER_SIZE, MAX_STACK_SIZE};
 use oxilangtag::LanguageTagParseError;
 use oxiri::IriParseError;
 use rio_api::parser::{LineBytePosition, ParseError};
@@ -32,6 +32,7 @@ pub enum TurtleErrorKind {
         error: LanguageTagParseError,
     },
     StackOverflow,
+    BufferOverflow,
 }
 
 impl fmt::Display for TurtleError {
@@ -55,6 +56,9 @@ impl fmt::Display for TurtleError {
             }
             TurtleErrorKind::StackOverflow => {
                 write!(f, "The parser encountered more than {} nested constructions. This number is limited in order to avoid stack overflow OS errors.", MAX_STACK_SIZE)
+            }
+            TurtleErrorKind::BufferOverflow => {
+                write!(f, "The parser encountered a term with more than {} bytes. The size is limited in order to avoid out of memory error on invalid files.", MAX_BUFFER_SIZE)
             }
         }?;
         if let Some(position) = self.position {

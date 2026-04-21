@@ -219,6 +219,7 @@ pub(crate) fn parse_variable<'a>(
         } else {
             return Ok(Variable { name: buffer });
         }
+        read.check_buffer_size(buffer)?;
     }
 }
 
